@@ -156,7 +156,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
         <head>
           <title>Print ${voucherTitle} - ${row.voucher_no}</title>
           <style>
-            @page { size: ${getPageSizeCSS(printConfig.paperSize)}; margin: 15mm; }
+            @page { size: ${getPageSizeCSS(printConfig.paperSize as any)}; margin: 15mm; }
             ${COMMON_PRINT_CSS}
           </style>
         </head>

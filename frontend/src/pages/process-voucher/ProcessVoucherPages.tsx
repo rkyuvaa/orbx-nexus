@@ -141,7 +141,7 @@ export function InwardVoucherPage() {
         <head>
           <title>Print Inward - ${row.inward_no}</title>
           <style>
-            @page { size: ${getPageSizeCSS(printConfig.inwardPaperSize)}; margin: 15mm; }
+            @page { size: ${getPageSizeCSS(printConfig.inwardPaperSize as any)}; margin: 15mm; }
             ${COMMON_PRINT_CSS}
           </style>
         </head>
@@ -629,8 +629,14 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                             value={item.weight}
                             onChange={(e) => handleLineItemChange(idx, "weight", e.target.value)}
                             fullWidth
-                            required
-                            slotProps={{ htmlInput: { "data-field": "weight", "data-row-index": idx } }}
+                            slotProps={{
+                              input: { readOnly: true },
+                              htmlInput: { "data-field": "weight", "data-row-index": idx }
+                            }}
+                            sx={{
+                              bgcolor: "action.hover",
+                              "& .MuiInputBase-input": { cursor: "not-allowed", fontWeight: 600 }
+                            }}
                           />
                         </TableCell>
                         <TableCell align="right">
@@ -1010,7 +1016,7 @@ export function OutwardVoucherPage() {
         <head>
           <title>Print Outward - ${row.outward_no}</title>
           <style>
-            @page { size: ${getPageSizeCSS(printConfig.outwardPaperSize)}; margin: 15mm; }
+            @page { size: ${getPageSizeCSS(printConfig.outwardPaperSize as any)}; margin: 15mm; }
             ${COMMON_PRINT_CSS}
           </style>
         </head>
@@ -1278,8 +1284,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
 
-  const [lineItems, setLineItems] = useState([
-    { product_id: "", quantity: "", weight: "", total_weight: "" }
+  const [lineItems, setLineItems] = useState<any[]>([
+    { product_id: "", process_id: "", quantity: "", weight: "", total_weight: "" }
   ]);
   const [inwardPickerOpen, setInwardPickerOpen] = useState(false);
   const [pickerLedgerId, setPickerLedgerId] = useState<number | null>(null);
@@ -1726,7 +1732,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     );
                   })}
                   <Button size="small" variant="text" sx={{ textTransform: "none", fontWeight: 600, color: "#023020" }}
-                    onClick={() => { setPickerLedgerId(watch("ledger_id") || null); setInwardPickerOpen(true); }}>
+                    onClick={() => { setPickerLedgerId(Number(watch("ledger_id")) || null); setInwardPickerOpen(true); }}>
                     + Add more
                   </Button>
                 </Box>
@@ -1768,11 +1774,30 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                             })()}
                             onChange={(_, val: any) => {
                               if (val) {
-                                handleLineItemChange(idx, "product_id", val.productId ?? val.id ?? "");
-                                handleLineItemChange(idx, "process_id", val.processId ?? "");
+                                const prodId = val.productId ?? val.id ?? "";
+                                const processId = val.processId ?? "";
+                                const prodObj = productMapObj[prodId];
+                                const unitWt = val.weight ?? prodObj?.weight ?? 0;
+                                setLineItems((prev) =>
+                                  prev.map((it, i) => {
+                                    if (i === idx) {
+                                      const qty = Number(it.quantity || 0);
+                                      const wt = Number(unitWt || 0);
+                                      return {
+                                        ...it,
+                                        product_id: prodId,
+                                        process_id: processId,
+                                        weight: wt,
+                                        total_weight: Number((qty * wt).toFixed(2)),
+                                      };
+                                    }
+                                    return it;
+                                  })
+                                );
                               } else {
                                 handleLineItemChange(idx, "product_id", "");
                                 handleLineItemChange(idx, "process_id", "");
+                                handleLineItemChange(idx, "weight", "");
                               }
                             }}
                             options={productOptions}
@@ -1864,8 +1889,14 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                             value={item.weight}
                             onChange={(e) => handleLineItemChange(idx, "weight", e.target.value)}
                             fullWidth
-                            required
-                            slotProps={{ htmlInput: { "data-field": "weight", "data-row-index": idx } }}
+                            slotProps={{
+                              input: { readOnly: true },
+                              htmlInput: { "data-field": "weight", "data-row-index": idx }
+                            }}
+                            sx={{
+                              bgcolor: "action.hover",
+                              "& .MuiInputBase-input": { cursor: "not-allowed", fontWeight: 600 }
+                            }}
                           />
                         </TableCell>
                         <TableCell align="right">

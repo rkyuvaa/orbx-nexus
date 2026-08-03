@@ -159,8 +159,7 @@ function AdjustmentDialog({ open, onClose, editing, products, saveMutation, gene
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-      TransitionProps={{
-        onEnter: () => {
+      {...({ TransitionProps: { onEnter: () => {
           reset({
             adjustment_no: editing?.adjustment_no || generateNextNo(),
             adjustment_date: editing?.adjustment_date || today,
@@ -168,8 +167,7 @@ function AdjustmentDialog({ open, onClose, editing, products, saveMutation, gene
             quantity: editing?.quantity || "",
             reason: editing?.reason || "",
           });
-        }
-      }}>
+        } } } as any)}>
       <DialogTitle sx={{ fontWeight: 700, color: "#023020" }}>
         {editing ? "Edit Adjustment" : "New Stock Adjustment"}
       </DialogTitle>
