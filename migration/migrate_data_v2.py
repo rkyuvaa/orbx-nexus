@@ -236,16 +236,16 @@ def migrate():
     # F. Products
     print("Migrating products...")
     try:
-        cursor.execute("SELECT prrProductCode, prrProductName, prrCompanyCode, prrDeleted FROM tblProductRegister")
+        cursor.execute("SELECT prrProductCode, prrProductName, prrProductWeight, prrCompanyCode, prrDeleted FROM tblProductRegister")
         count = 0
         with engine.begin() as conn:
             for row in cursor.fetchall():
-                old_code, name, comp_code, deleted = row
+                old_code, name, weight, comp_code, deleted = row
                 res = conn.execute(text("""
-                    INSERT INTO master.products (name, product_code, is_active)
-                    VALUES (:name, :code, :active) RETURNING id
+                    INSERT INTO master.products (name, product_code, weight, is_active)
+                    VALUES (:name, :code, :weight, :active) RETURNING id
                 """), {
-                    "name": name, "code": str(old_code), "active": not clean_bool(deleted)
+                    "name": name, "code": str(old_code), "weight": clean_num(weight), "active": not clean_bool(deleted)
                 })
                 new_id = res.fetchone()[0]
                 product_map[old_code] = new_id
@@ -263,8 +263,8 @@ def migrate():
             for row in cursor.fetchall():
                 old_code, name, notes, deleted = row
                 res = conn.execute(text("""
-                    INSERT INTO master.processes (name, process_code, sequence, description, is_active)
-                    VALUES (:name, :code, 0, :desc, :active) RETURNING id
+                    INSERT INTO master.processes (name, process_code, sequence, description, is_active, company_rate, contractor_rate, gst_percent)
+                    VALUES (:name, :code, 0, :desc, :active, 0.0, 0.0, 0.0) RETURNING id
                 """), {
                     "name": name, "code": str(old_code), "desc": notes or "", "active": not clean_bool(deleted)
                 })
