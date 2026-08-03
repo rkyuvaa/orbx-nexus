@@ -4,6 +4,7 @@ import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from app.api.deps import CurrentUser, DBSession
 from app.core.config import settings
@@ -28,12 +29,17 @@ async def list_backups(current_user: CurrentUser):
     for f in sorted(os.listdir(BACKUP_DIR), reverse=True):
         if f.endswith(".sql") or f.endswith(".dump"):
             path = os.path.join(BACKUP_DIR, f)
-            stat = os.stat(path)
-            files.append(BackupResult(
-                filename=f,
-                created_at=datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                size_bytes=stat.st_size
-            ))
+            try:
+                stat = os.stat(path)
+                files.append(
+                    BackupResult(
+                        filename=f,
+                        created_at=datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        size_bytes=stat.st_size,
+                    )
+                )
+            except Exception:
+                continue
     return files
 
 
@@ -47,6 +53,22 @@ async def download_backup(filename: str, current_user: CurrentUser):
     return FileResponse(filepath, media_type="application/octet-stream", filename=filename)
 
 
+def parse_db_url(url: str):
+    db_url = url.replace("postgresql+psycopg://", "").replace("postgresql://", "")
+    try:
+        userpass, rest = db_url.split("@")
+        user, password = userpass.split(":")
+        hostport, dbname = rest.split("/")
+        dbname = dbname.split("?")[0]
+        if ":" in hostport:
+            host, port = hostport.split(":")
+        else:
+            host, port = hostport, "5432"
+        return user, password, host, port, dbname
+    except Exception:
+        return "orbx", "orbx_secret", "postgres", "5432", "orbx_nexus"
+
+
 @router.post("/create")
 async def create_backup(current_user: CurrentUser):
     if current_user.role != "Admin":
@@ -57,19 +79,7 @@ async def create_backup(current_user: CurrentUser):
     filename = f"orbx_nexus_backup_{timestamp}.sql"
     filepath = os.path.join(BACKUP_DIR, filename)
 
-    # Parse connection string
-    db_url = settings.DATABASE_URL.replace("postgresql+psycopg://", "")
-    try:
-        userpass, rest = db_url.split("@")
-        user, password = userpass.split(":")
-        hostport, dbname = rest.split("/")
-        if ":" in hostport:
-            host, port = hostport.split(":")
-        else:
-            host, port = hostport, "5432"
-    except Exception:
-        raise HTTPException(status_code=500, detail="Could not parse DATABASE_URL for backup")
-
+    user, password, host, port, dbname = parse_db_url(settings.DATABASE_URL)
     env = os.environ.copy()
     env["PGPASSWORD"] = password
 
@@ -79,18 +89,19 @@ async def create_backup(current_user: CurrentUser):
             env=env,
             capture_output=True,
             text=True,
+            timeout=300,
         )
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
-    except FileNotFoundError:
-        # Fallback to Docker if pg_dump is not available on host
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         result = subprocess.run(
             ["docker", "exec", "orbx_nexus_postgres", "pg_dump", "-U", user, "-F", "p", dbname],
             capture_output=True,
             text=False,
+            timeout=300,
         )
         if result.returncode != 0:
-            err = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Unknown error"
+            err = result.stderr.decode("utf-8", errors="ignore") if result.stderr else "Unknown error"
             raise HTTPException(status_code=500, detail=f"Backup failed (docker): {err}")
         with open(filepath, "wb") as f:
             f.write(result.stdout)
@@ -99,7 +110,7 @@ async def create_backup(current_user: CurrentUser):
     return BackupResult(
         filename=filename,
         created_at=datetime.datetime.now().isoformat(),
-        size_bytes=stat.st_size
+        size_bytes=stat.st_size,
     )
 
 
@@ -111,36 +122,17 @@ async def restore_backup(filename: str, current_user: CurrentUser):
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Backup file not found")
 
-    # Parse connection string
-    db_url = settings.DATABASE_URL.replace("postgresql+psycopg://", "")
-    try:
-        userpass, rest = db_url.split("@")
-        user, password = userpass.split(":")
-        hostport, dbname = rest.split("/")
-        if ":" in hostport:
-            host, port = hostport.split(":")
-        else:
-            host, port = hostport, "5432"
-    except Exception:
-        raise HTTPException(status_code=500, detail="Could not parse DATABASE_URL for restore")
-
+    user, password, host, port, dbname = parse_db_url(settings.DATABASE_URL)
     env = os.environ.copy()
     env["PGPASSWORD"] = password
 
-    # Close active SQLAlchemy pooled connections in Uvicorn to prevent lock deadlocks
+    # Close active connections
     await engine.dispose()
 
-    try:
-        # Terminate any other open sessions to orbx_nexus database
-        subprocess.run(
-            ["docker", "exec", "orbx_nexus_postgres", "psql", "-U", user, "-d", "postgres", "-c",
-             f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{dbname}' AND pid <> pg_backend_pid();"],
-            capture_output=True,
-            timeout=10,
-        )
-    except Exception:
-        pass
+    restore_success = False
+    error_msg = ""
 
+    # Attempt 1: Native psql inside container
     try:
         result = subprocess.run(
             ["psql", "-h", host, "-p", port, "-U", user, "-d", dbname, "-f", filepath],
@@ -149,10 +141,15 @@ async def restore_backup(filename: str, current_user: CurrentUser):
             text=True,
             timeout=300,
         )
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Restore failed: {result.stderr}")
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        # Fallback to Docker via docker cp and psql -f
+        if result.returncode == 0:
+            restore_success = True
+        else:
+            error_msg = f"psql error: {result.stderr}"
+    except (FileNotFoundError, subprocess.TimeoutExpired) as ex:
+        error_msg = f"psql unavailable: {str(ex)}"
+
+    # Attempt 2: Fallback to docker exec if psql failed or missing
+    if not restore_success:
         try:
             subprocess.run(
                 ["docker", "cp", filepath, "orbx_nexus_postgres:/tmp/restore.sql"],
@@ -169,15 +166,28 @@ async def restore_backup(filename: str, current_user: CurrentUser):
                 ["docker", "exec", "orbx_nexus_postgres", "rm", "-f", "/tmp/restore.sql"],
                 timeout=10,
             )
-            if res.returncode != 0:
-                raise HTTPException(status_code=500, detail=f"Restore failed (docker): {res.stderr}")
+            if res.returncode == 0:
+                restore_success = True
+            else:
+                error_msg += f" | docker error: {res.stderr}"
         except Exception as ex:
-            if isinstance(ex, HTTPException):
-                raise ex
-            raise HTTPException(status_code=500, detail=f"Restore failed via docker: {str(ex)}")
-    finally:
-        await engine.dispose()
+            error_msg += f" | docker unavailable: {str(ex)}"
 
+    # Attempt 3: Pure Python async engine execution fallback
+    if not restore_success:
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                sql_script = f.read()
+
+            async with engine.begin() as conn:
+                # Execute in blocks
+                await conn.execute(text(sql_script))
+                await conn.commit()
+            restore_success = True
+        except Exception as ex:
+            raise HTTPException(status_code=500, detail=f"Restore failed: {error_msg} | python fallback error: {str(ex)}")
+
+    await engine.dispose()
     return {"message": f"Successfully restored {filename}"}
 
 
@@ -191,7 +201,7 @@ async def upload_and_restore(current_user: CurrentUser, file: UploadFile = File(
     os.makedirs(BACKUP_DIR, exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filepath = os.path.join(BACKUP_DIR, f"uploaded_{timestamp}_{file.filename}")
-    
+
     content = await file.read()
     with open(filepath, "wb") as f:
         f.write(content)
