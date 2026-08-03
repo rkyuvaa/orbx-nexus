@@ -23,8 +23,8 @@ if [ -z "$SWAP_SIZE" ] || [ "$SWAP_SIZE" -lt 500 ]; then
     echo "[OK] 2GB Swap space enabled."
 fi
 
-echo "[1/5] Pulling & Building Docker Containers (Non-conflicting Ports 8081 & 8001)..."
-docker compose -f docker-compose.prod.yml build
+echo "[1/5] Pulling & Building Docker Containers (No Cache, Ports 8081 & 8001)..."
+docker compose -f docker-compose.prod.yml build --no-cache
 
 echo "[2/5] Launching OrbX Nexus Containers..."
 docker compose -f docker-compose.prod.yml up -d

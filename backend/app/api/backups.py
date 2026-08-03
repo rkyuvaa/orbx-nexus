@@ -147,7 +147,7 @@ async def restore_backup(filename: str, current_user: CurrentUser):
             env=env,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=300,
         )
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"Restore failed: {result.stderr}")
@@ -157,13 +157,13 @@ async def restore_backup(filename: str, current_user: CurrentUser):
             subprocess.run(
                 ["docker", "cp", filepath, "orbx_nexus_postgres:/tmp/restore.sql"],
                 check=True,
-                timeout=30,
+                timeout=60,
             )
             res = subprocess.run(
                 ["docker", "exec", "orbx_nexus_postgres", "psql", "-U", user, "-d", dbname, "-f", "/tmp/restore.sql"],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=300,
             )
             subprocess.run(
                 ["docker", "exec", "orbx_nexus_postgres", "rm", "-f", "/tmp/restore.sql"],
