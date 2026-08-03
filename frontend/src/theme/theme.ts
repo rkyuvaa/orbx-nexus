@@ -1,7 +1,8 @@
 import { createTheme, alpha } from "@mui/material/styles";
 
-export const getOrbxTheme = (mode: "dark" | "light") => {
-  const isDark = mode === "dark";
+export const getOrbxTheme = (mode?: "dark" | "light") => {
+  const safeMode = mode === "light" ? "light" : "dark";
+  const isDark = safeMode === "dark";
 
   // Refined Dark Theme Palette — Soft Emerald Slate (eliminates harsh glaring white)
   const PRIMARY = isDark ? "#123524" : "#E6EBE8";
@@ -19,7 +20,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
 
   return createTheme({
     palette: {
-      mode,
+      mode: safeMode,
       primary: {
         main: ACCENT,
         light: ACCENT_LIGHT,
