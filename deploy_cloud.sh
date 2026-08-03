@@ -23,16 +23,19 @@ if [ -z "$SWAP_SIZE" ] || [ "$SWAP_SIZE" -lt 500 ]; then
     echo "[OK] 2GB Swap space enabled."
 fi
 
-echo "[1/4] Pulling & Building Docker Containers (Non-conflicting Ports 8081 & 8001)..."
+echo "[1/5] Pulling & Building Docker Containers (Non-conflicting Ports 8081 & 8001)..."
 docker compose -f docker-compose.prod.yml build
 
-echo "[2/4] Launching OrbX Nexus Containers..."
+echo "[2/5] Launching OrbX Nexus Containers..."
 docker compose -f docker-compose.prod.yml up -d
 
-echo "[3/4] Waiting for PostgreSQL & Backend to initialize..."
-sleep 8
+echo "[3/5] Waiting for PostgreSQL & Backend to initialize..."
+sleep 10
 
-echo "[4/4] Verifying running containers..."
+echo "[4/5] Initializing clean database & setting default admin user..."
+docker exec orbx_nexus_backend python flush_data.py
+
+echo "[5/5] Verifying running containers..."
 docker compose -f docker-compose.prod.yml ps
 
 echo ""
