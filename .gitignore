@@ -1,0 +1,31 @@
+# Environment & Python
+.env
+*.env
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node / JS
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database & Backups
+*.sql
+*.dump
+backend/backups/
+backend/orbx_nexus_backup.sql
+
+# IDE & Editor files
+.vscode/
+.idea/
+.kilo/
+*.swp
+
+# OS Files
+Thumbs.db
+Desktop.ini
+.DS_Store

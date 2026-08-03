@@ -1,0 +1,1114 @@
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Grid, IconButton, Chip, Tooltip, MenuItem, Autocomplete,
+  Typography, Paper, Table, TableHead, TableRow, TableCell, TableBody,
+  Checkbox, FormControlLabel
+} from "@mui/material";
+import { Add, Edit, Delete, Refresh, CheckCircle, Print, RemoveCircle } from "@mui/icons-material";
+import { useForm } from "react-hook-form";
+import { ColDef } from "../../components/tables/OrbxGrid";
+import api from "../../api/client";
+import PageHeader from "../../components/PageHeader";
+
+import OrbxGrid from "../../components/tables/OrbxGrid";
+
+import { useAuthStore } from "../../store";
+
+import { LazyAutocomplete } from "../../components/LazyAutocomplete";
+
+import { toWords } from "../../utils/numberToWords";
+
+import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+
+import { formatQty, formatAmount } from "../../utils/format";
+
+
+
+export default function LabourBillPage() {
+
+  const { activeFY } = useAuthStore();
+
+  const qc = useQueryClient();
+
+  const [open, setOpen] = useState(false);
+
+  const [editing, setEditing] = useState<any>(null);
+
+
+
+  // Search input states
+
+
+
+  const { data: bills = [], isLoading, refetch } = useQuery({
+
+    queryKey: ["labour-bills", activeFY],
+
+    queryFn: async () => (await api.get(`/labour-bills/?fy=${activeFY}`)).data,
+
+  });
+
+
+
+  const { data: ledgers = [] } = useQuery({
+
+    queryKey: ["ledgers", "Account"],
+
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+
+  });
+
+  const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
+
+  const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
+
+  const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
+
+
+
+  const ledgerMap = useMemo(() => {
+
+    const map: Record<number, string> = {};
+
+    ledgers.forEach((l: any) => map[l.id] = l.name);
+
+    return map;
+
+  }, [ledgers]);
+
+
+
+  const ledgerMapObj = useMemo(() => {
+
+    const map: Record<number | string, any> = {};
+
+    ledgers.forEach((l: any) => { map[l.id] = l; });
+
+    return map;
+
+  }, [ledgers]);
+
+
+
+  const productMapObj = useMemo(() => {
+
+    const map: Record<number | string, any> = {};
+
+    products.forEach((p: any) => { map[p.id] = p; });
+
+    return map;
+
+  }, [products]);
+
+
+
+  const processMapObj = useMemo(() => {
+
+    const map: Record<number | string, any> = {};
+
+    processes.forEach((p: any) => { map[p.id] = p; });
+
+    return map;
+
+  }, [processes]);
+
+
+
+  const today = new Date().toISOString().split("T")[0];
+
+
+
+  const markPaidMutation = useMutation({
+
+    mutationFn: (id: number) => api.patch(`/labour-bills/${id}/mark-paid?fy=${activeFY}&payment_date=${today}`),
+
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["labour-bills"] }),
+
+  });
+
+
+
+  const deleteMutation = useMutation({
+
+    mutationFn: (id: number) => api.delete(`/labour-bills/${id}?fy=${activeFY}`),
+
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["labour-bills"] }),
+
+  });
+
+
+
+  const handleOpen = (row?: any) => {
+
+    setEditing(row || null);
+
+    setOpen(true);
+
+  };
+
+
+
+  const handlePrintLabourBill = (row: any) => {
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) return;
+
+
+
+    // Load custom configuration
+
+    const savedConfig = localStorage.getItem("orbx_print_config");
+
+    let printConfig = {
+
+      showLogo: true,
+
+      billPaperSize: "A4",
+
+      billTitle: "Labour Bill Invoice",
+
+      billTerms: "1. Payment terms: Net 15 days.\n2. Interest @ 18% p.a. will be charged for delayed payments.",
+
+    };
+
+    if (savedConfig) {
+
+      try {
+
+        printConfig = { ...printConfig, ...JSON.parse(savedConfig) };
+
+      } catch (e) {}
+
+    }
+
+
+
+    const logoBase64 = localStorage.getItem("company_logo");
+
+    const logoHtml = (printConfig.showLogo && logoBase64)
+
+      ? `<img src="${logoBase64}" />`
+
+      : "";
+
+
+
+    // Company details
+
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+
+    const cName = compData?.name || "SRI METAL";
+
+    const cAddress1 = compData?.address || "";
+
+    const cAddress2 = "";
+
+    const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
+
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+
+    const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
+
+    const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+
+
+
+    const dateStr = new Date(row.bill_date).toLocaleDateString("en-IN", {
+
+      day: "2-digit",
+
+      month: "2-digit",
+
+      year: "numeric"
+
+    }).replace(/\//g, "-");
+
+
+
+    const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
+
+    const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
+    const supplierAddr1 = supplierLedger?.address || [supplierLedger?.address_line1, supplierLedger?.address_line2].filter(Boolean).join(", ") || "";
+    const supplierCityStatePin = [supplierLedger?.city, supplierLedger?.state, supplierLedger?.pincode].filter(Boolean).join(" - ");
+    const supplierPhone = supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "";
+    const supplierGstin = supplierLedger?.gstin || "";
+
+    const productName = products.find((p: any) => p.id === row.product_id)?.name || `Product #${row.product_id}`;
+    const processName = processes.find((p: any) => p.id === row.process_id)?.name || `Process #${row.process_id}`;
+    const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
+
+    const gstP = Number(row.gst_percent || 0);
+    const cgstP = Number(row.cgst_percent !== undefined && row.cgst_percent !== null ? row.cgst_percent : (gstP / 2));
+    const sgstP = Number(row.sgst_percent !== undefined && row.sgst_percent !== null ? row.sgst_percent : (gstP / 2));
+    const cgstAmt = row.cgst_amount !== undefined && row.cgst_amount !== null ? Number(row.cgst_amount) : Number(((Number(row.amount || 0) * cgstP) / 100).toFixed(2));
+    const sgstAmt = row.sgst_amount !== undefined && row.sgst_amount !== null ? Number(row.sgst_amount) : Number(((Number(row.amount || 0) * sgstP) / 100).toFixed(2));
+    const roundOffVal = Number(row.round_off || 0);
+    const netPayableVal = Number(row.net_amount || row.total_amount || 0);
+    const amountInWordsStr = toWords(netPayableVal);
+
+    let itemsArray: any[] = [];
+    if (typeof row.items === "string") {
+      try { itemsArray = JSON.parse(row.items); } catch (e) {}
+    } else if (Array.isArray(row.items)) {
+      itemsArray = row.items;
+    }
+    if (!itemsArray || itemsArray.length === 0) {
+      itemsArray = [{ product_id: row.product_id, process_id: row.process_id, quantity: row.quantity || 0, rate: row.rate || 0, amount: row.amount || 0 }];
+    }
+
+    let itemsHtml = "";
+    itemsArray.forEach((item, idx) => {
+      const prName = processes.find((pr: any) => pr.id === Number(item.process_id))?.name || (row.process_id ? processName : "-");
+      const pObj = products.find((p: any) => p.id === Number(item.product_id));
+      const uomStr = item.uom || pObj?.uom || "PCS";
+      itemsHtml += `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td style="font-weight: 600;">${prName}</td>
+          <td style="text-align: right;">${formatQty(item.quantity)}</td>
+          <td style="text-align: center;">${uomStr}</td>
+          <td style="text-align: right;">₹${formatAmount(item.rate)}</td>
+          <td style="text-align: right; font-weight: 600;">₹${formatAmount(item.amount)}</td>
+        </tr>
+      `;
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Labour Bill - ${row.bill_no}</title>
+          <style>
+            @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 15mm; }
+            ${COMMON_PRINT_CSS}
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <div class="logo-wrapper">${logoHtml}</div>
+            <div class="company-details">
+              <h1>${cName}</h1>
+              ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
+              ${cAddress2 ? `<p>${cAddress2}</p>` : ""}
+              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+              ${cTax ? `<p class="gstin">GSTIN: ${cTax}</p>` : ""}
+            </div>
+          </div>
+          <div class="title-section">
+            <h2>LABOUR BILL</h2>
+            <div class="doc-no">Bill No: ${row.bill_no}</div>
+            <div class="doc-date">Date: ${dateStr}</div>
+          </div>
+          <div class="address-section">
+            <div class="address-column" style="width: 100%;">
+              <h3>SUPPLIER DETAILS:</h3>
+              <div class="name">${supplierName}</div>
+              ${supplierAddr1 ? `<div class="address-lines">${supplierAddr1}</div>` : ""}
+              ${supplierCityStatePin ? `<div class="address-lines">${supplierCityStatePin}</div>` : ""}
+              ${supplierPhone ? `<div class="address-lines">${supplierPhone}</div>` : ""}
+              ${supplierGstin ? `<div class="gstin">GSTIN: ${supplierGstin}</div>` : ""}
+            </div>
+          </div>
+          <table class="items-table">
+            <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+              <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+                <th style="width: 50px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
+                <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
+                <th style="text-align: center; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">UOM</th>
+                <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">RATE</th>
+                <th style="text-align: right; width: 120px; background-color: #0f5132 !important; color: #ffffff !important;">SUBTOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+          <div class="totals-section">
+            <div class="calculation-box">
+              <div class="calculation-row">
+                <span>Taxable Subtotal:</span>
+                <span>₹${formatAmount(row.amount)}</span>
+              </div>
+              <div class="calculation-row">
+                <span>CGST (${cgstP}%):</span>
+                <span>₹${formatAmount(cgstAmt)}</span>
+              </div>
+              <div class="calculation-row">
+                <span>SGST (${sgstP}%):</span>
+                <span>₹${formatAmount(sgstAmt)}</span>
+              </div>
+              ${roundOffVal !== 0 ? `
+                <div class="calculation-row">
+                  <span>Round Off:</span>
+                  <span>${roundOffVal > 0 ? "+" : ""}₹${formatAmount(roundOffVal)}</span>
+                </div>
+              ` : ""}
+              <div class="calculation-row grand-total">
+                <span>Net Payable Amount:</span>
+                <span>₹${formatAmount(netPayableVal)}</span>
+              </div>
+              <div class="amount-in-words">${amountInWordsStr}</div>
+            </div>
+          </div>
+          <div class="bottom-section">
+            ${row.narration ? `
+              <div class="narration-box">
+                <strong>Narration:</strong> ${row.narration}
+              </div>
+            ` : ""}
+            ${formattedTerms ? `
+              <div class="terms-box">
+                <h4>Terms & Conditions:</h4>
+                <ol>
+                  ${formattedTerms.split("<br/>").map((t: string) => { const cleanT = t.replace(/^\s*\d+[\.\)]\s*/, "").trim(); return cleanT ? `<li>${cleanT}</li>` : ""; }).filter(Boolean).join("")}
+                </ol>
+              </div>
+            ` : ""}
+            <div class="signatures-container">
+              <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Supplier Signature</div>
+              </div>
+              <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Authorized Signatory for ${cName}</div>
+              </div>
+            </div>
+            <div class="thank-you-note">Thank you for your business!</div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const colDefs: ColDef[] = [
+    { field: "bill_no", headerName: "Bill No.", width: 110 },
+    { field: "bill_date", headerName: "Date", width: 95 },
+    { field: "ledger_id", headerName: "Supplier", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
+    { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
+    { field: "total_amount", headerName: "Total Amount", width: 130, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value || p.data?.net_amount)}` },
+    { field: "is_paid", headerName: "Status", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Paid" : "Pending"} color={p.value ? "success" : "warning"} /> },
+    { headerName: "Actions", width: 160, sortable: false, filter: false, cellRenderer: (p: any) => (
+      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
+        <Tooltip title="Print Bill"><IconButton size="small" onClick={() => handlePrintLabourBill(p.data)}><Print fontSize="small" /></IconButton></Tooltip>
+        {!p.data.is_paid && <Tooltip title="Mark Paid"><IconButton size="small" color="success" onClick={() => markPaidMutation.mutate(p.data.id)}><CheckCircle fontSize="small" /></IconButton></Tooltip>}
+        <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => deleteMutation.mutate(p.data.id)}><Delete fontSize="small" /></IconButton></Tooltip>
+      </Box>
+    )},
+  ];
+
+
+
+  return (
+
+    <Box>
+
+      <PageHeader
+
+        title="Labour Bill"
+
+        breadcrumbs={[{ label: "Labour Bill" }]}
+
+      />
+
+      <OrbxGrid
+
+        rowData={bills}
+
+        columnDefs={colDefs}
+
+        loading={isLoading}
+
+        onRefresh={refetch}
+
+        onAdd={() => handleOpen()}
+
+        addLabel="New Bill"
+
+      />
+
+
+
+      <LabourBillDialog
+
+        open={open}
+
+        onClose={() => setOpen(false)}
+
+        editing={editing}
+
+      />
+
+    </Box>
+
+  );
+
+}
+
+
+
+interface LabourBillDialogProps {
+  open: boolean;
+  onClose: () => void;
+  editing: any;
+}
+
+// Secondary Dialog: OutwardPicker
+interface OutwardPickerProps {
+  open: boolean;
+  onClose: () => void;
+  pendingOutwards: any[];
+  selectedOutwards: any[];
+  onSelect: (voucher: any) => void;
+}
+
+const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect }: OutwardPickerProps) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700, color: "#023020", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box>
+          Select Pending Outward Voucher
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.25 }}>
+            Click a row to add its items · highlighted rows already added
+          </Typography>
+        </Box>
+        <Button size="small" variant="contained"
+          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none" }}
+          onClick={onClose}>Done</Button>
+      </DialogTitle>
+      <DialogContent dividers sx={{ p: 0 }}>
+        {pendingOutwards.length === 0 ? (
+          <Box sx={{ py: 6, textAlign: "center" }}>
+            <Typography color="text.secondary">No pending outward vouchers found for this supplier.</Typography>
+            <Button sx={{ mt: 2 }} variant="outlined" onClick={onClose}>Continue without selecting</Button>
+          </Box>
+        ) : (
+          <Table size="small">
+            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Outward No</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Serial / Ref</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
+                <TableCell sx={{ width: 90 }} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pendingOutwards.map((out: any) => {
+                const alreadySelected = selectedOutwards.some((s) => s.id === out.id);
+                return (
+                  <TableRow key={out.id} hover
+                    sx={{ cursor: alreadySelected ? "default" : "pointer", bgcolor: alreadySelected ? "#e8f5e9" : "inherit" }}
+                    onClick={() => !alreadySelected && onSelect(out)}>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>{out.outward_no}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {out.outward_date ? new Date(out.outward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {out.ref_no || "-"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">{out.process_id || "-"}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {Number(out.quantity || 0).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      {alreadySelected ? (
+                        <Typography variant="caption" sx={{ color: "#023020", fontWeight: 700 }}>✓ Added</Typography>
+                      ) : (
+                        <Button size="small" variant="contained"
+                          sx={{ textTransform: "none", fontWeight: 600, bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" } }}
+                          onClick={(e) => { e.stopPropagation(); onSelect(out); }}>
+                          Add
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+});
+
+function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
+  const { activeFY } = useAuthStore();
+  const qc = useQueryClient();
+  const [selectedOutwards, setSelectedOutwards] = useState<any[]>([]);
+  const [outwardPickerOpen, setOutwardPickerOpen] = useState(false);
+  const [lineItems, setLineItems] = useState<any[]>([
+    { product_id: "", process_id: "", quantity: "", rate: "", amount: "" }
+  ]);
+
+  const { data: ledgers = [] } = useQuery({
+    queryKey: ["ledgers", "Account"],
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+  });
+  const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
+  const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
+  const { data: rates = [] } = useQuery({ queryKey: ["rates"], queryFn: async () => (await api.get("/products/rates/all")).data });
+  const { data: outwardVouchers = [] } = useQuery<any>({
+    queryKey: ["outward-vouchers"],
+    queryFn: async () => (await api.get(`/stock/outward/?fy=${activeFY}`)).data,
+    enabled: open
+  });
+
+  const ledgerMapObj = useMemo(() => {
+    const map: Record<number | string, any> = {};
+    ledgers.forEach((l: any) => { map[l.id] = l; });
+    return map;
+  }, [ledgers]);
+
+  const productMapObj = useMemo(() => {
+    const map: Record<number | string, any> = {};
+    products.forEach((p: any) => { map[p.id] = p; });
+    return map;
+  }, [products]);
+
+  const processMapObj = useMemo(() => {
+    const map: Record<number | string, any> = {};
+    processes.forEach((p: any) => { map[p.id] = p; });
+    return map;
+  }, [processes]);
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const generateNextBillNo = () => {
+    const savedConfig = localStorage.getItem("orbx_print_config");
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        const prefix = config.billPrefix || "LBL/";
+        const suffix = config.billSuffix || "";
+        const nextNo = config.billNextNo || 1;
+        const padding = config.billPadding || 4;
+        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
+      } catch (e) {}
+    }
+    return `LBL/${String(1).padStart(4, "0")}`;
+  };
+
+  const incrementBillNo = () => {
+    const savedConfig = localStorage.getItem("orbx_print_config");
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        if (config.billNextNo !== undefined) {
+          config.billNextNo = Number(config.billNextNo) + 1;
+          localStorage.setItem("orbx_print_config", JSON.stringify(config));
+        }
+      } catch (e) {}
+    }
+  };
+
+  const { register, handleSubmit, reset, watch, setValue } = useForm({
+    defaultValues: { bill_no: "", bill_date: today, ledger_id: "", gst_percent: "" as any, narration: "", dispatch_through: "" },
+  });
+
+  const selectedLedger = watch("ledger_id");
+
+  const supplierOutwardVouchers = useMemo(() => {
+    if (!selectedLedger) return [];
+    return outwardVouchers.filter((v: any) => v.ledger_id === Number(selectedLedger));
+  }, [outwardVouchers, selectedLedger]);
+
+  const handleSupplierChange = (val: any) => {
+    setValue("ledger_id", val ? val.id : "");
+    setSelectedOutwards([]);
+    setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+  };
+
+  const [enableRoundOff, setEnableRoundOff] = useState(true);
+
+  const getContractorRate = (productId: any, processId: any) => {
+    const contractorId = watch("ledger_id");
+    if (!contractorId) return 0;
+    const match = rates.find((r: any) => 
+      r.process_id === Number(processId) && 
+      r.ledger_id === Number(contractorId) && 
+      r.product_id === Number(productId) && 
+      r.is_active
+    );
+    if (match) return match.rate;
+
+    const proc = processes.find((p: any) => p.id === Number(processId));
+    if (proc) {
+      return proc.contractor_rate || proc.company_rate || 0;
+    }
+    return 0;
+  };
+
+  const handleOutwardSelect = (out: any) => {
+    setSelectedOutwards((prev) => [...prev, out]);
+
+    let rawItems: any[] = [];
+    if (out.items && Array.isArray(out.items) && out.items.length > 0) {
+      rawItems = out.items;
+    } else if (typeof out.items === "string") {
+      try {
+        const parsed = JSON.parse(out.items);
+        if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
+      } catch (e) {}
+    }
+
+    if (rawItems.length === 0) {
+      rawItems = [{
+        product_id: out.product_id || "",
+        process_id: out.process_id || "",
+        quantity: out.quantity || 0,
+        weight: out.weight || out.total_weight || 0,
+      }];
+    }
+
+    const newItems = rawItems.map((item: any) => {
+      const productId = item.product_id || out.product_id || "";
+      const processId = item.process_id || out.process_id || "";
+      const qtyVal = Number(item.quantity || out.quantity || 0);
+      const weightVal = Number(item.weight || item.total_weight || out.weight || out.total_weight || 0);
+      const rateVal = getContractorRate(productId, processId);
+
+      const proc = processes.find((p: any) => p.id === Number(processId));
+      if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
+        setValue("gst_percent", proc.gst_percent);
+      }
+
+      return {
+        product_id: productId,
+        process_id: processId,
+        quantity: qtyVal,
+        weight: weightVal,
+        rate: rateVal,
+        amount: Number((qtyVal * rateVal).toFixed(2))
+      };
+    });
+
+    setLineItems((prev) => {
+      if (prev.length === 1 && !prev[0].product_id && !prev[0].process_id && !prev[0].quantity) {
+        return newItems;
+      }
+      return [...prev, ...newItems];
+    });
+  };
+
+  const handleRemoveSelectedOutward = (id: number) => {
+    const updated = selectedOutwards.filter((o) => o.id !== id);
+    setSelectedOutwards(updated);
+  };
+
+  const handleAddLineItem = () => {
+    setLineItems((prev) => [...prev, { product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+  };
+
+  const handleRemoveLineItem = (index: number) => {
+    if (lineItems.length === 1) return;
+    setLineItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleLineItemChange = (index: number, field: string, value: any) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => {
+        if (i === index) {
+          const updated = { ...item, [field]: value };
+          if (field === "process_id" || field === "product_id") {
+            const procId = field === "process_id" ? value : item.process_id;
+            const prodId = field === "product_id" ? value : item.product_id;
+            updated.rate = getContractorRate(prodId, procId);
+            if (field === "process_id") {
+              const proc = processes.find((p: any) => p.id === Number(value));
+              if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
+                setValue("gst_percent", proc.gst_percent);
+              }
+            }
+          }
+          if (field === "quantity" || field === "rate" || field === "process_id" || field === "product_id") {
+            updated.amount = Number((Number(updated.quantity || 0) * Number(updated.rate || 0)).toFixed(2));
+          }
+          return updated;
+        }
+        return item;
+      })
+    );
+  };
+
+  const gstPercent = Number(watch("gst_percent")) || 0;
+  const cgstPercent = Number((gstPercent / 2).toFixed(2));
+  const sgstPercent = Number((gstPercent / 2).toFixed(2));
+
+  const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const subtotalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+  const cgstAmount = Number(((subtotalAmount * cgstPercent) / 100).toFixed(2));
+  const sgstAmount = Number(((subtotalAmount * sgstPercent) / 100).toFixed(2));
+  const totalGstAmount = Number((cgstAmount + sgstAmount).toFixed(2));
+
+  const unroundedTotal = subtotalAmount + totalGstAmount;
+  const netAmount = enableRoundOff ? Math.round(unroundedTotal) : Number(unroundedTotal.toFixed(2));
+  const roundOffAmount = Number((netAmount - unroundedTotal).toFixed(2));
+
+  useEffect(() => {
+    if (open) {
+      if (editing) {
+        // Restore selected outwards
+        const outwardIdList = (() => {
+          const ids = editing.outward_ids || [];
+          if (!Array.isArray(ids)) return [];
+          return ids.map((id: number) => {
+            const out = outwardVouchers.find((v: any) => v.id === id);
+            return {
+              id,
+              outward_no: out?.outward_no || `#${id}`,
+              outward_date: out?.outward_date || "",
+              ref_no: out?.ref_no || "",
+              process_id: out?.process_id || "",
+              quantity: out?.quantity || 0,
+              items: out?.items || null
+            };
+          });
+        })();
+        setSelectedOutwards(outwardIdList);
+
+        let parsedItems: any[] = [];
+        if (typeof editing.items === "string") {
+          try { parsedItems = JSON.parse(editing.items); } catch (e) {}
+        } else if (Array.isArray(editing.items)) {
+          parsedItems = editing.items;
+        }
+
+        if (parsedItems && parsedItems.length > 0) {
+          setLineItems(parsedItems);
+        } else {
+          setLineItems([{
+            product_id: editing.product_id || "",
+            process_id: editing.process_id || "",
+            quantity: editing.quantity || "",
+            rate: editing.rate || "",
+            amount: editing.amount || ""
+          }]);
+        }
+      } else {
+        setSelectedOutwards([]);
+        setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+      }
+      reset(editing || {
+        bill_no: generateNextBillNo(),
+        bill_date: today,
+        ledger_id: "",
+        gst_percent: "" as any,
+        narration: "",
+        dispatch_through: ""
+      });
+    }
+  }, [open, editing, reset, outwardVouchers]);
+
+  const saveMutation = useMutation({
+    mutationFn: (formData: any) => {
+      const payload = {
+        bill_no: formData.bill_no,
+        bill_date: formData.bill_date,
+        ledger_id: Number(formData.ledger_id),
+        inward_id: selectedOutwards.length > 0 ? selectedOutwards[0].inward_id : null,
+        product_id: lineItems[0]?.product_id ? Number(lineItems[0].product_id) : null,
+        process_id: lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null,
+        quantity: totalQty,
+        rate: lineItems[0]?.rate ? Number(lineItems[0].rate) : 0,
+        amount: subtotalAmount,
+        gst_percent: gstPercent,
+        gst_amount: totalGstAmount,
+        cgst_percent: cgstPercent,
+        cgst_amount: cgstAmount,
+        sgst_percent: sgstPercent,
+        sgst_amount: sgstAmount,
+        round_off: roundOffAmount,
+        net_amount: netAmount,
+        total_amount: netAmount,
+        narration: formData.narration || null,
+        dispatch_through: formData.dispatch_through || null,
+        items: lineItems.map((item) => ({
+          product_id: item.product_id ? Number(item.product_id) : null,
+          process_id: item.process_id ? Number(item.process_id) : null,
+          quantity: Number(item.quantity) || 0,
+          weight: Number(item.weight) || 0,
+          rate: Number(item.rate) || 0,
+          amount: Number(item.amount) || 0
+        })),
+        outward_ids: selectedOutwards.map((o) => o.id)
+      };
+      return editing
+        ? api.put(`/labour-bills/${editing.id}?fy=${activeFY}`, payload)
+        : api.post(`/labour-bills/?fy=${activeFY}`, payload);
+    },
+    onSuccess: () => {
+      if (!editing) incrementBillNo();
+      qc.invalidateQueries({ queryKey: ["labour-bills"] });
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error("Save error:", error);
+      alert("Failed to save Labour Bill. This usually happens if the Bill Number already exists. Please verify the Bill Number and try again.");
+    }
+  });
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === "Enter") {
+      const active = document.activeElement as HTMLElement;
+      if (active && (active.tagName === "BUTTON" || active.tagName === "TEXTAREA")) {
+        return;
+      }
+      e.preventDefault();
+
+      const form = e.currentTarget;
+      const focusable = Array.from(
+        form.querySelectorAll(
+          'input:not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]:not([disabled])'
+        )
+      ) as HTMLElement[];
+
+      const index = focusable.indexOf(active);
+      if (index > -1) {
+        const next = focusable[index + 1];
+        if (next) {
+          next.focus();
+        }
+      }
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+        <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} onKeyDown={handleKeyDown}>
+          <DialogTitle sx={{ fontWeight: 700, color: "#023020" }}>
+            {editing ? "Edit Labour Bill" : "New Labour Bill"}
+          </DialogTitle>
+          <DialogContent dividers>
+            <Grid container spacing={2}>
+              {/* Header Details */}
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <TextField {...register("bill_no")} label="Bill No. *" fullWidth required size="small" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 2 }}>
+                <TextField {...register("bill_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 5 }}>
+                <LazyAutocomplete
+                  size="small"
+                  value={ledgerMapObj[watch("ledger_id")] || null}
+                  onChange={(_, val) => handleSupplierChange(val)}
+                  options={ledgers}
+                  getOptionLabel={(option: any) => option.name || ""}
+                  noOptionsText="No matching suppliers"
+                  renderInput={(params) => <TextField {...params} label="Supplier *" required={!watch("ledger_id")} />}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <TextField {...register("dispatch_through")} label="Dispatch Through" fullWidth size="small" placeholder="Transport details" />
+              </Grid>
+
+              {/* Linked Outward Vouchers */}
+              <Grid size={{ xs: 12 }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Linked Outward Vouchers:</Typography>
+                  {selectedOutwards.map((out) => (
+                    <Box key={out.id} sx={{
+                      display: "inline-flex", alignItems: "center", gap: 0.5,
+                      bgcolor: "#e8f5e9", border: "1px solid #023020",
+                      borderRadius: "8px", px: 1.5, py: 0.5
+                    }}>
+                      <Box>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
+                          {out.outward_no || `#${out.id}`}
+                        </Typography>
+                        {out.ref_no && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
+                            Ref: {out.ref_no}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" sx={{ fontSize: "0.7rem", lineHeight: 1.4, display: "block", color: "text.primary" }}>
+                          Qty: {Number(out.quantity || 0).toLocaleString()}
+                        </Typography>
+                      </Box>
+                      <IconButton size="small" sx={{ p: 0, ml: 0.5, color: "#023020" }} onClick={() => handleRemoveSelectedOutward(out.id)}>
+                        <Typography sx={{ fontSize: 12, lineHeight: 1 }}>✕</Typography>
+                      </IconButton>
+                    </Box>
+                  ))}
+                  <Button size="small" variant="text" sx={{ textTransform: "none", fontWeight: 600, color: "#023020" }}
+                    disabled={!selectedLedger}
+                    onClick={() => setOutwardPickerOpen(true)}>
+                    + Add Outward Vouchers
+                  </Button>
+                </Box>
+              </Grid>
+
+              {/* Line Items Table */}
+              <Grid size={{ xs: 12 }}>
+                <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+                  Bill Line Items
+                </Typography>
+                <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
+                  <Table size="small">
+                    <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                      <TableRow>
+                        <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
+                        <TableCell sx={{ width: "35%", fontWeight: 700 }}>Product Name *</TableCell>
+                        <TableCell sx={{ width: "25%", fontWeight: 700 }}>Process *</TableCell>
+                        <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
+                        <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Rate *</TableCell>
+                        <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
+                        <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {lineItems.map((item, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell align="center">{idx + 1}</TableCell>
+                          <TableCell>
+                            <LazyAutocomplete
+                              size="small"
+                              value={productMapObj[item.product_id] || null}
+                              onChange={(_, val) => handleLineItemChange(idx, "product_id", val ? val.id : "")}
+                              options={products}
+                              getOptionLabel={(option: any) => option.name || ""}
+                              noOptionsText="No matching products"
+                              renderInput={(params) => <TextField {...params} required={!item.product_id} />}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <LazyAutocomplete
+                              size="small"
+                              value={processMapObj[item.process_id] || null}
+                              onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
+                              options={processes}
+                              getOptionLabel={(option: any) => option.name || ""}
+                              noOptionsText="No matching processes"
+                              renderInput={(params) => <TextField {...params} required={!item.process_id} />}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => handleLineItemChange(idx, "quantity", e.target.value)}
+                              slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              required
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={item.rate}
+                              onChange={(e) => handleLineItemChange(idx, "rate", e.target.value)}
+                              slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              required
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              ₹{formatAmount(item.amount)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)}>
+                              <RemoveCircle fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Paper>
+                <Button size="small" variant="text" startIcon={<Add />} sx={{ mt: 1, textTransform: "none", color: "#023020", fontWeight: 600 }} onClick={handleAddLineItem}>
+                  Add Item Row
+                </Button>
+              </Grid>
+
+              {/* Subtotals & Taxes & Round Off */}
+              <Grid size={{ xs: 12 }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f8fafc", borderRadius: "8px" }}>
+                  <Grid container spacing={2} sx={{ alignItems: "center" }}>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                      <TextField label="Taxable Subtotal" type="number" fullWidth size="small" value={subtotalAmount} slotProps={{ input: { readOnly: true } }} />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 2 }}>
+                      <TextField {...register("gst_percent")} label="GST %" type="number" fullWidth size="small" slotProps={{ htmlInput: { step: "any" } }} />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 2 }}>
+                      <TextField label={`CGST (${cgstPercent}%)`} type="number" fullWidth size="small" value={cgstAmount} slotProps={{ input: { readOnly: true } }} />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 2 }}>
+                      <TextField label={`SGST (${sgstPercent}%)`} type="number" fullWidth size="small" value={sgstAmount} slotProps={{ input: { readOnly: true } }} />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <TextField label="Round Off" type="number" fullWidth size="small" value={roundOffAmount} slotProps={{ input: { readOnly: true } }} />
+                        <FormControlLabel
+                          control={<Checkbox checked={enableRoundOff} onChange={(e) => setEnableRoundOff(e.target.checked)} size="small" color="success" />}
+                          label="Auto"
+                          sx={{ m: 0, whiteSpace: "nowrap" }}
+                        />
+                      </Box>
+                    </Grid>
+                    <Grid size={{ xs: 12 }}>
+                      <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2, pt: 1, borderTop: "1px solid #cbd5e1" }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                          Net Payable Amount:
+                        </Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                          ₹{formatAmount(netAmount)}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <TextField {...register("narration")} label="Narration" fullWidth size="small" />
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+            <Button onClick={onClose} variant="outlined">Cancel</Button>
+            <Button type="submit" variant="contained" disabled={saveMutation.isPending}>Save</Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      <OutwardPicker
+        open={outwardPickerOpen}
+        onClose={() => setOutwardPickerOpen(false)}
+        pendingOutwards={supplierOutwardVouchers}
+        selectedOutwards={selectedOutwards}
+        onSelect={handleOutwardSelect}
+      />
+    </>
+  );
+}
