@@ -12,8 +12,19 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
+# 2. Automatically create 2GB swap space if host memory/swap is low (prevents Node OOM crash)
+SWAP_SIZE=$(free -m | awk '/^Swap:/ {print $2}')
+if [ -z "$SWAP_SIZE" ] || [ "$SWAP_SIZE" -lt 500 ]; then
+    echo "[INFO] Low RAM/Swap detected on server. Adding 2GB swap space for smooth compilation..."
+    sudo fallocate -l 2G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile 2>/dev/null || true
+    sudo swapon /swapfile 2>/dev/null || true
+    echo "[OK] 2GB Swap space enabled."
+fi
+
 echo "[1/4] Pulling & Building Docker Containers (Non-conflicting Ports 8081 & 8001)..."
-docker compose -f docker-compose.prod.yml build --no-cache
+docker compose -f docker-compose.prod.yml build
 
 echo "[2/4] Launching OrbX Nexus Containers..."
 docker compose -f docker-compose.prod.yml up -d
