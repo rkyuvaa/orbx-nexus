@@ -3,18 +3,19 @@ import { createTheme, alpha } from "@mui/material/styles";
 export const getOrbxTheme = (mode: "dark" | "light") => {
   const isDark = mode === "dark";
 
+  // Refined Dark Theme Palette — Soft Emerald Slate (eliminates harsh glaring white)
   const PRIMARY = isDark ? "#123524" : "#E6EBE8";
   const PRIMARY_LIGHT = isDark ? "#1e4d36" : "#c2d1ca";
-  const PRIMARY_DARK = isDark ? "#08140E" : "#F4F6F5";
+  const PRIMARY_DARK = isDark ? "#0A1712" : "#F4F6F5";
   const ACCENT = "#16C47F";
   const ACCENT_LIGHT = isDark ? "#3ae09d" : "#0f9e64";
-  const BACKGROUND = isDark ? "#08140E" : "#F4F6F5";
-  const SURFACE = isDark ? "#0D1B14" : "#FFFFFF";
-  const SURFACE_2 = isDark ? "#123524" : "#E6EBE8";
-  const BORDER = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
-  const TEXT_PRIMARY = isDark ? "#FFFFFF" : "#0E1F18";
-  const TEXT_SECONDARY = isDark ? "#A5B4B1" : "#5C6E6B";
-  const TEXT_DISABLED = isDark ? "#5c6e6b" : "#99adab";
+  const BACKGROUND = isDark ? "#0A1712" : "#F4F6F5";
+  const SURFACE = isDark ? "#0F211A" : "#FFFFFF";
+  const SURFACE_2 = isDark ? "#142A21" : "#E6EBE8";
+  const BORDER = isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.08)";
+  const TEXT_PRIMARY = isDark ? "#E6F0EC" : "#0E1F18";
+  const TEXT_SECONDARY = isDark ? "#9EB3AA" : "#5C6E6B";
+  const TEXT_DISABLED = isDark ? "#596D65" : "#99adab";
 
   return createTheme({
     palette: {
@@ -23,7 +24,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
         main: ACCENT,
         light: ACCENT_LIGHT,
         dark: isDark ? "#0b965f" : "#0c8052",
-        contrastText: isDark ? "#08140E" : "#FFFFFF",
+        contrastText: isDark ? "#0A1712" : "#FFFFFF",
       },
       secondary: {
         main: PRIMARY_LIGHT,
@@ -47,14 +48,14 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
     },
     typography: {
       fontFamily: "'Inter', 'Manrope', -apple-system, sans-serif",
-      h1: { fontWeight: 700, fontSize: "2.5rem", letterSpacing: "-0.02em", color: TEXT_PRIMARY },
-      h2: { fontWeight: 700, fontSize: "2rem", letterSpacing: "-0.01em", color: TEXT_PRIMARY },
-      h3: { fontWeight: 600, fontSize: "1.75rem", color: TEXT_PRIMARY },
-      h4: { fontWeight: 600, fontSize: "1.5rem", color: TEXT_PRIMARY },
-      h5: { fontWeight: 600, fontSize: "1.25rem", color: TEXT_PRIMARY },
+      h1: { fontWeight: 700, fontSize: "2.25rem", letterSpacing: "-0.02em", color: TEXT_PRIMARY },
+      h2: { fontWeight: 700, fontSize: "1.85rem", letterSpacing: "-0.01em", color: TEXT_PRIMARY },
+      h3: { fontWeight: 600, fontSize: "1.6rem", color: TEXT_PRIMARY },
+      h4: { fontWeight: 600, fontSize: "1.4rem", color: TEXT_PRIMARY },
+      h5: { fontWeight: 600, fontSize: "1.2rem", color: TEXT_PRIMARY },
       h6: { fontWeight: 600, fontSize: "1rem", color: TEXT_PRIMARY },
-      subtitle1: { fontWeight: 500, fontSize: "0.95rem", color: TEXT_SECONDARY },
-      subtitle2: { fontWeight: 500, fontSize: "0.875rem", color: TEXT_SECONDARY },
+      subtitle1: { fontWeight: 500, fontSize: "0.925rem", color: TEXT_SECONDARY },
+      subtitle2: { fontWeight: 500, fontSize: "0.85rem", color: TEXT_SECONDARY },
       body1: { fontSize: "0.875rem", lineHeight: 1.5, color: TEXT_PRIMARY },
       body2: { fontSize: "0.8125rem", lineHeight: 1.4, color: TEXT_SECONDARY },
       button: { fontWeight: 600, fontSize: "0.85rem", textTransform: "none" },
@@ -86,13 +87,13 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
           root: {
             backgroundColor: SURFACE,
             border: `1px solid ${BORDER}`,
-            borderRadius: 16,
+            borderRadius: 14,
             backgroundImage: "none",
             transition: "border-color 150ms, box-shadow 150ms",
-            boxShadow: isDark ? "none" : "0 4px 12px rgba(0, 0, 0, 0.03)",
+            boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.25)" : "0 4px 12px rgba(0, 0, 0, 0.03)",
             "&:hover": {
-              borderColor: alpha(ACCENT, 0.3),
-              boxShadow: isDark ? `0 8px 32px rgba(0, 0, 0, 0.3)` : `0 8px 24px rgba(0, 0, 0, 0.08)`,
+              borderColor: alpha(ACCENT, 0.35),
+              boxShadow: isDark ? `0 8px 32px rgba(0, 0, 0, 0.4)` : `0 8px 24px rgba(0, 0, 0, 0.08)`,
             },
           },
         },
@@ -101,7 +102,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
         styleOverrides: {
           root: {
             borderRadius: 8,
-            padding: "8px 20px",
+            padding: "7px 18px",
             fontWeight: 600,
             transition: "all 150ms ease-in-out",
             "&:active": {
@@ -110,7 +111,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
           },
           contained: {
             backgroundColor: ACCENT,
-            color: isDark ? "#08140E" : "#FFFFFF",
+            color: isDark ? "#0A1712" : "#FFFFFF",
             boxShadow: `0 2px 8px ${alpha(ACCENT, 0.25)}`,
             "&:hover": {
               backgroundColor: ACCENT_LIGHT,
@@ -132,11 +133,15 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
         styleOverrides: {
           root: {
             "& .MuiOutlinedInput-root": {
-              backgroundColor: isDark ? "rgba(0, 0, 0, 0.2)" : "rgba(0, 0, 0, 0.02)",
+              backgroundColor: isDark ? "rgba(0, 0, 0, 0.25)" : "rgba(0, 0, 0, 0.02)",
               color: TEXT_PRIMARY,
               "& fieldset": { borderColor: BORDER },
-              "&:hover fieldset": { borderColor: alpha(ACCENT, 0.3) },
+              "&:hover fieldset": { borderColor: alpha(ACCENT, 0.35) },
               "&.Mui-focused fieldset": { borderColor: ACCENT, borderWidth: 1 },
+            },
+            "& .MuiInputLabel-root": {
+              color: TEXT_SECONDARY,
+              "&.Mui-focused": { color: ACCENT },
             },
           },
         },
@@ -145,10 +150,10 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
         defaultProps: { size: "small" },
         styleOverrides: {
           root: {
-            backgroundColor: isDark ? "rgba(0, 0, 0, 0.2)" : "rgba(0, 0, 0, 0.02)",
+            backgroundColor: isDark ? "rgba(0, 0, 0, 0.25)" : "rgba(0, 0, 0, 0.02)",
             color: TEXT_PRIMARY,
             "& fieldset": { borderColor: BORDER },
-            "&:hover fieldset": { borderColor: alpha(ACCENT, 0.3) },
+            "&:hover fieldset": { borderColor: alpha(ACCENT, 0.35) },
             "&.Mui-focused fieldset": { borderColor: ACCENT },
           },
         },
@@ -160,7 +165,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
               backgroundColor: SURFACE_2,
               color: TEXT_SECONDARY,
               fontWeight: 600,
-              fontSize: "0.875rem",
+              fontSize: "0.85rem",
               textTransform: "none",
               letterSpacing: "normal",
               borderBottom: `1px solid ${BORDER}`,
@@ -173,13 +178,14 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
         styleOverrides: {
           root: {
             whiteSpace: "nowrap",
+            color: TEXT_PRIMARY,
           },
         },
       },
       MuiTableRow: {
         styleOverrides: {
           root: {
-            "&:hover": { backgroundColor: "rgba(22, 196, 127, 0.04)" },
+            "&:hover": { backgroundColor: "rgba(22, 196, 127, 0.05)" },
             "& .MuiTableCell-root": { borderColor: BORDER },
           },
         },
@@ -188,14 +194,14 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
         styleOverrides: {
           root: { fontWeight: 500, borderRadius: 6 },
           sizeSmall: {
-            fontSize: "0.625rem",
-            height: 18,
+            fontSize: "0.65rem",
+            height: 20,
             "& .MuiChip-label": {
               paddingLeft: 6,
               paddingRight: 6,
             },
           },
-          colorSuccess: { backgroundColor: "rgba(22, 196, 127, 0.12)", color: ACCENT },
+          colorSuccess: { backgroundColor: "rgba(22, 196, 127, 0.15)", color: ACCENT },
         },
       },
       MuiDialog: {
@@ -204,6 +210,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
             backgroundColor: SURFACE,
             border: `1px solid ${BORDER}`,
             borderRadius: 16,
+            boxShadow: isDark ? "0 16px 48px rgba(0, 0, 0, 0.6)" : "0 16px 48px rgba(0, 0, 0, 0.1)",
           },
         },
       },
@@ -218,7 +225,7 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
       MuiAppBar: {
         styleOverrides: {
           root: {
-            backgroundColor: alpha(BACKGROUND, 0.85),
+            backgroundColor: alpha(BACKGROUND, 0.9),
             backgroundImage: "none",
             borderBottom: `1px solid ${BORDER}`,
             backdropFilter: "blur(12px)",
@@ -233,12 +240,12 @@ export const getOrbxTheme = (mode: "dark" | "light") => {
             margin: "2px 8px",
             transition: "all 150ms ease-in-out",
             "&.Mui-selected": {
-              backgroundColor: "rgba(22, 196, 127, 0.12)",
+              backgroundColor: "rgba(22, 196, 127, 0.14)",
               color: TEXT_PRIMARY,
               "& .MuiListItemIcon-root": { color: ACCENT },
-              "&:hover": { backgroundColor: "rgba(22, 196, 127, 0.18)" },
+              "&:hover": { backgroundColor: "rgba(22, 196, 127, 0.2)" },
             },
-            "&:hover": { backgroundColor: "rgba(22, 196, 127, 0.06)" },
+            "&:hover": { backgroundColor: "rgba(22, 196, 127, 0.07)" },
           },
         },
       },
