@@ -2,7 +2,7 @@ import sys
 import os
 import asyncio
 import subprocess
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -78,27 +78,37 @@ async def flush_all_data():
     print("[4/5] Seeding clean configuration & initial Admin credentials...")
     async with AsyncSessionLocal() as db:
         for fy in DEFAULT_YEARS:
-            is_active = fy["year_str"] == "2026_2027"
-            db.add(
-                FinancialYear(
-                    year_str=fy["year_str"],
-                    label=fy["label"],
-                    start_date=fy["start_date"],
-                    end_date=fy["end_date"],
-                    schema_name=f"fy_{fy['year_str']}",
-                    is_active=is_active,
-                    is_locked=fy["year_str"] in ("2023_2024", "2024_2025"),
-                )
+            res_fy = await db.execute(
+                select(FinancialYear).where(FinancialYear.year_str == fy["year_str"])
             )
+            if not res_fy.scalar_one_or_none():
+                is_active = fy["year_str"] == "2026_2027"
+                db.add(
+                    FinancialYear(
+                        year_str=fy["year_str"],
+                        label=fy["label"],
+                        start_date=fy["start_date"],
+                        end_date=fy["end_date"],
+                        schema_name=f"fy_{fy['year_str']}",
+                        is_active=is_active,
+                        is_locked=fy["year_str"] in ("2023_2024", "2024_2025"),
+                    )
+                )
 
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin@orbx"),
-            full_name="System Administrator",
-            role="Admin",
-            is_active=True,
-        )
-        db.add(admin)
+        res_user = await db.execute(select(User).where(User.username == "admin"))
+        user = res_user.scalar_one_or_none()
+        if not user:
+            admin = User(
+                username="admin",
+                hashed_password=get_password_hash("admin@orbx"),
+                full_name="System Administrator",
+                role="Admin",
+                is_active=True,
+            )
+            db.add(admin)
+        else:
+            user.hashed_password = get_password_hash("admin@orbx")
+            user.is_active = True
         await db.commit()
 
     # 5. Flush Redis Cache
