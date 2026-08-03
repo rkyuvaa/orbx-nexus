@@ -45,7 +45,7 @@ export function ProductRegisterPage() {
   const colDefs: ColDef[] = [
     { field: "name", headerName: "Product Name", flex: 2 },
     { field: "product_code", headerName: "Code", width: 100 },
-    { field: "weight", headerName: "Weight (kg)", width: 120, type: "numericColumn" },
+    { field: "weight", headerName: "Weight (kg)", width: 140, type: "numericColumn", valueFormatter: (p: any) => (p.value && parseFloat(p.value) > 0 ? `${parseFloat(p.value)} kg` : "-") },
     { field: "description", headerName: "Description", flex: 1 },
     { field: "is_active", headerName: "Active", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Yes" : "No"} color={p.value ? "success" : "default"} sx={{ fontSize: "0.7rem" }} /> },
     { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
