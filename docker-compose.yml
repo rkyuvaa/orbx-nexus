@@ -9,13 +9,13 @@ services:
       POSTGRES_USER: orbx
       POSTGRES_PASSWORD: orbx_secret
       POSTGRES_DB: orbx_nexus
-    ports:
-      - "5433:5432"
+    expose:
+      - "5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - orbx_nexus_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U orbx -d orbx_nexus"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
 
@@ -23,17 +23,44 @@ services:
     image: redis:7-alpine
     container_name: orbx_nexus_redis
     restart: unless-stopped
-    ports:
-      - "6380:6379"
+    expose:
+      - "6379"
     volumes:
-      - redis_data:/data
+      - orbx_nexus_redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 3s
       retries: 5
 
-volumes:
-  postgres_data:
-  redis_data:
+  backend:
+    build: ./backend
+    container_name: orbx_nexus_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql+psycopg://orbx:orbx_secret@postgres:5432/orbx_nexus
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-super-secret-jwt-key-change-in-production-min-32-chars
+      - ACCESS_TOKEN_EXPIRE_MINUTES=480
+      - PROJECT_NAME=OrbX Nexus ERP
+      - API_V1_STR=/api/v1
 
+  frontend:
+    build: ./frontend
+    container_name: orbx_nexus_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+volumes:
+  orbx_nexus_postgres_data:
+  orbx_nexus_redis_data:
