@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -97,7 +97,7 @@ export function ProcessRegisterPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const { data = [], isLoading, refetch } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
       name: "",
       process_code: "",
@@ -109,6 +109,26 @@ export function ProcessRegisterPage() {
       is_active: true
     }
   });
+
+  const watchCode = watch("process_code");
+  const isCombined = !!(watchCode && watchCode.includes(" / "));
+
+  useEffect(() => {
+    if (isCombined) {
+      const parts = watchCode.split("/").map(p => p.trim()).filter(Boolean);
+      let companySum = 0;
+      let contractorSum = 0;
+      parts.forEach(part => {
+        const matched = data.find((p: any) => p.process_code === part);
+        if (matched) {
+          companySum += parseFloat(matched.company_rate || 0);
+          contractorSum += parseFloat(matched.contractor_rate || 0);
+        }
+      });
+      setValue("company_rate", companySum ? String(companySum.toFixed(2)) : "");
+      setValue("contractor_rate", contractorSum ? String(contractorSum.toFixed(2)) : "");
+    }
+  }, [watchCode, isCombined, data, setValue]);
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => {
@@ -209,10 +229,14 @@ export function ProcessRegisterPage() {
                   })}
                   label="Company Rate Per KG *"
                   type="number"
-                  slotProps={{ htmlInput: { step: "any", min: 0 } }}
+                  slotProps={{
+                    input: { readOnly: isCombined },
+                    htmlInput: { step: "any", min: 0 }
+                  }}
+                  sx={{ bgcolor: isCombined ? "action.hover" : "inherit" }}
                   fullWidth
                   error={!!errors.company_rate}
-                  helperText={errors.company_rate?.message}
+                  helperText={errors.company_rate?.message || (isCombined ? "Sum of component rates" : "")}
                 />
               </Grid>
               <Grid size={{ xs: 6 }}>
@@ -223,10 +247,14 @@ export function ProcessRegisterPage() {
                   })}
                   label="Contractor Rate Per KG *"
                   type="number"
-                  slotProps={{ htmlInput: { step: "any", min: 0 } }}
+                  slotProps={{
+                    input: { readOnly: isCombined },
+                    htmlInput: { step: "any", min: 0 }
+                  }}
+                  sx={{ bgcolor: isCombined ? "action.hover" : "inherit" }}
                   fullWidth
                   error={!!errors.contractor_rate}
-                  helperText={errors.contractor_rate?.message}
+                  helperText={errors.contractor_rate?.message || (isCombined ? "Sum of component rates" : "")}
                 />
               </Grid>
               <Grid size={{ xs: 6 }}>

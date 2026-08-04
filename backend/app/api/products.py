@@ -400,7 +400,40 @@ async def list_processes(
     if is_active is not None:
         q = q.where(Process.is_active == is_active)
     result = await db.execute(q.order_by(Process.process_code))
-    return result.scalars().all()
+    processes_list = result.scalars().all()
+    
+    # Resolve rates for combined processes dynamically
+    single_map = {p.process_code: p for p in processes_list if p.process_code and " / " not in p.process_code}
+    
+    # Query any component processes that are missing from single_map (e.g. due to filtering)
+    missing_codes = set()
+    for p in processes_list:
+        if p.process_code and " / " in p.process_code:
+            parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
+            for part in parts:
+                if part not in single_map:
+                    missing_codes.add(part)
+                    
+    if missing_codes:
+        missing_res = await db.execute(select(Process).where(Process.process_code.in_(list(missing_codes))))
+        for mp in missing_res.scalars().all():
+            if mp.process_code:
+                single_map[mp.process_code] = mp
+                
+    for p in processes_list:
+        if p.process_code and " / " in p.process_code:
+            parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
+            sum_company = 0.0
+            sum_contractor = 0.0
+            for part in parts:
+                cp = single_map.get(part)
+                if cp:
+                    sum_company += float(cp.company_rate or 0.0)
+                    sum_contractor += float(cp.contractor_rate or 0.0)
+            p.company_rate = sum_company
+            p.contractor_rate = sum_contractor
+            
+    return processes_list
 
 
 @router.post("/processes", response_model=ProcessOut, status_code=201)
@@ -420,6 +453,23 @@ async def create_process(body: ProcessCreate, current_user: CurrentUser, db: DBS
         raise HTTPException(status_code=400, detail="Process Name must be unique")
 
     p = Process(**body.model_dump())
+    
+    # Calculate combined rates if template
+    if p.process_code and " / " in p.process_code:
+        parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
+        if parts:
+            child_res = await db.execute(select(Process).where(Process.process_code.in_(parts)))
+            child_map = {cp.process_code: cp for cp in child_res.scalars().all()}
+            sum_company = 0.0
+            sum_contractor = 0.0
+            for part in parts:
+                cp = child_map.get(part)
+                if cp:
+                    sum_company += float(cp.company_rate or 0.0)
+                    sum_contractor += float(cp.contractor_rate or 0.0)
+            p.company_rate = sum_company
+            p.contractor_rate = sum_contractor
+
     db.add(p)
     await db.flush()
     await db.refresh(p)
@@ -455,6 +505,23 @@ async def update_process(process_id: int, body: ProcessCreate, current_user: Cur
 
     for k, v in body.model_dump().items():
         setattr(p, k, v)
+        
+    # Calculate combined rates if template
+    if p.process_code and " / " in p.process_code:
+        parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
+        if parts:
+            child_res = await db.execute(select(Process).where(Process.process_code.in_(parts)))
+            child_map = {cp.process_code: cp for cp in child_res.scalars().all()}
+            sum_company = 0.0
+            sum_contractor = 0.0
+            for part in parts:
+                cp = child_map.get(part)
+                if cp:
+                    sum_company += float(cp.company_rate or 0.0)
+                    sum_contractor += float(cp.contractor_rate or 0.0)
+            p.company_rate = sum_company
+            p.contractor_rate = sum_contractor
+
     await db.flush()
     await db.refresh(p)
     return p

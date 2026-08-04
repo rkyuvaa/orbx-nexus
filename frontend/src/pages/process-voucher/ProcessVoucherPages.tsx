@@ -1848,42 +1848,16 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           />
 
                         </TableCell>
-                        <TableCell sx={{ width: 250 }}>
-                          <AutocompleteAny
-                            multiple
+                        <TableCell sx={{ width: 220, whiteSpace: "nowrap" }}>
+                          <Autocomplete
                             size="small"
-                            value={
-                              item.process_id 
-                                ? String(item.process_id).split(",")
-                                    .map(id => processMapObj[id.trim()])
-                                    .filter(Boolean)
-                                : []
-                            }
-                            onChange={(_, val: any) => {
-                              const ids = val ? val.map((v: any) => v.id).join(",") : "";
-                              handleLineItemChange(idx, "process_id", ids);
-                            }}
-                            options={processes.filter((p: any) => p.is_active || (item.process_id && String(item.process_id).split(",").map(id => Number(id.trim())).includes(p.id)))}
+                            value={processMapObj[item.process_id ?? ""] || null}
+                            onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
+                            options={processes.filter((p: any) => p.is_active || p.id === Number(item.process_id))}
                             getOptionLabel={(option: any) => option.process_code || option.name || ""}
-                            noOptionsText="No matching processes"
-                            disableCloseOnSelect
-                            renderInput={(params: any) => <TextField {...params} placeholder="Select processes..." />}
-                            renderTags={(value: any, getTagProps: any) =>
-                              value.map((option: any, index: number) => {
-                                const { key, ...tagProps } = getTagProps({ index });
-                                return (
-                                  <Chip
-                                    key={key}
-                                    variant="outlined"
-                                    label={option.process_code}
-                                    size="small"
-                                    sx={{ height: 22, fontSize: "0.7rem" }}
-                                    {...tagProps}
-                                  />
-                                );
-                              })
-                            }
-                            renderOption={(props: any, option: any) => {
+                            noOptionsText="No processes"
+                            renderInput={(params) => <TextField {...params} placeholder="Select process..." />}
+                            renderOption={(props, option) => {
                               const { key, ...otherProps } = props;
                               return (
                                 <li key={key} {...otherProps}>

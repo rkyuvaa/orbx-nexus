@@ -693,26 +693,28 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       const qtyVal = Number(item.quantity || out.quantity || 0);
       const weightVal = Number(item.weight || item.total_weight || out.weight || out.total_weight || 0);
 
-      if (processIdStr.includes(",")) {
-        const processIds = processIdStr.split(",").map(id => id.trim()).filter(Boolean);
-        processIds.forEach((pid) => {
-          const rateVal = getContractorRate(productId, pid);
-          const proc = processes.find((p: any) => p.id === Number(pid));
-          if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
-            setValue("gst_percent", proc.gst_percent);
+      const proc = processes.find((p: any) => p.id === Number(processIdStr));
+      if (proc && proc.process_code && proc.process_code.includes(" / ")) {
+        const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+        parts.forEach((part: any) => {
+          const childProc = processes.find((p: any) => p.process_code === part);
+          if (childProc) {
+            const rateVal = getContractorRate(productId, childProc.id);
+            if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
+              setValue("gst_percent", childProc.gst_percent);
+            }
+            newItems.push({
+              product_id: productId,
+              process_id: childProc.id,
+              quantity: qtyVal,
+              weight: weightVal,
+              rate: rateVal,
+              amount: Number((qtyVal * rateVal).toFixed(2))
+            });
           }
-          newItems.push({
-            product_id: productId,
-            process_id: Number(pid),
-            quantity: qtyVal,
-            weight: weightVal,
-            rate: rateVal,
-            amount: Number((qtyVal * rateVal).toFixed(2))
-          });
         });
       } else {
         const rateVal = getContractorRate(productId, processIdStr);
-        const proc = processes.find((p: any) => p.id === Number(processIdStr));
         if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
           setValue("gst_percent", proc.gst_percent);
         }
