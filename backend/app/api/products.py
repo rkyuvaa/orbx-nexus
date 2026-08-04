@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select, text
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 
 from app.api.deps import CurrentUser, DBSession
@@ -63,14 +63,15 @@ class ProcessOut(BaseModel):
 
 
 class ProcessCreate(BaseModel):
-    name: str
-    process_code: str | None = None
+    name: str = Field(..., min_length=1)
+    process_code: str = Field(..., min_length=1)
     product_id: int | None = None
     sequence: int = 0
     description: str | None = None
-    company_rate: float = 0.0
-    contractor_rate: float = 0.0
+    company_rate: float = Field(..., ge=0)
+    contractor_rate: float = Field(..., ge=0)
     gst_percent: float = 0.0
+    is_active: bool = True
 
 
 
@@ -310,19 +311,112 @@ async def delete_product(product_id: int, current_user: CurrentUser, db: DBSessi
 
 # ──── Processes ────
 
+async def is_process_used(db: DBSession, process_id: int) -> bool:
+    # 1. Check master.rates table
+    rate_res = await db.execute(
+        text("SELECT COUNT(*) FROM master.rates WHERE process_id = :pid"),
+        {"pid": process_id}
+    )
+    if (rate_res.scalar() or 0) > 0:
+        return True
+
+    # 2. Retrieve all financial year schemas
+    try:
+        fy_res = await db.execute(text("SELECT schema_name FROM master.financial_years"))
+        schemas = [r[0] for r in fy_res.fetchall()]
+    except Exception:
+        schemas = []
+
+    for schema in schemas:
+        try:
+            # Check labour_bills
+            lb_res = await db.execute(
+                text(f"SELECT COUNT(*) FROM {schema}.labour_bills WHERE process_id = :pid"),
+                {"pid": process_id}
+            )
+            if (lb_res.scalar() or 0) > 0:
+                return True
+
+            # Check job_work_entries
+            jw_res = await db.execute(
+                text(f"SELECT COUNT(*) FROM {schema}.job_work_entries WHERE process_id = :pid"),
+                {"pid": process_id}
+            )
+            if (jw_res.scalar() or 0) > 0:
+                return True
+
+            # Check stock_inward process_id (header and items)
+            si_res = await db.execute(
+                text(f"SELECT COUNT(*) FROM {schema}.stock_inward WHERE process_id = :pid_str OR process_id = :pid_str_raw"),
+                {"pid_str": str(process_id), "pid_str_raw": f"{process_id}"}
+            )
+            if (si_res.scalar() or 0) > 0:
+                return True
+
+            si_items_res = await db.execute(
+                text(f"""
+                    SELECT COUNT(*) FROM {schema}.stock_inward 
+                    WHERE (items @> '[{{"process_id": {process_id}}}]'::jsonb)
+                       OR (items @> '[{{"process_id": "{process_id}"}}]'::jsonb)
+                """)
+            )
+            if (si_items_res.scalar() or 0) > 0:
+                return True
+
+            # Check stock_outward process_id (header and items)
+            so_res = await db.execute(
+                text(f"SELECT COUNT(*) FROM {schema}.stock_outward WHERE process_id = :pid_str OR process_id = :pid_str_raw"),
+                {"pid_str": str(process_id), "pid_str_raw": f"{process_id}"}
+            )
+            if (so_res.scalar() or 0) > 0:
+                return True
+
+            so_items_res = await db.execute(
+                text(f"""
+                    SELECT COUNT(*) FROM {schema}.stock_outward 
+                    WHERE (items @> '[{{"process_id": {process_id}}}]'::jsonb)
+                       OR (items @> '[{{"process_id": "{process_id}"}}]'::jsonb)
+                """)
+            )
+            if (so_items_res.scalar() or 0) > 0:
+                return True
+        except Exception:
+            pass
+
+    return False
+
+
 @router.get("/processes/all", response_model=list[ProcessOut])
 async def list_processes(
-    current_user: CurrentUser, db: DBSession, product_id: Optional[int] = Query(None)
+    current_user: CurrentUser, db: DBSession, 
+    product_id: Optional[int] = Query(None),
+    is_active: Optional[bool] = Query(None)
 ):
     q = select(Process)
     if product_id:
         q = q.where(Process.product_id == product_id)
-    result = await db.execute(q.order_by(Process.sequence, Process.name))
+    if is_active is not None:
+        q = q.where(Process.is_active == is_active)
+    result = await db.execute(q.order_by(Process.process_code))
     return result.scalars().all()
 
 
 @router.post("/processes", response_model=ProcessOut, status_code=201)
 async def create_process(body: ProcessCreate, current_user: CurrentUser, db: DBSession):
+    # Check Process Code uniqueness
+    code_check = await db.execute(
+        select(Process).where(Process.process_code == body.process_code)
+    )
+    if code_check.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Short Code must be unique")
+
+    # Check Process Name uniqueness
+    name_check = await db.execute(
+        select(Process).where(Process.name == body.name)
+    )
+    if name_check.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Process Name must be unique")
+
     p = Process(**body.model_dump())
     db.add(p)
     await db.flush()
@@ -336,6 +430,27 @@ async def update_process(process_id: int, body: ProcessCreate, current_user: Cur
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404)
+
+    # Check Process Code uniqueness (excluding current)
+    code_check = await db.execute(
+        select(Process).where(
+            Process.process_code == body.process_code,
+            Process.id != process_id
+        )
+    )
+    if code_check.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Short Code must be unique")
+
+    # Check Process Name uniqueness (excluding current)
+    name_check = await db.execute(
+        select(Process).where(
+            Process.name == body.name,
+            Process.id != process_id
+        )
+    )
+    if name_check.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Process Name must be unique")
+
     for k, v in body.model_dump().items():
         setattr(p, k, v)
     await db.flush()
@@ -349,7 +464,14 @@ async def delete_process(process_id: int, current_user: CurrentUser, db: DBSessi
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404)
+        
+    # Check if process is used in transactions
+    used = await is_process_used(db, process_id)
+    if used:
+        raise HTTPException(status_code=400, detail="Cannot delete process as it is used in transactions.")
+
     await db.delete(p)
+
 
 
 # ──── Rates ────

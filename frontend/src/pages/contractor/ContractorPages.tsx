@@ -107,7 +107,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                 <LazyAutocomplete options={ledgers} getOptionLabel={(o: any) => o.name} value={ledgers.find((l: any) => l.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label="Supplier *" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
               )} /></Grid>
               <Grid size={{ xs: 12 }}><Controller name="process_id" control={control} render={({ field }) => (
-                <LazyAutocomplete options={processes} getOptionLabel={(o: any) => o.name} value={processes.find((p: any) => p.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : null)} renderInput={(params) => <TextField {...params} label="Process" />} />
+                <LazyAutocomplete options={processes.filter((p: any) => p.is_active || p.id === Number(field.value))} getOptionLabel={(o: any) => o.name} value={processes.find((p: any) => p.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : null)} renderInput={(params) => <TextField {...params} label="Process" />} />
               )} /></Grid>
               <Grid size={{ xs: 4 }}><TextField {...register("quantity")} label="Quantity" type="number" fullWidth /></Grid>
               <Grid size={{ xs: 4 }}><TextField {...register("rate")} label="Rate" type="number" fullWidth /></Grid>

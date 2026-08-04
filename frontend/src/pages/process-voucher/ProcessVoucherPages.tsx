@@ -1841,7 +1841,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                             size="small"
                             value={processMapObj[item.process_id ?? ""] || null}
                             onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
-                            options={processes}
+                            options={processes.filter((p: any) => p.is_active || p.id === Number(item.process_id))}
                             getOptionLabel={(option: any) => option.name || ""}
                             noOptionsText="No processes"
                             renderInput={(params) => <TextField {...params} placeholder="Select process..." />}

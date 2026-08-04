@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Grid, IconButton, Tooltip, Chip, MenuItem,
+  TextField, Grid, IconButton, Tooltip, Chip, MenuItem, Switch, FormControlLabel,
 } from "@mui/material";
 import { Edit, Delete } from "@mui/icons-material";
 import { useForm, Controller } from "react-hook-form";
@@ -97,7 +97,18 @@ export function ProcessRegisterPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const { data = [], isLoading, refetch } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
-  const { register, handleSubmit, reset } = useForm({ defaultValues: { name: "", process_code: "", sequence: 0, description: "", company_rate: "", contractor_rate: "", gst_percent: "" as any } });
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm({
+    defaultValues: {
+      name: "",
+      process_code: "",
+      sequence: 0,
+      description: "",
+      company_rate: "",
+      contractor_rate: "",
+      gst_percent: "" as any,
+      is_active: true
+    }
+  });
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => {
@@ -107,34 +118,51 @@ export function ProcessRegisterPage() {
         contractor_rate: data.contractor_rate !== "" && data.contractor_rate !== null && data.contractor_rate !== undefined ? parseFloat(data.contractor_rate) : 0.0,
         gst_percent: data.gst_percent !== "" && data.gst_percent !== null && data.gst_percent !== undefined ? parseFloat(data.gst_percent) : 0.0,
         sequence: data.sequence !== "" && data.sequence !== null && data.sequence !== undefined ? parseInt(data.sequence, 10) : 0,
+        is_active: !!data.is_active
       };
       return editing ? api.put(`/products/processes/${editing.id}`, payload) : api.post("/products/processes", payload);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["processes"] }); setOpen(false); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["processes"] });
+      setOpen(false);
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.detail || "Failed to save process.";
+      alert(msg);
+    }
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/products/processes/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["processes"] }),
+    onError: (err: any) => {
+      const msg = err.response?.data?.detail || "Failed to delete process.";
+      alert(msg);
+    }
   });
 
   const handleOpen = (row?: any) => {
     setEditing(row || null);
-    reset(row || { name: "", process_code: "", sequence: 0, description: "", company_rate: "", contractor_rate: "", gst_percent: "" });
+    reset(row || { name: "", process_code: "", sequence: 0, description: "", company_rate: "", contractor_rate: "", gst_percent: "", is_active: true });
     setOpen(true);
   };
 
   const colDefs: ColDef[] = [
+    { field: "process_code", headerName: "Short Code", width: 120 },
     { field: "name", headerName: "Process Name", flex: 2 },
-    { field: "process_code", headerName: "Code", width: 100 },
-    { field: "company_rate", headerName: "Company Rate", width: 120, type: "numericColumn" },
-    { field: "contractor_rate", headerName: "Contractor Rate", width: 120, type: "numericColumn" },
+    { field: "company_rate", headerName: "Company Rate", width: 140, type: "numericColumn", valueFormatter: (p: any) => p.value !== undefined ? `₹${parseFloat(p.value).toFixed(2)}` : "-" },
+    { field: "contractor_rate", headerName: "Contractor Rate", width: 140, type: "numericColumn", valueFormatter: (p: any) => p.value !== undefined ? `₹${parseFloat(p.value).toFixed(2)}` : "-" },
+    { field: "is_active", headerName: "Status", width: 110, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Active" : "Inactive"} color={p.value ? "success" : "default"} sx={{ fontSize: "0.75rem", fontWeight: 600 }} /> },
     { field: "gst_percent", headerName: "GST %", width: 90, type: "numericColumn", valueFormatter: (p: any) => `${p.value || 0}%` },
     { field: "sequence", headerName: "Seq.", width: 70, type: "numericColumn" },
     { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
-        <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => deleteMutation.mutate(p.data.id)}><Delete fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => {
+          if (confirm("Are you sure you want to delete this process?")) {
+            deleteMutation.mutate(p.data.id);
+          }
+        }}><Delete fontSize="small" /></IconButton></Tooltip>
       </Box>
     )},
   ];
@@ -155,13 +183,96 @@ export function ProcessRegisterPage() {
           <DialogTitle>{editing ? "Edit Process" : "Add Process"}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 8 }}><TextField {...register("name")} label="Process Name" fullWidth required /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("process_code")} label="Code" fullWidth /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("company_rate")} label="Company Rate" type="number" slotProps={{ htmlInput: { step: "any" } }} fullWidth /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("contractor_rate")} label="Contractor Rate" type="number" slotProps={{ htmlInput: { step: "any" } }} fullWidth /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("gst_percent")} label="GST %" type="number" slotProps={{ htmlInput: { step: "any" } }} fullWidth /></Grid>
-              <Grid size={{ xs: 12 }}><TextField {...register("sequence")} label="Sequence" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 12 }}><TextField {...register("description")} label="Description" fullWidth multiline rows={2} /></Grid>
+              <Grid size={{ xs: 8 }}>
+                <TextField
+                  {...register("name", { required: "Process Name is required" })}
+                  label="Process Name *"
+                  fullWidth
+                  error={!!errors.name}
+                  helperText={errors.name?.message}
+                />
+              </Grid>
+              <Grid size={{ xs: 4 }}>
+                <TextField
+                  {...register("process_code", { required: "Short Code is required" })}
+                  label="Short Code *"
+                  fullWidth
+                  error={!!errors.process_code}
+                  helperText={errors.process_code?.message}
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <TextField
+                  {...register("company_rate", {
+                    required: "Company Rate is required",
+                    min: { value: 0, message: "Rate cannot be negative" }
+                  })}
+                  label="Company Rate Per KG *"
+                  type="number"
+                  slotProps={{ htmlInput: { step: "any", min: 0 } }}
+                  fullWidth
+                  error={!!errors.company_rate}
+                  helperText={errors.company_rate?.message}
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <TextField
+                  {...register("contractor_rate", {
+                    required: "Contractor Rate is required",
+                    min: { value: 0, message: "Rate cannot be negative" }
+                  })}
+                  label="Contractor Rate Per KG *"
+                  type="number"
+                  slotProps={{ htmlInput: { step: "any", min: 0 } }}
+                  fullWidth
+                  error={!!errors.contractor_rate}
+                  helperText={errors.contractor_rate?.message}
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <TextField
+                  {...register("gst_percent")}
+                  label="GST %"
+                  type="number"
+                  slotProps={{ htmlInput: { step: "any" } }}
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <TextField
+                  {...register("sequence")}
+                  label="Sequence"
+                  type="number"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="is_active"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={!!field.value}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                          color="success"
+                        />
+                      }
+                      label="Active (Available for future transactions)"
+                    />
+                  )}
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  {...register("description")}
+                  label="Description"
+                  fullWidth
+                  multiline
+                  rows={2}
+                />
+              </Grid>
             </Grid>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
@@ -238,7 +349,7 @@ export function RateRegisterPage() {
                 <LazyAutocomplete options={products} getOptionLabel={(o: any) => `${o.name} (${o.product_code || ""})`} value={products.find((p: any) => p.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label="Product" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
               )} /></Grid>
               <Grid size={{ xs: 12 }}><Controller name="process_id" control={control} rules={{ required: "Required" }} render={({ field, fieldState }) => (
-                <LazyAutocomplete options={processes} getOptionLabel={(o: any) => o.name} value={processes.find((p: any) => p.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label="Process" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
+                <LazyAutocomplete options={processes.filter((p: any) => p.is_active || p.id === Number(field.value))} getOptionLabel={(o: any) => o.name} value={processes.find((p: any) => p.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label="Process" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
               )} /></Grid>
               <Grid size={{ xs: 6 }}><TextField {...register("rate")} label="Rate" type="number" slotProps={{ htmlInput: { step: "any" } }} fullWidth required /></Grid>
               <Grid size={{ xs: 6 }}><Controller name="uom_id" control={control} render={({ field }) => (
