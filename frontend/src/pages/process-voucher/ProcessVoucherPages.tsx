@@ -10,6 +10,8 @@ import { useForm } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
+
+const AutocompleteAny = Autocomplete as any;
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
@@ -95,7 +97,11 @@ export function InwardVoucherPage() {
       year: "numeric"
     }).replace(/\//g, "-") : "-";
 
-    const processName = processes.find((p: any) => p.id === row.process_id)?.name || "-";
+    const processName = row.process_id
+      ? String(row.process_id).split(",")
+          .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
+          .filter(Boolean).join(" / ")
+      : "-";
     const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
     const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
     const supplierAddress = supplierLedger?.address || "";
@@ -924,13 +930,17 @@ export function OutwardVoucherPage() {
               
               let itemProcName = "";
               if (outwardItem.process_id) {
-                itemProcName = processes.find((p: any) => p.id === Number(outwardItem.process_id))?.name || "";
+                itemProcName = String(outwardItem.process_id).split(",")
+                  .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
+                  .filter(Boolean).join(" / ");
               } else {
                 try {
                   const invItems = typeof inv.items === 'string' ? JSON.parse(inv.items) : (Array.isArray(inv.items) ? inv.items : []);
                   const match = invItems.find((i: any) => Number(i.product_id) === prodId);
                   if (match && match.process_id) {
-                    itemProcName = processes.find((p: any) => p.id === Number(match.process_id))?.name || "";
+                    itemProcName = String(match.process_id).split(",")
+                      .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
+                      .filter(Boolean).join(" / ");
                   }
                 } catch {}
               }
@@ -957,7 +967,9 @@ export function OutwardVoucherPage() {
 
           let itemProcName = "";
           if (outwardItem.process_id) {
-            itemProcName = processes.find((p: any) => p.id === Number(outwardItem.process_id))?.name || "";
+            itemProcName = String(outwardItem.process_id).split(",")
+              .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
+              .filter(Boolean).join(" / ");
           }
 
           printRows.push({
@@ -1836,18 +1848,51 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           />
 
                         </TableCell>
-                        <TableCell sx={{ width: 220, whiteSpace: "nowrap" }}>
-                          <Autocomplete
+                        <TableCell sx={{ width: 250 }}>
+                          <AutocompleteAny
+                            multiple
                             size="small"
-                            value={processMapObj[item.process_id ?? ""] || null}
-                            onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
-                            options={processes.filter((p: any) => p.is_active || p.id === Number(item.process_id))}
-                            getOptionLabel={(option: any) => option.name || ""}
-                            noOptionsText="No processes"
-                            renderInput={(params) => <TextField {...params} placeholder="Select process..." />}
-                            renderOption={({ key, ...otherProps }: any, option) => (
-                              <li key={key} {...otherProps}><Typography variant="body2" sx={{ whiteSpace: "nowrap" }}>{option.name}</Typography></li>
-                            )}
+                            value={
+                              item.process_id 
+                                ? String(item.process_id).split(",")
+                                    .map(id => processMapObj[id.trim()])
+                                    .filter(Boolean)
+                                : []
+                            }
+                            onChange={(_, val: any) => {
+                              const ids = val ? val.map((v: any) => v.id).join(",") : "";
+                              handleLineItemChange(idx, "process_id", ids);
+                            }}
+                            options={processes.filter((p: any) => p.is_active || (item.process_id && String(item.process_id).split(",").map(id => Number(id.trim())).includes(p.id)))}
+                            getOptionLabel={(option: any) => option.process_code || option.name || ""}
+                            noOptionsText="No matching processes"
+                            disableCloseOnSelect
+                            renderInput={(params: any) => <TextField {...params} placeholder="Select processes..." />}
+                            renderTags={(value: any, getTagProps: any) =>
+                              value.map((option: any, index: number) => {
+                                const { key, ...tagProps } = getTagProps({ index });
+                                return (
+                                  <Chip
+                                    key={key}
+                                    variant="outlined"
+                                    label={option.process_code}
+                                    size="small"
+                                    sx={{ height: 22, fontSize: "0.7rem" }}
+                                    {...tagProps}
+                                  />
+                                );
+                              })
+                            }
+                            renderOption={(props: any, option: any) => {
+                              const { key, ...otherProps } = props;
+                              return (
+                                <li key={key} {...otherProps}>
+                                  <Typography variant="body2" sx={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                                    {option.process_code ? `[${option.process_code}] ${option.name}` : option.name}
+                                  </Typography>
+                                </li>
+                              );
+                            }}
                           />
                         </TableCell>
                           {/* Balance Stock qty for this line item (from productBalanceMap) */}

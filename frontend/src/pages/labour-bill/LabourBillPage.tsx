@@ -686,26 +686,45 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       }];
     }
 
-    const newItems = rawItems.map((item: any) => {
+    const newItems: any[] = [];
+    rawItems.forEach((item: any) => {
       const productId = item.product_id || out.product_id || "";
-      const processId = item.process_id || out.process_id || "";
+      const processIdStr = String(item.process_id || out.process_id || "");
       const qtyVal = Number(item.quantity || out.quantity || 0);
       const weightVal = Number(item.weight || item.total_weight || out.weight || out.total_weight || 0);
-      const rateVal = getContractorRate(productId, processId);
 
-      const proc = processes.find((p: any) => p.id === Number(processId));
-      if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
-        setValue("gst_percent", proc.gst_percent);
+      if (processIdStr.includes(",")) {
+        const processIds = processIdStr.split(",").map(id => id.trim()).filter(Boolean);
+        processIds.forEach((pid) => {
+          const rateVal = getContractorRate(productId, pid);
+          const proc = processes.find((p: any) => p.id === Number(pid));
+          if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
+            setValue("gst_percent", proc.gst_percent);
+          }
+          newItems.push({
+            product_id: productId,
+            process_id: Number(pid),
+            quantity: qtyVal,
+            weight: weightVal,
+            rate: rateVal,
+            amount: Number((qtyVal * rateVal).toFixed(2))
+          });
+        });
+      } else {
+        const rateVal = getContractorRate(productId, processIdStr);
+        const proc = processes.find((p: any) => p.id === Number(processIdStr));
+        if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
+          setValue("gst_percent", proc.gst_percent);
+        }
+        newItems.push({
+          product_id: productId,
+          process_id: processIdStr ? Number(processIdStr) : "",
+          quantity: qtyVal,
+          weight: weightVal,
+          rate: rateVal,
+          amount: Number((qtyVal * rateVal).toFixed(2))
+        });
       }
-
-      return {
-        product_id: productId,
-        process_id: processId,
-        quantity: qtyVal,
-        weight: weightVal,
-        rate: rateVal,
-        amount: Number((qtyVal * rateVal).toFixed(2))
-      };
     });
 
     setLineItems((prev) => {

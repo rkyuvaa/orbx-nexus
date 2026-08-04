@@ -347,36 +347,38 @@ async def is_process_used(db: DBSession, process_id: int) -> bool:
 
             # Check stock_inward process_id (header and items)
             si_res = await db.execute(
-                text(f"SELECT COUNT(*) FROM {schema}.stock_inward WHERE process_id = :pid_str OR process_id = :pid_str_raw"),
-                {"pid_str": str(process_id), "pid_str_raw": f"{process_id}"}
+                text(f"SELECT COUNT(*) FROM {schema}.stock_inward WHERE :pid_str = ANY(string_to_array(COALESCE(process_id, ''), ','))"),
+                {"pid_str": str(process_id)}
             )
             if (si_res.scalar() or 0) > 0:
                 return True
 
             si_items_res = await db.execute(
                 text(f"""
-                    SELECT COUNT(*) FROM {schema}.stock_inward 
-                    WHERE (items @> '[{{"process_id": {process_id}}}]'::jsonb)
-                       OR (items @> '[{{"process_id": "{process_id}"}}]'::jsonb)
-                """)
+                    SELECT COUNT(*) FROM {schema}.stock_inward,
+                    jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item
+                    WHERE :pid_str = ANY(string_to_array(COALESCE(item->>'process_id', ''), ','))
+                """),
+                {"pid_str": str(process_id)}
             )
             if (si_items_res.scalar() or 0) > 0:
                 return True
 
             # Check stock_outward process_id (header and items)
             so_res = await db.execute(
-                text(f"SELECT COUNT(*) FROM {schema}.stock_outward WHERE process_id = :pid_str OR process_id = :pid_str_raw"),
-                {"pid_str": str(process_id), "pid_str_raw": f"{process_id}"}
+                text(f"SELECT COUNT(*) FROM {schema}.stock_outward WHERE :pid_str = ANY(string_to_array(COALESCE(process_id, ''), ','))"),
+                {"pid_str": str(process_id)}
             )
             if (so_res.scalar() or 0) > 0:
                 return True
 
             so_items_res = await db.execute(
                 text(f"""
-                    SELECT COUNT(*) FROM {schema}.stock_outward 
-                    WHERE (items @> '[{{"process_id": {process_id}}}]'::jsonb)
-                       OR (items @> '[{{"process_id": "{process_id}"}}]'::jsonb)
-                """)
+                    SELECT COUNT(*) FROM {schema}.stock_outward,
+                    jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item
+                    WHERE :pid_str = ANY(string_to_array(COALESCE(item->>'process_id', ''), ','))
+                """),
+                {"pid_str": str(process_id)}
             )
             if (so_items_res.scalar() or 0) > 0:
                 return True
