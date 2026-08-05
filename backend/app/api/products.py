@@ -60,6 +60,7 @@ class ProcessOut(BaseModel):
     company_rate: float
     contractor_rate: float
     gst_percent: float = 0.0
+    process_ids: str | None = None
 
 
 class ProcessCreate(BaseModel):
@@ -72,6 +73,7 @@ class ProcessCreate(BaseModel):
     contractor_rate: float = Field(..., ge=0)
     gst_percent: float = 0.0
     is_active: bool = True
+    process_ids: str | None = None
 
 
 
@@ -402,31 +404,58 @@ async def list_processes(
     result = await db.execute(q.order_by(Process.process_code))
     processes_list = result.scalars().all()
     
-    # Resolve rates for combined processes dynamically
-    single_map = {p.process_code: p for p in processes_list if p.process_code and " / " not in p.process_code}
+    # Resolve rates for combined processes / groups dynamically
+    single_map = {p.id: p for p in processes_list if not p.process_ids and (not p.process_code or " / " not in p.process_code)}
     
     # Query any component processes that are missing from single_map (e.g. due to filtering)
+    missing_ids = set()
+    for p in processes_list:
+        if p.process_ids:
+            pids = [int(x.strip()) for x in p.process_ids.split(",") if x.strip().isdigit()]
+            for pid in pids:
+                if pid not in single_map:
+                    missing_ids.add(pid)
+                    
+    if missing_ids:
+        missing_res = await db.execute(select(Process).where(Process.id.in_(list(missing_ids))))
+        for mp in missing_res.scalars().all():
+            single_map[mp.id] = mp
+            
+    # Also support the old " / " code lookup fallback
+    single_code_map = {p.process_code: p for p in single_map.values() if p.process_code}
     missing_codes = set()
     for p in processes_list:
-        if p.process_code and " / " in p.process_code:
+        if not p.process_ids and p.process_code and " / " in p.process_code:
             parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
             for part in parts:
-                if part not in single_map:
+                if part not in single_code_map:
                     missing_codes.add(part)
-                    
     if missing_codes:
         missing_res = await db.execute(select(Process).where(Process.process_code.in_(list(missing_codes))))
         for mp in missing_res.scalars().all():
             if mp.process_code:
-                single_map[mp.process_code] = mp
-                
+                single_code_map[mp.process_code] = mp
+                single_map[mp.id] = mp
+
     for p in processes_list:
-        if p.process_code and " / " in p.process_code:
+        if p.process_ids:
+            pids = [int(x.strip()) for x in p.process_ids.split(",") if x.strip().isdigit()]
+            sum_company = 0.0
+            sum_contractor = 0.0
+            for pid in pids:
+                cp = single_map.get(pid)
+                if cp:
+                    sum_company += float(cp.company_rate or 0.0)
+                    sum_contractor += float(cp.contractor_rate or 0.0)
+            p.company_rate = sum_company
+            p.contractor_rate = sum_contractor
+        elif p.process_code and " / " in p.process_code:
+            # old template fallback
             parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
             sum_company = 0.0
             sum_contractor = 0.0
             for part in parts:
-                cp = single_map.get(part)
+                cp = single_code_map.get(part)
                 if cp:
                     sum_company += float(cp.company_rate or 0.0)
                     sum_contractor += float(cp.contractor_rate or 0.0)
@@ -454,8 +483,22 @@ async def create_process(body: ProcessCreate, current_user: CurrentUser, db: DBS
 
     p = Process(**body.model_dump())
     
-    # Calculate combined rates if template
-    if p.process_code and " / " in p.process_code:
+    # Calculate rates if template / group
+    if p.process_ids:
+        pids = [int(x.strip()) for x in p.process_ids.split(",") if x.strip().isdigit()]
+        if pids:
+            child_res = await db.execute(select(Process).where(Process.id.in_(pids)))
+            child_map = {cp.id: cp for cp in child_res.scalars().all()}
+            sum_company = 0.0
+            sum_contractor = 0.0
+            for pid in pids:
+                cp = child_map.get(pid)
+                if cp:
+                    sum_company += float(cp.company_rate or 0.0)
+                    sum_contractor += float(cp.contractor_rate or 0.0)
+            p.company_rate = sum_company
+            p.contractor_rate = sum_contractor
+    elif p.process_code and " / " in p.process_code:
         parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
         if parts:
             child_res = await db.execute(select(Process).where(Process.process_code.in_(parts)))
@@ -506,8 +549,22 @@ async def update_process(process_id: int, body: ProcessCreate, current_user: Cur
     for k, v in body.model_dump().items():
         setattr(p, k, v)
         
-    # Calculate combined rates if template
-    if p.process_code and " / " in p.process_code:
+    # Calculate rates if template / group
+    if p.process_ids:
+        pids = [int(x.strip()) for x in p.process_ids.split(",") if x.strip().isdigit()]
+        if pids:
+            child_res = await db.execute(select(Process).where(Process.id.in_(pids)))
+            child_map = {cp.id: cp for cp in child_res.scalars().all()}
+            sum_company = 0.0
+            sum_contractor = 0.0
+            for pid in pids:
+                cp = child_map.get(pid)
+                if cp:
+                    sum_company += float(cp.company_rate or 0.0)
+                    sum_contractor += float(cp.contractor_rate or 0.0)
+            p.company_rate = sum_company
+            p.contractor_rate = sum_contractor
+    elif p.process_code and " / " in p.process_code:
         parts = [part.strip() for part in p.process_code.split("/") if part.strip()]
         if parts:
             child_res = await db.execute(select(Process).where(Process.process_code.in_(parts)))

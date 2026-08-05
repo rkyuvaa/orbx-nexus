@@ -4,7 +4,7 @@ import LoginPage from "../pages/auth/LoginPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import AccountsGroupPage from "../pages/accounts/AccountsGroupPage";
 import LedgerPage from "../pages/accounts/LedgerPage";
-import { ProductRegisterPage, ProcessRegisterPage, RateRegisterPage, UoMPage } from "../pages/process/ProcessInfoPages";
+import { ProductRegisterPage, ProcessRegisterPage, ProcessGroupsPage, RateRegisterPage, UoMPage } from "../pages/process/ProcessInfoPages";
 import { InwardVoucherPage, OutwardVoucherPage } from "../pages/process-voucher/ProcessVoucherPages";
 import LabourBillPage from "../pages/labour-bill/LabourBillPage";
 import {
@@ -69,6 +69,7 @@ export const router = createBrowserRouter([
       // Process Info
       { path: "process/products", element: <ProductRegisterPage /> },
       { path: "process/processes", element: <ProcessRegisterPage /> },
+      { path: "process/groups", element: <ProcessGroupsPage /> },
       { path: "process/rates", element: <RateRegisterPage /> },
 
       // Process Voucher

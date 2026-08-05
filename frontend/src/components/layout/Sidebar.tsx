@@ -58,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Supplier", path: "/master/suppliers", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Product Register", path: "/process/products", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Process Register", path: "/process/processes", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Process Groups", path: "/process/groups", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {

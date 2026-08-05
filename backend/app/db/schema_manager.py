@@ -265,6 +265,7 @@ async def ensure_master_schema(engine: AsyncEngine):
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS master"))
         await conn.execute(text("ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS gst_percent NUMERIC(5,2) DEFAULT 0.0"))
+        await conn.execute(text("ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS process_ids VARCHAR(200)"))
         await conn.commit()
 
 

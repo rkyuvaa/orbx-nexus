@@ -199,6 +199,7 @@ class Process(Base):
     gst_percent: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0)
     description: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    process_ids: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     product: Mapped["Product | None"] = relationship("Product", back_populates="processes")

@@ -694,7 +694,26 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       const weightVal = Number(item.weight || item.total_weight || out.weight || out.total_weight || 0);
 
       const proc = processes.find((p: any) => p.id === Number(processIdStr));
-      if (proc && proc.process_code && proc.process_code.includes(" / ")) {
+      if (proc && proc.process_ids) {
+        const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
+        childIds.forEach((cid: string) => {
+          const childProc = processes.find((p: any) => p.id === Number(cid));
+          if (childProc) {
+            const rateVal = getContractorRate(productId, childProc.id);
+            if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
+              setValue("gst_percent", childProc.gst_percent);
+            }
+            newItems.push({
+              product_id: productId,
+              process_id: childProc.id,
+              quantity: qtyVal,
+              weight: weightVal,
+              rate: rateVal,
+              amount: Number((qtyVal * rateVal).toFixed(2))
+            });
+          }
+        });
+      } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
         const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
         parts.forEach((part: any) => {
           const childProc = processes.find((p: any) => p.process_code === part);
