@@ -71,6 +71,10 @@ export default function LabourBillPage() {
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
 
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
+  const { data: outwardVouchers = [] } = useQuery<any>({
+    queryKey: ["outward-vouchers"],
+    queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data
+  });
 
 
 
@@ -242,6 +246,18 @@ export default function LabourBillPage() {
     const supplierPhone = supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "";
     const supplierGstin = supplierLedger?.gstin || "";
 
+    const outwardIds = Array.isArray(row.outward_ids)
+      ? row.outward_ids
+      : (typeof row.outward_ids === "string"
+        ? (() => { try { return JSON.parse(row.outward_ids); } catch { return []; } })()
+        : []);
+    
+    const linkedOutwards = (outwardIds || []).map((id: number) => {
+      return outwardVouchers.find((v: any) => v.id === id);
+    }).filter(Boolean);
+
+    const supplierRefs = linkedOutwards.map((out: any) => out.ref_no).filter(Boolean).join(", ") || "-";
+
     const productName = products.find((p: any) => p.id === row.product_id)?.name || `Product #${row.product_id}`;
     const processName = processes.find((p: any) => p.id === row.process_id)?.name || `Process #${row.process_id}`;
     const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
@@ -317,6 +333,7 @@ export default function LabourBillPage() {
               ${supplierCityStatePin ? `<div class="address-lines">${supplierCityStatePin}</div>` : ""}
               ${supplierPhone ? `<div class="address-lines">${supplierPhone}</div>` : ""}
               ${supplierGstin ? `<div class="gstin">GSTIN: ${supplierGstin}</div>` : ""}
+              ${supplierRefs && supplierRefs !== "-" ? `<div class="address-lines" style="margin-top: 6px;"><strong>Supplier Ref:</strong> ${supplierRefs}</div>` : ""}
             </div>
           </div>
           <table class="items-table">

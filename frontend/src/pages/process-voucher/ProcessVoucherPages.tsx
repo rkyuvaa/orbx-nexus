@@ -110,6 +110,7 @@ export function InwardVoucherPage() {
     const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
     const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
     const supplierAddress = supplierLedger?.address || "";
+    const supplierCityStatePin = [supplierLedger?.city, supplierLedger?.state, supplierLedger?.pincode].filter(Boolean).join(" - ");
     const supplierGstin = supplierLedger?.gstin || "";
 
     let itemsArray: any[] = [];
@@ -172,11 +173,12 @@ export function InwardVoucherPage() {
             <div class="doc-no">Inward No: ${row.inward_no}</div>
             <div class="doc-date">Date: ${dateStr}</div>
           </div>
-          <div class="address-section">
+           <div class="address-section">
             <div class="address-column">
               <h3>Supplier Details:</h3>
               <div class="name">${supplierName}</div>
               ${supplierAddress ? `<div class="address-lines">${supplierAddress}</div>` : ""}
+              ${supplierCityStatePin ? `<div class="address-lines">${supplierCityStatePin}</div>` : ""}
               ${supplierGstin ? `<div class="gstin">GSTIN: ${supplierGstin}</div>` : ""}
             </div>
             <div class="address-column">
@@ -1075,7 +1077,7 @@ export function OutwardVoucherPage() {
                 <th style="width: 50px; text-align: center; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">S.No</th>
                 <th style="width: 120px; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Job Order No</th>
                 <th style="white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Product Description</th>
-                <th style="white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Nature of Business</th>
+                <th style="white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">NATURE OF PROCESS</th>
                 <th style="text-align: right; width: 70px; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Quantity</th>
                 <th style="text-align: right; width: 120px; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Total Wt (kg)</th>
               </tr>
