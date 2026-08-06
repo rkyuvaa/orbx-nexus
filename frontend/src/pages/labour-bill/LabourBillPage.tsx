@@ -652,22 +652,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const [enableRoundOff, setEnableRoundOff] = useState(true);
 
-  const getContractorRate = (productId: any, processId: any) => {
-    const contractorId = watch("ledger_id");
-    if (!contractorId) return 0;
-    const match = rates.find((r: any) => 
-      r.process_id === Number(processId) && 
-      r.ledger_id === Number(contractorId) && 
-      r.product_id === Number(productId) && 
-      r.is_active
-    );
-    if (match) return match.rate;
-
+  const getCompanyRate = (productId: any, processId: any) => {
     const proc = processes.find((p: any) => p.id === Number(processId));
-    if (proc) {
-      return proc.contractor_rate || proc.company_rate || 0;
-    }
-    return 0;
+    return proc ? proc.company_rate || 0 : 0;
   };
 
   const handleOutwardSelect = (out: any) => {
@@ -705,7 +692,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         childIds.forEach((cid: string) => {
           const childProc = processes.find((p: any) => p.id === Number(cid));
           if (childProc) {
-            const rateVal = getContractorRate(productId, childProc.id);
+            const rateVal = getCompanyRate(productId, childProc.id);
             if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
               setValue("gst_percent", childProc.gst_percent);
             }
@@ -724,7 +711,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         parts.forEach((part: any) => {
           const childProc = processes.find((p: any) => p.process_code === part);
           if (childProc) {
-            const rateVal = getContractorRate(productId, childProc.id);
+            const rateVal = getCompanyRate(productId, childProc.id);
             if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
               setValue("gst_percent", childProc.gst_percent);
             }
@@ -739,7 +726,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           }
         });
       } else {
-        const rateVal = getContractorRate(productId, processIdStr);
+        const rateVal = getCompanyRate(productId, processIdStr);
         if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
           setValue("gst_percent", proc.gst_percent);
         }
@@ -784,7 +771,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           if (field === "process_id" || field === "product_id") {
             const procId = field === "process_id" ? value : item.process_id;
             const prodId = field === "product_id" ? value : item.product_id;
-            updated.rate = getContractorRate(prodId, procId);
+            updated.rate = getCompanyRate(prodId, procId);
             if (field === "process_id") {
               const proc = processes.find((p: any) => p.id === Number(value));
               if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
@@ -1022,8 +1009,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                     <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                       <TableRow>
                         <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
-                        <TableCell sx={{ width: "35%", fontWeight: 700 }}>Product Name *</TableCell>
-                        <TableCell sx={{ width: "25%", fontWeight: 700 }}>Process *</TableCell>
+                        <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
                         <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
                         <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Rate *</TableCell>
                         <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
@@ -1034,17 +1020,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                       {lineItems.map((item, idx) => (
                         <TableRow key={idx}>
                           <TableCell align="center">{idx + 1}</TableCell>
-                          <TableCell>
-                            <LazyAutocomplete
-                              size="small"
-                              value={productMapObj[item.product_id] || null}
-                              onChange={(_, val) => handleLineItemChange(idx, "product_id", val ? val.id : "")}
-                              options={products}
-                              getOptionLabel={(option: any) => option.name || ""}
-                              noOptionsText="No matching products"
-                              renderInput={(params) => <TextField {...params} required={!item.product_id} />}
-                            />
-                          </TableCell>
                           <TableCell>
                             <LazyAutocomplete
                               size="small"
