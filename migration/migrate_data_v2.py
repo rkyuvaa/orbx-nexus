@@ -11,7 +11,7 @@ try:
 except ImportError:
     pyodbc = None
 
-PG_URL = "postgresql+psycopg://orbx:orbx_secret@localhost:5432/orbx_nexus"
+PG_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://orbx:orbx_secret@localhost:5432/orbx_nexus")
 MDB_PASSWORD = "gks0990gtn"
 MDB_DIR = "d:/JWMS/Data/SRI METAL"
 
