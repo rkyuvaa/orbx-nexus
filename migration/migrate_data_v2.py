@@ -171,10 +171,10 @@ def migrate():
                 old_code, name, group_code, phone, street, area, city, state, pin, vat, pan, ac_num, notes, deleted = row
                 address = f"{street or ''} {area or ''}".strip()
                 res = conn.execute(text("""
-                    INSERT INTO master.ledgers (name, ledger_code, group_id, ledger_type, opening_balance, balance_type, phone, mobile, address, gstin, pan, bank_account_no, is_active)
-                    VALUES (:name, :code, :group_id, 'Account', 0, 'Dr', :phone, :mobile, :addr, :gstin, :pan, :ac, :active) RETURNING id
+                    INSERT INTO master.ledgers (name, ledger_code, group_id, ledger_type, opening_balance, balance_type, phone, mobile, address, city, state, pincode, gstin, pan, bank_account_no, is_active)
+                    VALUES (:name, :code, :group_id, 'Account', 0, 'Dr', :phone, :mobile, :addr, :city, :state, :pin, :gstin, :pan, :ac, :active) RETURNING id
                 """), {
-                    "name": name, "code": str(old_code), "group_id": group_map.get(group_code), "phone": phone or "", "mobile": phone or "", "addr": address, "gstin": vat or "", "pan": pan or "", "ac": ac_num or "", "active": not clean_bool(deleted)
+                    "name": name, "code": str(old_code), "group_id": group_map.get(group_code), "phone": phone or "", "mobile": phone or "", "addr": address, "city": city or "", "state": state or "", "pin": pin or "", "gstin": vat or "", "pan": pan or "", "ac": ac_num or "", "active": not clean_bool(deleted)
                 })
                 new_id = res.fetchone()[0]
                 ledger_map[f"acc_{old_code}"] = new_id
@@ -196,10 +196,10 @@ def migrate():
                 old_code, name, mail, ac, street, area, city, state, pin, phone, email, notes, deleted = row
                 address = f"{street or ''} {area or ''}".strip()
                 res = conn.execute(text("""
-                    INSERT INTO master.ledgers (name, ledger_code, group_id, ledger_type, opening_balance, balance_type, phone, mobile, address, bank_account_no, is_active)
-                    VALUES (:name, :code, :group_id, 'Contractor', 0, 'Dr', :phone, :mobile, :addr, :ac, :active) RETURNING id
+                    INSERT INTO master.ledgers (name, ledger_code, group_id, ledger_type, opening_balance, balance_type, phone, mobile, address, city, state, pincode, bank_account_no, is_active)
+                    VALUES (:name, :code, :group_id, 'Contractor', 0, 'Dr', :phone, :mobile, :addr, :city, :state, :pin, :ac, :active) RETURNING id
                 """), {
-                    "name": name, "code": f"CON_{old_code}", "group_id": contractor_group_id, "phone": phone or "", "mobile": phone or "", "addr": address, "ac": ac or "", "active": not clean_bool(deleted)
+                    "name": name, "code": f"CON_{old_code}", "group_id": contractor_group_id, "phone": phone or "", "mobile": phone or "", "addr": address, "city": city or "", "state": state or "", "pin": pin or "", "ac": ac or "", "active": not clean_bool(deleted)
                 })
                 new_id = res.fetchone()[0]
                 ledger_map[f"con_{old_code}"] = new_id
@@ -221,10 +221,10 @@ def migrate():
                 old_code, name, mail, ac, street, area, city, state, pin, phone, email, notes, deleted = row
                 address = f"{street or ''} {area or ''}".strip()
                 res = conn.execute(text("""
-                    INSERT INTO master.ledgers (name, ledger_code, group_id, ledger_type, opening_balance, balance_type, phone, mobile, address, bank_account_no, is_active)
-                    VALUES (:name, :code, :group_id, 'Staff', 0, 'Dr', :phone, :mobile, :addr, :ac, :active) RETURNING id
+                    INSERT INTO master.ledgers (name, ledger_code, group_id, ledger_type, opening_balance, balance_type, phone, mobile, address, city, state, pincode, bank_account_no, is_active)
+                    VALUES (:name, :code, :group_id, 'Staff', 0, 'Dr', :phone, :mobile, :addr, :city, :state, :pin, :ac, :active) RETURNING id
                 """), {
-                    "name": name, "code": f"STF_{old_code}", "group_id": staff_group_id, "phone": phone or "", "mobile": phone or "", "addr": address, "ac": ac or "", "active": not clean_bool(deleted)
+                    "name": name, "code": f"STF_{old_code}", "group_id": staff_group_id, "phone": phone or "", "mobile": phone or "", "addr": address, "city": city or "", "state": state or "", "pin": pin or "", "ac": ac or "", "active": not clean_bool(deleted)
                 })
                 new_id = res.fetchone()[0]
                 ledger_map[f"stf_{old_code}"] = new_id
