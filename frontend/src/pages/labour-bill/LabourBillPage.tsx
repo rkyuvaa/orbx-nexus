@@ -741,11 +741,34 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       }
     });
 
+    const mergeProcessItems = (items: any[]) => {
+      const merged: Record<number | string, any> = {};
+      items.forEach((item) => {
+        if (!item.process_id) {
+          const tempKey = `temp_${Math.random()}`;
+          merged[tempKey] = { ...item };
+        } else {
+          const key = Number(item.process_id);
+          if (merged[key]) {
+            merged[key].quantity = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
+            merged[key].weight = Number(merged[key].weight || 0) + Number(item.weight || 0);
+            merged[key].amount = Number((merged[key].quantity * Number(merged[key].rate || 0)).toFixed(2));
+          } else {
+            merged[key] = { ...item };
+          }
+        }
+      });
+      return Object.values(merged);
+    };
+
     setLineItems((prev) => {
+      let combined = [];
       if (prev.length === 1 && !prev[0].product_id && !prev[0].process_id && !prev[0].quantity) {
-        return newItems;
+        combined = newItems;
+      } else {
+        combined = [...prev, ...newItems];
       }
-      return [...prev, ...newItems];
+      return mergeProcessItems(combined);
     });
   };
 
