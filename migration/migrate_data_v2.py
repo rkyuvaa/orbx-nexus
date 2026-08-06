@@ -1,7 +1,15 @@
 import os
-import pyodbc
+import sys
+import json
+import argparse
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy import create_engine, text
+
+try:
+    import pyodbc
+except ImportError:
+    pyodbc = None
 
 PG_URL = "postgresql+psycopg://orbx:orbx_secret@localhost:5432/orbx_nexus"
 MDB_PASSWORD = "gks0990gtn"
@@ -21,7 +29,10 @@ def clean_date(val):
         try:
             return datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
         except ValueError:
-            return None
+            try:
+                return datetime.fromisoformat(val)
+            except ValueError:
+                return None
     return val
 
 def clean_bool(val):
@@ -36,24 +47,253 @@ def clean_bool(val):
 def clean_num(val):
     return float(val) if val is not None else 0.0
 
-def migrate():
-    engine = create_engine(PG_URL)
-    print("Connected to PostgreSQL database successfully.")
-    
+def get_case_insensitive(d, key):
+    key_lower = key.lower()
+    for k, v in d.items():
+        if k.lower() == key_lower:
+            return v
+    return None
+
+class MockCursor:
+    def __init__(self, data_store, current_year=None):
+        self.data_store = data_store
+        self.current_year = current_year
+        self.results = []
+        self.index = 0
+
+    def execute(self, query, params=None):
+        query_upper = query.upper()
+        table_name = None
+        for tbl in [
+            "TBLCOMPANYMASTER", "TBLUNITMASTER", "TBLSTOCKITEM", "TBLACCOUNTSGROUP", 
+            "TBLACCOUNTSLEDGER", "TBLCONTRACTORLEDGER", "TBLSTAFFLEDGER", 
+            "TBLPRODUCTREGISTER", "TBLRATEREGISTER", "TBLCOMPANYVOUCHER", 
+            "TBLVOUCHEROPERATIONS", "TBLPROCESSVOUCHER", "TBLPROCESSOPERATION", 
+            "TBLLABOURBILL", "TBLSTAFFSALARYVOUCHER", "TBLADVANCEREGISTER", 
+            "TBLJOBWORKREGISTER", "TBLJOBWORKOPERATION", "TBLEBREADING", "TBLSTOCKTRANSFER"
+        ]:
+            if tbl in query_upper:
+                table_name = tbl
+                break
+        
+        if not table_name:
+            raise ValueError(f"Table name not found in query: {query}")
+            
+        rows = []
+        if table_name in [
+            "TBLCOMPANYMASTER", "TBLUNITMASTER", "TBLSTOCKITEM", "TBLACCOUNTSGROUP", 
+            "TBLACCOUNTSLEDGER", "TBLCONTRACTORLEDGER", "TBLSTAFFLEDGER", 
+            "TBLPRODUCTREGISTER", "TBLRATEREGISTER"
+        ]:
+            rows = self.data_store.get("master", {}).get(table_name, [])
+        else:
+            year_key = self.current_year.replace("_", "-") if self.current_year else None
+            rows = self.data_store.get("years", {}).get(year_key, {}).get(table_name, []) or \
+                   self.data_store.get("years", {}).get(self.current_year, {}).get(table_name, [])
+
+        if table_name == "TBLACCOUNTSLEDGER":
+            if "ACLLEDGERTYPE <> 'PROCESS'" in query_upper:
+                rows = [r for r in rows if r.get("aclLedgerType") != "Process"]
+            elif "ACLLEDGERTYPE = 'PROCESS'" in query_upper:
+                rows = [r for r in rows if r.get("aclLedgerType") == "Process"]
+
+        if table_name == "TBLCOMPANYVOUCHER" and "CMVVOUCHERTYPECODE IN" in query_upper:
+            rows = [r for r in rows if r.get("cmvVoucherTypeCode") in (2, 3, 4, 5, 17)]
+
+        if table_name == "TBLVOUCHEROPERATIONS" and "VOUOVOUCHERTYPECODE IN" in query_upper:
+            rows = [r for r in rows if r.get("vouoVoucherTypeCode") in (2, 3, 4, 5, 17)]
+
+        if table_name == "TBLPROCESSVOUCHER" and "PRVVOUCHERTYPECODE = 6" in query_upper:
+            rows = [r for r in rows if r.get("prvVoucherTypeCode") == 6]
+        elif table_name == "TBLPROCESSVOUCHER" and "PRVVOUCHERTYPECODE = 7" in query_upper:
+            rows = [r for r in rows if r.get("prvVoucherTypeCode") == 7]
+
+        if "SUM(VOUOAMOUNT)" in query_upper:
+            v_code = params[0]
+            total_sum = sum(clean_num(r.get("vouoAmount")) for r in rows if r.get("vouoVoucherCode") == v_code)
+            self.results = [(total_sum,)]
+            self.index = 0
+            return
+
+        if params:
+            v_code = params[0]
+            if "PROVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("proVoucherCode") == v_code]
+            elif "VOUOVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("vouoVoucherCode") == v_code]
+            elif "LBRVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("lbrVoucherCode") == v_code]
+            elif "SSVVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("ssvVoucherCode") == v_code]
+            elif "ADVVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("advVoucherCode") == v_code]
+            elif "JOWVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("jowVoucherCode") == v_code]
+            elif "JWOPVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("jwopVoucherCode") == v_code]
+            elif "JWOVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("jwoVoucherCode") == v_code]
+            elif "STTVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("sttVoucherCode") == v_code]
+            elif "STIVOUCHERCODE = ?" in query_upper:
+                rows = [r for r in rows if r.get("stiVoucherCode") == v_code]
+
+        select_part = query.split("FROM")[0].replace("SELECT", "").strip()
+        select_fields = [f.strip().split(".")[-1] for f in select_part.split(",")]
+        select_fields = [f for f in select_fields if f and f != "*"]
+
+        self.results = []
+        for r in rows:
+            row_tuple = tuple(get_case_insensitive(r, field) for field in select_fields)
+            self.results.append(row_tuple)
+        self.index = 0
+
+    def fetchall(self):
+        return self.results
+
+    def fetchone(self):
+        if self.index < len(self.results):
+            res = self.results[self.index]
+            self.index += 1
+            return res
+        return None
+
+    def close(self):
+        pass
+
+class MockMdbConn:
+    def __init__(self, data_store, current_year=None):
+        self.data_store = data_store
+        self.current_year = current_year
+
+    def cursor(self):
+        return MockCursor(self.data_store, self.current_year)
+
+    def close(self):
+        pass
+
+def serialize_value(val):
+    if isinstance(val, (datetime, datetime.date)):
+        return val.isoformat()
+    if isinstance(val, Decimal):
+        return float(val)
+    return val
+
+def export_table(cursor, table_name):
+    try:
+        cursor.execute(f"SELECT * FROM {table_name}")
+        cols = [column[0] for column in cursor.description]
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            row_dict = {}
+            for i, val in enumerate(row):
+                row_dict[cols[i]] = serialize_value(val)
+            result.append(row_dict)
+        return result
+    except Exception as e:
+        print(f"    Warning: Could not export {table_name}: {e}")
+        return []
+
+def run_export(export_path):
+    if not pyodbc:
+        print("ERROR: pyodbc is not installed on this machine, which is required for export.")
+        sys.exit(1)
+
     drivers = [x for x in pyodbc.drivers() if "Access" in x]
     if not drivers:
         print("ERROR: Microsoft Access ODBC Driver not found on this machine.")
-        return
+        sys.exit(1)
     driver = drivers[0]
     print(f"Using ODBC Driver: {driver}")
-    
+
+    dump_data = {
+        "master": {},
+        "years": {}
+    }
+
+    # 1. Export Master Tables
     latest_year = "2026_2027"
     latest_path = os.path.join(MDB_DIR, MDB_FILES[latest_year])
-    print(f"\n--- Loading Master Data from {latest_path} ---")
-    
+    if not os.path.exists(latest_path):
+        print(f"ERROR: Latest year MDB file not found at {latest_path}")
+        sys.exit(1)
+
+    print(f"\n--- Exporting Master Data from {latest_path} ---")
     conn_str = f"Driver={{{driver}}};DBQ={latest_path};PWD={MDB_PASSWORD};"
     mdb_conn = pyodbc.connect(conn_str)
     cursor = mdb_conn.cursor()
+
+    master_tables = [
+        "tblCompanyMaster", "tblUnitMaster", "tblStockItem", "tblAccountsGroup",
+        "tblAccountsLedger", "tblContractorLedger", "tblStaffLedger",
+        "tblProductRegister", "tblRateRegister"
+    ]
+    for table in master_tables:
+        print(f"  Exporting table: {table}...")
+        dump_data["master"][table] = export_table(cursor, table)
+
+    cursor.close()
+    mdb_conn.close()
+
+    # 2. Export Transaction Tables per Year
+    for fy_key, mdb_filename in MDB_FILES.items():
+        mdb_path = os.path.join(MDB_DIR, mdb_filename)
+        if not os.path.exists(mdb_path):
+            print(f"Skipping {fy_key} (file {mdb_filename} not found).")
+            continue
+
+        print(f"\n--- Exporting {fy_key} from {mdb_path} ---")
+        conn_str = f"Driver={{{driver}}};DBQ={mdb_path};PWD={MDB_PASSWORD};"
+        mdb_conn = pyodbc.connect(conn_str)
+        cursor = mdb_conn.cursor()
+
+        dump_data["years"][fy_key] = {}
+        transaction_tables = [
+            "tblCompanyVoucher", "tblVoucherOperations", "tblProcessVoucher",
+            "tblProcessOperation", "tblLabourBill", "tblStaffSalaryVoucher",
+            "tblAdvanceRegister", "tblJobWorkRegister", "tblJobworkOperation",
+            "tblEBReading", "tblStockTransfer"
+        ]
+        for table in transaction_tables:
+            print(f"  Exporting table: {table}...")
+            dump_data["years"][fy_key][table] = export_table(cursor, table)
+
+        cursor.close()
+        mdb_conn.close()
+
+    print(f"\nWriting exported data to: {export_path}")
+    with open(export_path, "w", encoding="utf-8") as f:
+        json.dump(dump_data, f, ensure_ascii=False, indent=2)
+    print("Export completed successfully!")
+
+def migrate(json_store=None):
+    engine = create_engine(PG_URL)
+    print("Connected to PostgreSQL database successfully.")
+    
+    if json_store is not None:
+        print("Using JSON data store for legacy Access data.")
+        latest_year = "2026_2027"
+        mdb_conn = MockMdbConn(json_store, current_year=latest_year)
+        cursor = mdb_conn.cursor()
+    else:
+        if not pyodbc:
+            print("ERROR: pyodbc is not installed and no JSON import file was specified.")
+            return
+        drivers = [x for x in pyodbc.drivers() if "Access" in x]
+        if not drivers:
+            print("ERROR: Microsoft Access ODBC Driver not found on this machine.")
+            return
+        driver = drivers[0]
+        print(f"Using ODBC Driver: {driver}")
+        
+        latest_year = "2026_2027"
+        latest_path = os.path.join(MDB_DIR, MDB_FILES[latest_year])
+        print(f"\n--- Loading Master Data from {latest_path} ---")
+        
+        conn_str = f"Driver={{{driver}}};DBQ={latest_path};PWD={MDB_PASSWORD};"
+        mdb_conn = pyodbc.connect(conn_str)
+        cursor = mdb_conn.cursor()
     
     # Truncate all master tables
     with engine.begin() as conn:
@@ -312,15 +552,21 @@ def migrate():
     }
 
     for year, filename in MDB_FILES.items():
-        mdb_path = os.path.join(MDB_DIR, filename)
-        if not os.path.exists(mdb_path):
-            print(f"File not found: {mdb_path}. Skipping.")
-            continue
-            
-        print(f"\nProcessing Year Schema: fy_{year} ({filename})...")
-        conn_str = f"Driver={{{driver}}};DBQ={mdb_path};PWD={MDB_PASSWORD};"
-        mdb_conn = pyodbc.connect(conn_str)
-        cursor = mdb_conn.cursor()
+        schema = f"fy_{year}"
+        if json_store is not None:
+            print(f"\nProcessing Year Schema: {schema} from JSON store...")
+            mdb_conn = MockMdbConn(json_store, current_year=year)
+            cursor = mdb_conn.cursor()
+        else:
+            mdb_path = os.path.join(MDB_DIR, filename)
+            if not os.path.exists(mdb_path):
+                print(f"File not found: {mdb_path}. Skipping.")
+                continue
+                
+            print(f"\nProcessing Year Schema: {schema} ({filename})...")
+            conn_str = f"Driver={{{driver}}};DBQ={mdb_path};PWD={MDB_PASSWORD};"
+            mdb_conn = pyodbc.connect(conn_str)
+            cursor = mdb_conn.cursor()
         
         schema = f"fy_{year}"
         
@@ -675,4 +921,20 @@ def migrate():
     print("\n================ MIGRATION SUCCESSFULLY COMPLETED ================")
 
 if __name__ == "__main__":
-    migrate()
+    parser = argparse.ArgumentParser(description="OrbX Nexus Legacy Access Data Migration ETL")
+    parser.add_argument("--export", type=str, help="Export Access data to a JSON file (runs on Windows)")
+    parser.add_argument("--import-file", type=str, help="Import data from a JSON file (runs on server/container)")
+    
+    args = parser.parse_args()
+    
+    if args.export:
+        run_export(args.export)
+    elif args.import_file:
+        if not os.path.exists(args.import_file):
+            print(f"ERROR: Import file not found: {args.import_file}")
+            sys.exit(1)
+        with open(args.import_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        migrate(json_store=data)
+    else:
+        migrate()
