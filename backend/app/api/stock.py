@@ -141,7 +141,6 @@ async def get_pending_inward_for_outward(
             si.items AS hdr_items
           FROM {s}.stock_inward si WHERE 1=1 {ledger_filter}
         ),
-        -- Inward line items expanded (header + JSONB)
         in_lines AS (
           SELECT inward_id, hdr_product_id AS product_id, hdr_qty AS line_qty,
             NULL::int AS process_id
@@ -156,11 +155,10 @@ async def get_pending_inward_for_outward(
             jsonb_array_elements(COALESCE(hdr_items, '[]'::jsonb)) AS item
           WHERE jsonb_array_length(COALESCE(hdr_items, '[]'::jsonb)) > 0
         ),
-        -- Outward items matched by inward_id + product_id + process_id
+        -- Outward items matched only by inward_id + product_id (ignoring process)
         out_dispatched AS (
           SELECT so.inward_id,
             COALESCE((o_item->>'product_id')::int, so.product_id) AS product_id,
-            (o_item->>'process_id')::int AS process_id,
             SUM(COALESCE((o_item->>'quantity')::numeric, so.quantity)) AS dispatched
           FROM {s}.stock_outward so
           LEFT JOIN LATERAL jsonb_array_elements(
@@ -169,14 +167,17 @@ async def get_pending_inward_for_outward(
           ) AS o_item ON TRUE
           WHERE so.inward_id IS NOT NULL
           GROUP BY so.inward_id,
-            COALESCE((o_item->>'product_id')::int, so.product_id),
-            (o_item->>'process_id')::int
+            COALESCE((o_item->>'product_id')::int, so.product_id)
+        ),
+        inward_balances AS (
+          SELECT il.inward_id,
+            SUM(GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0)) AS total_balance
+          FROM in_lines il
+          LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id AND od.product_id = il.product_id
+          GROUP BY il.inward_id
         )
         SELECT si.*,
-          -- product-level balance (backward compat)
-          GREATEST(COALESCE(pi.total_inward, 0)
-            - COALESCE(op.total_outward, 0)
-            + COALESCE(ap.total_adj, 0), 0) AS balance_qty,
+          COALESCE(ib.total_balance, 0) AS balance_qty,
           -- per-line-item balances as JSON array
           COALESCE((
             SELECT jsonb_agg(
@@ -191,17 +192,11 @@ async def get_pending_inward_for_outward(
             FROM in_lines il
             LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id
               AND od.product_id = il.product_id
-              AND (od.process_id IS NOT DISTINCT FROM il.process_id)
             WHERE il.inward_id = si.id
               AND GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0) > 0
           ), '[]'::jsonb) AS line_items_balance
         FROM {s}.stock_inward si
-        LEFT JOIN (SELECT product_id, SUM(quantity) AS total_inward FROM {s}.stock_inward GROUP BY product_id) pi
-          ON pi.product_id = si.product_id
-        LEFT JOIN (SELECT product_id, SUM(so.quantity) AS total_outward FROM {s}.stock_outward so GROUP BY product_id) op
-          ON op.product_id = si.product_id
-        LEFT JOIN (SELECT product_id, SUM(sa.quantity) AS total_adj FROM {s}.stock_adjustments sa GROUP BY product_id) ap
-          ON ap.product_id = si.product_id
+        LEFT JOIN inward_balances ib ON ib.inward_id = si.id
         WHERE 1=1 {ledger_filter}
         ORDER BY si.inward_date DESC
         """),

@@ -28,7 +28,7 @@ import { toWords } from "../../utils/numberToWords";
 
 import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
 
-import { formatQty, formatAmount } from "../../utils/format";
+import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
 
 
@@ -308,12 +308,12 @@ export default function LabourBillPage() {
     itemsArray.forEach((item, idx) => {
       const prName = resolveProcessName(item.process_id, processes) || (row.process_id ? processName : "-");
       const pObj = products.find((p: any) => p.id === Number(item.product_id));
-      const uomStr = item.uom || pObj?.uom || "PCS";
+      const uomStr = item.uom || pObj?.uom || "KG";
       itemsHtml += `
         <tr>
           <td style="text-align: center;">${idx + 1}</td>
           <td style="font-weight: 600;">${prName}</td>
-          <td style="text-align: right;">${formatQty(item.quantity)}</td>
+          <td style="text-align: right;">${formatWeight(item.quantity)}</td>
           <td style="text-align: center;">${uomStr}</td>
           <td style="text-align: right;">₹${formatAmount(item.rate)}</td>
           <td style="text-align: right; font-weight: 600;">₹${formatAmount(item.amount)}</td>
@@ -364,7 +364,7 @@ export default function LabourBillPage() {
               <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
                 <th style="width: 50px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
-                <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
+                <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
                 <th style="text-align: center; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">UOM</th>
                 <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">RATE</th>
                 <th style="text-align: right; width: 120px; background-color: #0f5132 !important; color: #ffffff !important;">SUBTOTAL</th>
@@ -443,7 +443,7 @@ export default function LabourBillPage() {
     { field: "bill_no", headerName: "Bill No.", width: 110 },
     { field: "bill_date", headerName: "Date", width: 95 },
     { field: "ledger_id", headerName: "Supplier", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
-    { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
+    { field: "quantity", headerName: "Weight", width: 80, type: "numericColumn", valueFormatter: (p) => formatWeight(p.value) },
     { field: "total_amount", headerName: "Total Amount", width: 130, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value || p.data?.net_amount)}` },
     { field: "is_paid", headerName: "Status", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Paid" : "Pending"} color={p.value ? "success" : "warning"} /> },
     { headerName: "Actions", width: 160, sortable: false, filter: false, cellRenderer: (p: any) => (
@@ -549,7 +549,7 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
                 <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Serial / Ref</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Weight (kg)</TableCell>
                 <TableCell sx={{ width: 90 }} />
               </TableRow>
             </TableHead>
@@ -578,7 +578,7 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {Number(out.quantity || 0).toLocaleString()}
+                        {formatWeight(out.total_weight || out.weight || 0)}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
@@ -714,8 +714,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       rawItems = [{
         product_id: out.product_id || "",
         process_id: out.process_id || "",
-        quantity: out.quantity || 0,
-        weight: out.weight || out.total_weight || 0,
+        quantity: out.total_weight || out.weight || 0,
       }];
     }
 
@@ -723,8 +722,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     rawItems.forEach((item: any) => {
       const productId = item.product_id || out.product_id || "";
       const processIdStr = String(item.process_id || out.process_id || "");
-      const qtyVal = Number(item.quantity || out.quantity || 0);
-      const weightVal = Number(item.weight || item.total_weight || out.weight || out.total_weight || 0);
+      const totalWeightVal = Number(item.total_weight || item.weight || (Number(item.quantity) * Number(item.weight)) || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
 
       const proc = processes.find((p: any) => p.id === Number(processIdStr));
       if (proc && proc.process_ids) {
@@ -739,10 +737,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             newItems.push({
               product_id: productId,
               process_id: childProc.id,
-              quantity: qtyVal,
-              weight: weightVal,
+              quantity: totalWeightVal,
               rate: rateVal,
-              amount: Number((qtyVal * rateVal).toFixed(2))
+              amount: Number((totalWeightVal * rateVal).toFixed(2))
             });
           }
         });
@@ -758,10 +755,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             newItems.push({
               product_id: productId,
               process_id: childProc.id,
-              quantity: qtyVal,
-              weight: weightVal,
+              quantity: totalWeightVal,
               rate: rateVal,
-              amount: Number((qtyVal * rateVal).toFixed(2))
+              amount: Number((totalWeightVal * rateVal).toFixed(2))
             });
           }
         });
@@ -773,10 +769,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         newItems.push({
           product_id: productId,
           process_id: processIdStr ? Number(processIdStr) : "",
-          quantity: qtyVal,
-          weight: weightVal,
+          quantity: totalWeightVal,
           rate: rateVal,
-          amount: Number((qtyVal * rateVal).toFixed(2))
+          amount: Number((totalWeightVal * rateVal).toFixed(2))
         });
       }
     });
@@ -791,7 +786,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           const key = Number(item.process_id);
           if (merged[key]) {
             merged[key].quantity = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
-            merged[key].weight = Number(merged[key].weight || 0) + Number(item.weight || 0);
             merged[key].amount = Number((merged[key].quantity * Number(merged[key].rate || 0)).toFixed(2));
           } else {
             merged[key] = { ...item };
@@ -949,7 +943,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           product_id: item.product_id ? Number(item.product_id) : null,
           process_id: item.process_id ? Number(item.process_id) : null,
           quantity: Number(item.quantity) || 0,
-          weight: Number(item.weight) || 0,
           rate: Number(item.rate) || 0,
           amount: Number(item.amount) || 0
         })),
@@ -1046,7 +1039,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                           </Typography>
                         )}
                         <Typography variant="caption" sx={{ fontSize: "0.7rem", lineHeight: 1.4, display: "block", color: "text.primary" }}>
-                          Qty: {Number(out.quantity || 0).toLocaleString()}
+                          Wt: {formatWeight(out.total_weight || out.weight || 0)} kg
                         </Typography>
                       </Box>
                       <IconButton size="small" sx={{ p: 0, ml: 0.5, color: "#023020" }} onClick={() => handleRemoveSelectedOutward(out.id)}>
@@ -1073,7 +1066,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                       <TableRow>
                         <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
                         <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
-                        <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
+                        <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Weight (kg) *</TableCell>
                         <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Rate *</TableCell>
                         <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
                         <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
