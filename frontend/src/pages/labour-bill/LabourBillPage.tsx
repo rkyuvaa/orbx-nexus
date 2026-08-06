@@ -75,6 +75,10 @@ export default function LabourBillPage() {
     queryKey: ["outward-vouchers"],
     queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data
   });
+  const { data: inwardVouchers = [] } = useQuery<any>({
+    queryKey: ["inward-vouchers-list"],
+    queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data
+  });
 
 
 
@@ -256,7 +260,25 @@ export default function LabourBillPage() {
       return outwardVouchers.find((v: any) => v.id === id);
     }).filter(Boolean);
 
-    const supplierRefs = linkedOutwards.map((out: any) => out.ref_no).filter(Boolean).join(", ") || "-";
+    // Resolve all linked inward vouchers for these outward vouchers
+    const resolvedInwardRefs = new Set<string>();
+    linkedOutwards.forEach((out: any) => {
+      const outInwardIds = out.inward_ids 
+        ? (Array.isArray(out.inward_ids) ? out.inward_ids : (typeof out.inward_ids === 'string' ? (() => { try { return JSON.parse(out.inward_ids); } catch { return []; } })() : []))
+        : (out.inward_id ? [out.inward_id] : []);
+        
+      (outInwardIds || []).forEach((inwId: number) => {
+        const inv = inwardVouchers.find((v: any) => v.id === inwId);
+        if (inv) {
+          const ref = inv.ref_no || inv.serial_no || inv.inward_no;
+          if (ref) resolvedInwardRefs.add(ref);
+        }
+      });
+      // Fallback to outward's own ref_no if no inwards matched
+      if (out.ref_no) resolvedInwardRefs.add(out.ref_no);
+    });
+
+    const supplierRefs = Array.from(resolvedInwardRefs).join(", ") || "-";
 
     const productName = products.find((p: any) => p.id === row.product_id)?.name || `Product #${row.product_id}`;
     const processName = processes.find((p: any) => p.id === row.process_id)?.name || `Process #${row.process_id}`;
