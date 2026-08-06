@@ -581,7 +581,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const { data: rates = [] } = useQuery({ queryKey: ["rates"], queryFn: async () => (await api.get("/products/rates/all")).data });
   const { data: outwardVouchers = [] } = useQuery<any>({
     queryKey: ["outward-vouchers"],
-    queryFn: async () => (await api.get(`/stock/outward/?fy=${activeFY}`)).data,
+    queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data,
     enabled: open
   });
 
