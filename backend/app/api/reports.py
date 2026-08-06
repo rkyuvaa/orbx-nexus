@@ -258,51 +258,114 @@ async def stock_in_hand(
     )
     inward_rows = inward_res.mappings().all()
 
-    # 3. Fetch stock outward records up to as_of_date
-    outward_res = await db.execute(
-        text(f"SELECT * FROM {schema}.stock_outward WHERE outward_date <= :aod"),
-        {"aod": as_of_date}
-    )
-    outward_rows = outward_res.mappings().all()
+    # 3. Fetch stock outward     # Map from (inward_id, product_id) -> initial_quantity
+    inward_quantities = {}
+    for si in inward_rows:
+        si_dict = dict(si)
+        inward_id = si_dict["id"]
+        raw_items = si_dict.get("items")
+        if isinstance(raw_items, str):
+            try: raw_items = json.loads(raw_items)
+            except Exception: raw_items = []
 
-    # Build dispatched map: (inward_id, product_id, process_id) -> total_dispatched
-    dispatched_map: dict = {}
+        unrolled_items = []
+        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
+            for item in raw_items:
+                unrolled_items.append({
+                    "product_id": item.get("product_id"),
+                    "quantity": float(item.get("quantity") or 0)
+                })
+        else:
+            if si_dict.get("product_id") or float(si_dict.get("quantity") or 0) > 0:
+                unrolled_items.append({
+                    "product_id": si_dict.get("product_id"),
+                    "quantity": float(si_dict.get("quantity") or 0)
+                })
+
+        for item in unrolled_items:
+            p_id = item["product_id"]
+            if p_id:
+                key = (int(inward_id), int(p_id))
+                inward_quantities[key] = inward_quantities.get(key, 0.0) + item["quantity"]
+
+    # Map from (inward_id, product_id) -> total_dispatched_qty
+    dispatched_pool = {}
+
     for so in outward_rows:
         so_dict = dict(so)
         inw_ids = []
         if so_dict.get("inward_id"):
-            inw_ids.append(so_dict["inward_id"])
+            inw_ids.append(int(so_dict["inward_id"]))
         if so_dict.get("inward_ids"):
             raw_ids = so_dict["inward_ids"]
             if isinstance(raw_ids, str):
                 try: raw_ids = json.loads(raw_ids)
                 except Exception: raw_ids = []
             if isinstance(raw_ids, list):
-                inw_ids.extend([int(x) for x in raw_ids if x])
+                for x in raw_ids:
+                    if x and int(x) not in inw_ids:
+                        inw_ids.append(int(x))
 
-        items = so_dict.get("items")
-        if isinstance(items, str):
-            try: items = json.loads(items)
-            except Exception: items = []
+        raw_items = so_dict.get("items")
+        if isinstance(raw_items, str):
+            try: raw_items = json.loads(raw_items)
+            except Exception: raw_items = []
 
-        if items and isinstance(items, list) and len(items) > 0:
-            for item in items:
-                p_id = item.get("product_id") or so_dict.get("product_id")
-                pr_id = item.get("process_id") or so_dict.get("process_id")
-                qty = float(item.get("quantity") or 0)
-                for iid in inw_ids:
-                    key = (int(iid), int(p_id) if p_id else None, str(pr_id) if pr_id else None)
-                    dispatched_map[key] = dispatched_map.get(key, 0.0) + qty
+        outward_items = []
+        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
+            for item in raw_items:
+                outward_items.append({
+                    "product_id": item.get("product_id") or so_dict.get("product_id"),
+                    "quantity": float(item.get("quantity") or 0)
+                })
         else:
-            p_id = so_dict.get("product_id")
-            pr_id = so_dict.get("process_id")
-            qty = float(so_dict.get("quantity") or 0)
-            for iid in inw_ids:
-                key = (int(iid), int(p_id) if p_id else None, str(pr_id) if pr_id else None)
-                dispatched_map[key] = dispatched_map.get(key, 0.0) + qty
+            if so_dict.get("product_id") or float(so_dict.get("quantity") or 0) > 0:
+                outward_items.append({
+                    "product_id": so_dict.get("product_id"),
+                    "quantity": float(so_dict.get("quantity") or 0)
+                })
+
+        for item in outward_items:
+            p_id = item["product_id"]
+            if not p_id:
+                continue
+            p_id = int(p_id)
+            remaining_qty = item["quantity"]
+
+            matching_inwards = [iid for iid in inw_ids if (iid, p_id) in inward_quantities]
+
+            if not matching_inwards:
+                matching_inwards = inw_ids
+
+            for iid in matching_inwards:
+                if remaining_qty <= 0:
+                    break
+                
+                inw_key = (iid, p_id)
+                init_qty = inward_quantities.get(inw_key, 0.0)
+                already_disp = dispatched_pool.get(inw_key, 0.0)
+                avail_qty = max(0.0, init_qty - already_disp)
+
+                if avail_qty <= 0:
+                    if iid == matching_inwards[-1]:
+                        allocate_qty = remaining_qty
+                    else:
+                        continue
+                else:
+                    allocate_qty = min(avail_qty, remaining_qty)
+
+                dispatched_pool[inw_key] = already_disp + allocate_qty
+                remaining_qty -= allocate_qty
+
+            if remaining_qty > 0 and not matching_inwards:
+                if inw_ids:
+                    inw_key = (inw_ids[0], p_id)
+                    dispatched_pool[inw_key] = dispatched_pool.get(inw_key, 0.0) + remaining_qty
 
     # 4. Unroll inward line items and calculate balance
     result_list = []
+    remaining_dispatched = {k: v for k, v in dispatched_pool.items()}
+
     for si in inward_rows:
         si_dict = dict(si)
         inward_id = si_dict["id"]
@@ -337,18 +400,23 @@ async def stock_in_hand(
 
         for item in unrolled_items:
             p_id = item["product_id"]
-            pr_id = item["process_id"]
             line_qty = item["quantity"]
             unit_weight = item["weight"]
 
-            key = (int(inward_id), int(p_id) if p_id else None, str(pr_id) if pr_id else None)
-            dispatched = dispatched_map.get(key, 0.0)
-            if dispatched == 0 and p_id:
-                dispatched = dispatched_map.get((int(inward_id), int(p_id), None), 0.0)
+            if not p_id:
+                continue
 
-            balance_qty = max(0.0, line_qty - dispatched)
+            pool_key = (int(inward_id), int(p_id))
+            dispatched_to_subtract = 0.0
+            if pool_key in remaining_dispatched:
+                avail = remaining_dispatched[pool_key]
+                sub = min(line_qty, avail)
+                dispatched_to_subtract = sub
+                remaining_dispatched[pool_key] = avail - sub
+
+            balance_qty = max(0.0, line_qty - dispatched_to_subtract)
             if balance_qty > 0:
-                p_name = product_map.get(p_id, f"Product #{p_id}" if p_id else "General Item")
+                p_name = product_map.get(p_id, f"Product #{p_id}")
                 result_list.append({
                     "inward_no": inward_no,
                     "inward_date": inward_date,
@@ -361,7 +429,6 @@ async def stock_in_hand(
                 })
 
     return result_list
-    return [dict(r) for r in result.mappings().all()]
 
 
 # ─────── Receivables / Payables ───────
