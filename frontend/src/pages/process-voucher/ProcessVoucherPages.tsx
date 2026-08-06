@@ -1853,8 +1853,11 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                             size="small"
                             value={processMapObj[item.process_id ?? ""] || null}
                             onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
-                            options={processes.filter((p: any) => p.is_active || p.id === Number(item.process_id))}
-                            getOptionLabel={(option: any) => option.process_code || option.name || ""}
+                            options={processes.filter((p: any) => 
+                              (p.is_active || p.id === Number(item.process_id)) && 
+                              (p.process_ids || (p.process_code && p.process_code.includes(" / ")))
+                            )}
+                            getOptionLabel={(option: any) => option.name || ""}
                             noOptionsText="No processes"
                             renderInput={(params) => <TextField {...params} placeholder="Select process..." />}
                             renderOption={(props, option) => {
@@ -1862,7 +1865,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                               return (
                                 <li key={key} {...otherProps}>
                                   <Typography variant="body2" sx={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                                    {option.process_code ? `[${option.process_code}] ${option.name}` : option.name}
+                                    {option.name}
                                   </Typography>
                                 </li>
                               );

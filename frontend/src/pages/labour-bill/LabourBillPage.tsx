@@ -1044,7 +1044,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                               size="small"
                               value={processMapObj[item.process_id] || null}
                               onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
-                              options={processes.filter((p: any) => p.is_active || p.id === Number(item.process_id))}
+                              options={processes.filter((p: any) => 
+                                (p.is_active || p.id === Number(item.process_id)) && 
+                                (p.process_ids || (p.process_code && p.process_code.includes(" / ")))
+                              )}
                               getOptionLabel={(option: any) => option.name || ""}
                               noOptionsText="No matching processes"
                               renderInput={(params) => <TextField {...params} required={!item.process_id} />}
