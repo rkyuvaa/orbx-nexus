@@ -85,11 +85,13 @@ class MockCursor:
             "TBLACCOUNTSLEDGER", "TBLCONTRACTORLEDGER", "TBLSTAFFLEDGER", 
             "TBLPRODUCTREGISTER", "TBLRATEREGISTER"
         ]:
-            rows = self.data_store.get("master", {}).get(table_name, [])
+            rows = get_case_insensitive(self.data_store.get("master", {}), table_name) or []
         else:
             year_key = self.current_year.replace("_", "-") if self.current_year else None
-            rows = self.data_store.get("years", {}).get(year_key, {}).get(table_name, []) or \
-                   self.data_store.get("years", {}).get(self.current_year, {}).get(table_name, [])
+            year_data = get_case_insensitive(self.data_store.get("years", {}), year_key or "") or \
+                        get_case_insensitive(self.data_store.get("years", {}), self.current_year or "")
+            if year_data:
+                rows = get_case_insensitive(year_data, table_name) or []
 
         if table_name == "TBLACCOUNTSLEDGER":
             if "ACLLEDGERTYPE <> 'PROCESS'" in query_upper:
