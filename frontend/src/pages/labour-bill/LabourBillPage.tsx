@@ -346,6 +346,7 @@ export default function LabourBillPage() {
             <h2>LABOUR BILL</h2>
             <div class="doc-no">Bill No: ${row.bill_no}</div>
             <div class="doc-date">Date: ${dateStr}</div>
+            ${supplierRefs && supplierRefs !== "-" ? `<div class="doc-date">Supplier Ref: ${supplierRefs}</div>` : ""}
           </div>
           <div class="address-section">
             <div class="address-column" style="width: 100%;">
@@ -355,7 +356,6 @@ export default function LabourBillPage() {
               ${supplierCityStatePin ? `<div class="address-lines">${supplierCityStatePin}</div>` : ""}
               ${supplierPhone ? `<div class="address-lines">${supplierPhone}</div>` : ""}
               ${supplierGstin ? `<div class="gstin">GSTIN: ${supplierGstin}</div>` : ""}
-              ${supplierRefs && supplierRefs !== "-" ? `<div class="address-lines" style="margin-top: 6px;"><strong>Supplier Ref:</strong> ${supplierRefs}</div>` : ""}
             </div>
           </div>
           <table class="items-table">
