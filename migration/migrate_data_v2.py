@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import argparse
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy import create_engine, text
 
@@ -173,7 +173,7 @@ class MockMdbConn:
         pass
 
 def serialize_value(val):
-    if isinstance(val, (datetime, datetime.date)):
+    if isinstance(val, (datetime, date)):
         return val.isoformat()
     if isinstance(val, Decimal):
         return float(val)
@@ -251,9 +251,7 @@ def run_export(export_path):
         dump_data["years"][fy_key] = {}
         transaction_tables = [
             "tblCompanyVoucher", "tblVoucherOperations", "tblProcessVoucher",
-            "tblProcessOperation", "tblLabourBill", "tblStaffSalaryVoucher",
-            "tblAdvanceRegister", "tblJobWorkRegister", "tblJobworkOperation",
-            "tblEBReading", "tblStockTransfer"
+            "tblProcessOperation", "tblJobworkOperation", "tblEBReading", "tblStockTransfer"
         ]
         for table in transaction_tables:
             print(f"  Exporting table: {table}...")
