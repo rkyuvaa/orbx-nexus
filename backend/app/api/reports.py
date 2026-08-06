@@ -258,7 +258,14 @@ async def stock_in_hand(
     )
     inward_rows = inward_res.mappings().all()
 
-    # 3. Fetch stock outward     # Map from (inward_id, product_id) -> initial_quantity
+    # 3. Fetch stock outward records up to as_of_date
+    outward_res = await db.execute(
+        text(f"SELECT * FROM {schema}.stock_outward WHERE outward_date <= :aod"),
+        {"aod": as_of_date}
+    )
+    outward_rows = outward_res.mappings().all()
+
+    # Map from (inward_id, product_id) -> initial_quantity
     inward_quantities = {}
     for si in inward_rows:
         si_dict = dict(si)
