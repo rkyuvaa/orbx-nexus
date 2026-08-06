@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem } from "@mui/material";
-import { Add, Delete, Refresh } from "@mui/icons-material";
+import Add from "@mui/icons-material/Add";
+import Delete from "@mui/icons-material/Delete";
+import Refresh from "@mui/icons-material/Refresh";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";

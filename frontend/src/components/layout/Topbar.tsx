@@ -2,10 +2,13 @@ import {
   AppBar, Toolbar, IconButton, Typography, Box,
   Avatar, Menu, MenuItem, Divider, Tooltip, ListItemIcon, Breadcrumbs, Link,
 } from "@mui/material";
-import {
-  Logout, Person, NotificationsNone, LightMode, DarkMode, NavigateNext,
-  Menu as MenuIcon,
-} from "@mui/icons-material";
+import Logout from "@mui/icons-material/Logout";
+import Person from "@mui/icons-material/Person";
+import NotificationsNone from "@mui/icons-material/NotificationsNone";
+import LightMode from "@mui/icons-material/LightMode";
+import DarkMode from "@mui/icons-material/DarkMode";
+import NavigateNext from "@mui/icons-material/NavigateNext";
+import MenuIcon from "@mui/icons-material/Menu";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { alpha, useTheme } from "@mui/material/styles";

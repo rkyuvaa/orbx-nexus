@@ -5,7 +5,8 @@ import {
   TextField, Grid, IconButton, Tooltip, MenuItem, Typography,
   Divider, Alert,
 } from "@mui/material";
-import { Edit, Delete } from "@mui/icons-material";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";

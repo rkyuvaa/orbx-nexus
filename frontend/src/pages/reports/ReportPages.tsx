@@ -4,7 +4,8 @@ import {
   Box, Button, TextField, Paper, Typography,
   Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, MenuItem, Autocomplete
 } from "@mui/material";
-import { Print, Search } from "@mui/icons-material";
+import Print from "@mui/icons-material/Print";
+import Search from "@mui/icons-material/Search";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore } from "../../store";

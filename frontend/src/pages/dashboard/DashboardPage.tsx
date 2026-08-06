@@ -2,9 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Box, Grid, Card, CardContent, Typography, Skeleton, Chip, useTheme,
 } from "@mui/material";
-import {
-  ReceiptLong, PendingActions, Inventory2, Factory, TrendingUp, TrendingDown,
-} from "@mui/icons-material";
+import ReceiptLong from "@mui/icons-material/ReceiptLong";
+import PendingActions from "@mui/icons-material/PendingActions";
+import Inventory2 from "@mui/icons-material/Inventory2";
+import Factory from "@mui/icons-material/Factory";
+import TrendingUp from "@mui/icons-material/TrendingUp";
+import TrendingDown from "@mui/icons-material/TrendingDown";
 import {
   ResponsiveContainer, XAxis, YAxis,
   Tooltip, BarChart, Bar, CartesianGrid, Legend,

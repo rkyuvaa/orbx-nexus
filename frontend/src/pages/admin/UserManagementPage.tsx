@@ -5,7 +5,10 @@ import {
   TextField, Grid, IconButton, Tooltip, Chip, Switch, FormControlLabel,
   Table, TableHead, TableBody, TableRow, TableCell, Paper, Typography, MenuItem,
 } from "@mui/material";
-import { Add, Edit, Refresh, LockOutlined } from "@mui/icons-material";
+import Add from "@mui/icons-material/Add";
+import Edit from "@mui/icons-material/Edit";
+import Refresh from "@mui/icons-material/Refresh";
+import LockOutlined from "@mui/icons-material/LockOutlined";
 import { useForm } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";

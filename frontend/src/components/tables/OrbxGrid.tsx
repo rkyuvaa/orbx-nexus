@@ -4,7 +4,14 @@ import {
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
   TableSortLabel, Paper, LinearProgress, Typography, TableFooter
 } from "@mui/material";
-import { Search, Download, Refresh, Add, FilterList, Print, Visibility, PictureAsPdf } from "@mui/icons-material";
+import Search from "@mui/icons-material/Search";
+import Download from "@mui/icons-material/Download";
+import Refresh from "@mui/icons-material/Refresh";
+import Add from "@mui/icons-material/Add";
+import FilterList from "@mui/icons-material/FilterList";
+import Print from "@mui/icons-material/Print";
+import Visibility from "@mui/icons-material/Visibility";
+import PictureAsPdf from "@mui/icons-material/PictureAsPdf";
 import { useUIStore } from "../../store";
 import { getPageSizeCSS } from "../../utils/printStyles";
 

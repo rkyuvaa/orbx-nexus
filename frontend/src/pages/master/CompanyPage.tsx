@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Box, Button, Grid, TextField, Typography, IconButton } from "@mui/material";
-import { Save, Refresh, PhotoCamera, Delete } from "@mui/icons-material";
+import Save from "@mui/icons-material/Save";
+import Refresh from "@mui/icons-material/Refresh";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
+import Delete from "@mui/icons-material/Delete";
 import { useForm } from "react-hook-form";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";

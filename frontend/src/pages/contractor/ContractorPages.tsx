@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Chip } from "@mui/material";
-import { Add, Edit, Delete, Refresh } from "@mui/icons-material";
+import Add from "@mui/icons-material/Add";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
+import Refresh from "@mui/icons-material/Refresh";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";

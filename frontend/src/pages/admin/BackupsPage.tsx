@@ -4,7 +4,12 @@ import {
   Box, Button, Card, CardContent, Typography, Chip, CircularProgress, Alert,
   IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions
 } from "@mui/material";
-import { CloudUpload, Delete, Backup, Download, RestorePage, UploadFile } from "@mui/icons-material";
+import CloudUpload from "@mui/icons-material/CloudUpload";
+import Delete from "@mui/icons-material/Delete";
+import Backup from "@mui/icons-material/Backup";
+import Download from "@mui/icons-material/Download";
+import RestorePage from "@mui/icons-material/RestorePage";
+import UploadFile from "@mui/icons-material/UploadFile";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";

@@ -5,7 +5,12 @@ import {
   TextField, Grid, IconButton, Chip, Tooltip, MenuItem, Typography, Paper,
   Table, TableHead, TableRow, TableCell, TableBody, Divider, Autocomplete
 } from "@mui/material";
-import { Add, Edit, Delete, Refresh, Print, RemoveCircle } from "@mui/icons-material";
+import Add from "@mui/icons-material/Add";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
+import Refresh from "@mui/icons-material/Refresh";
+import Print from "@mui/icons-material/Print";
+import RemoveCircle from "@mui/icons-material/RemoveCircle";
 import { useForm } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";

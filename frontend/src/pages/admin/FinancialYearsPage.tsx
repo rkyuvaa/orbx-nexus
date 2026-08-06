@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Box, Button, Chip, Card, CardContent, Grid, Typography, Tooltip } from "@mui/material";
-import { Lock, Check } from "@mui/icons-material";
+import Lock from "@mui/icons-material/Lock";
+import Check from "@mui/icons-material/Check";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import { alpha } from "@mui/material/styles";

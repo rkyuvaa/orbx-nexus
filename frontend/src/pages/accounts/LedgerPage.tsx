@@ -4,7 +4,12 @@ import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography,
 } from "@mui/material";
-import { Add, Edit, Delete, Refresh, PhotoCamera, Person } from "@mui/icons-material";
+import Add from "@mui/icons-material/Add";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
+import Refresh from "@mui/icons-material/Refresh";
+import PhotoCamera from "@mui/icons-material/PhotoCamera";
+import Person from "@mui/icons-material/Person";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";

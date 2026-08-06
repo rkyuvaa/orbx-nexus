@@ -6,7 +6,13 @@ import {
   Typography, Paper, Table, TableHead, TableRow, TableCell, TableBody,
   Checkbox, FormControlLabel
 } from "@mui/material";
-import { Add, Edit, Delete, Refresh, CheckCircle, Print, RemoveCircle } from "@mui/icons-material";
+import Add from "@mui/icons-material/Add";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
+import Refresh from "@mui/icons-material/Refresh";
+import CheckCircle from "@mui/icons-material/CheckCircle";
+import Print from "@mui/icons-material/Print";
+import RemoveCircle from "@mui/icons-material/RemoveCircle";
 import { useForm } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";

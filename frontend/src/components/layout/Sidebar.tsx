@@ -5,14 +5,30 @@ import {
   Collapse, Typography, Drawer, Divider, Tooltip, useMediaQuery,
   Autocomplete, TextField, InputAdornment, IconButton,
 } from "@mui/material";
-import {
-  Dashboard, Business, AccountBalance, Inventory2,
-  PrecisionManufacturing, Receipt, Group, Assignment,
-  AttachMoney, Construction, Analytics, BarChart,
-  AdminPanelSettings, Fingerprint, Backup, ManageHistory,
-  ExpandLess, ExpandMore, ChevronRight, Menu as MenuIcon,
-  LocalShipping, Verified, Settings, Search as SearchIcon,
-} from "@mui/icons-material";
+import Dashboard from "@mui/icons-material/Dashboard";
+import Business from "@mui/icons-material/Business";
+import AccountBalance from "@mui/icons-material/AccountBalance";
+import Inventory2 from "@mui/icons-material/Inventory2";
+import PrecisionManufacturing from "@mui/icons-material/PrecisionManufacturing";
+import Receipt from "@mui/icons-material/Receipt";
+import Group from "@mui/icons-material/Group";
+import Assignment from "@mui/icons-material/Assignment";
+import AttachMoney from "@mui/icons-material/AttachMoney";
+import Construction from "@mui/icons-material/Construction";
+import Analytics from "@mui/icons-material/Analytics";
+import BarChart from "@mui/icons-material/BarChart";
+import AdminPanelSettings from "@mui/icons-material/AdminPanelSettings";
+import Fingerprint from "@mui/icons-material/Fingerprint";
+import Backup from "@mui/icons-material/Backup";
+import ManageHistory from "@mui/icons-material/ManageHistory";
+import ExpandLess from "@mui/icons-material/ExpandLess";
+import ExpandMore from "@mui/icons-material/ExpandMore";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import MenuIcon from "@mui/icons-material/Menu";
+import LocalShipping from "@mui/icons-material/LocalShipping";
+import Verified from "@mui/icons-material/Verified";
+import Settings from "@mui/icons-material/Settings";
+import SearchIcon from "@mui/icons-material/Search";
 import { useUIStore } from "../../store";
 
 const DRAWER_WIDTH = 240;

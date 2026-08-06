@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Box, Button, Grid, TextField, Switch, FormControlLabel, MenuItem, Paper, Typography, Divider } from "@mui/material";
-import { Save, Refresh } from "@mui/icons-material";
+import Save from "@mui/icons-material/Save";
+import Refresh from "@mui/icons-material/Refresh";
 import PageHeader from "../../components/PageHeader";
 
 interface PrintConfig {
