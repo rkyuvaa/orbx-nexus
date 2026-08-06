@@ -29,6 +29,7 @@ import { toWords } from "../../utils/numberToWords";
 import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
 
 import { formatQty, formatAmount } from "../../utils/format";
+import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
 
 
 
@@ -281,7 +282,7 @@ export default function LabourBillPage() {
     const supplierRefs = Array.from(resolvedInwardRefs).join(", ") || "-";
 
     const productName = products.find((p: any) => p.id === row.product_id)?.name || `Product #${row.product_id}`;
-    const processName = processes.find((p: any) => p.id === row.process_id)?.name || `Process #${row.process_id}`;
+    const processName = resolveProcessName(row.process_id, processes) || "-";
     const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
 
     const gstP = Number(row.gst_percent || 0);
@@ -305,7 +306,7 @@ export default function LabourBillPage() {
 
     let itemsHtml = "";
     itemsArray.forEach((item, idx) => {
-      const prName = processes.find((pr: any) => pr.id === Number(item.process_id))?.name || (row.process_id ? processName : "-");
+      const prName = resolveProcessName(item.process_id, processes) || (row.process_id ? processName : "-");
       const pObj = products.find((p: any) => p.id === Number(item.product_id));
       const uomStr = item.uom || pObj?.uom || "PCS";
       itemsHtml += `

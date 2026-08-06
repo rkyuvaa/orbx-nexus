@@ -38,14 +38,14 @@ export const COMMON_PRINT_CSS = `
   table.items-table tfoot td, table.items-table tr.total-row td { border-top: 0.5px solid #198754; border-bottom: 0.5px solid #198754; border-left: 0.5px solid #198754; border-right: 0.5px solid #198754; color: #0f5132; font-size: 11px; }
 
   /* Totals Section Above Bottom Section */
-  .totals-section { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+  .totals-section { display: flex; justify-content: flex-end; margin-top: auto; margin-bottom: 16px; }
   .calculation-box { display: flex; flex-direction: column; align-items: flex-end; min-width: 280px; }
   .calculation-row { display: flex; justify-content: space-between; width: 100%; padding: 4px 8px; color: #1a1a1a; font-size: 11px; }
   .calculation-row.grand-total { border-top: 0.5px solid #198754; border-bottom: 0.5px solid #198754; background-color: #f0fdf4 !important; padding: 8px; margin-top: 4px; font-size: 13px; font-weight: 700; color: #0f5132; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .amount-in-words { font-size: 11px; font-style: italic; color: #0f5132; text-align: right; margin-top: 6px; font-weight: 600; }
 
   /* Bottom Section Pinned to Very Bottom of Page */
-  .bottom-section { margin-top: auto; padding-top: 12px; border-top: 0.5px solid #198754; page-break-inside: avoid; }
+  .bottom-section { margin-top: 8px; padding-top: 12px; border-top: 0.5px solid #198754; page-break-inside: avoid; }
   .narration-box { font-size: 11px; margin-bottom: 12px; color: #1a1a1a; background-color: #f0fdf4 !important; padding: 8px 12px; border-left: 3px solid #0f5132; border-radius: 4px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .narration-box strong { color: #0f5132; }
   

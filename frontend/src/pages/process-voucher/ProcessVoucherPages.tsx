@@ -23,6 +23,17 @@ import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 
+export const resolveProcessName = (procId: any, processesList: any[]): string => {
+  if (!procId) return "";
+  const strVal = String(procId).trim();
+  if (/^\d+(?:\s*,\s*\d+)*$/.test(strVal)) {
+    return strVal.split(",")
+      .map(id => processesList.find((p: any) => p.id === Number(id.trim()))?.name || id.trim())
+      .filter(Boolean).join(" / ");
+  }
+  return strVal;
+};
+
 interface InwardLineItem {
   product_id: number | string;
   process_id?: number | string;
@@ -102,11 +113,7 @@ export function InwardVoucherPage() {
       year: "numeric"
     }).replace(/\//g, "-") : "-";
 
-    const processName = row.process_id
-      ? String(row.process_id).split(",")
-          .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
-          .filter(Boolean).join(" / ")
-      : "-";
+    const processName = resolveProcessName(row.process_id, processes) || "-";
     const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
     const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
     const supplierAddress = supplierLedger?.address || "";
@@ -937,17 +944,13 @@ export function OutwardVoucherPage() {
               
               let itemProcName = "";
               if (outwardItem.process_id) {
-                itemProcName = String(outwardItem.process_id).split(",")
-                  .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
-                  .filter(Boolean).join(" / ");
+                itemProcName = resolveProcessName(outwardItem.process_id, processes);
               } else {
                 try {
                   const invItems = typeof inv.items === 'string' ? JSON.parse(inv.items) : (Array.isArray(inv.items) ? inv.items : []);
                   const match = invItems.find((i: any) => Number(i.product_id) === prodId);
                   if (match && match.process_id) {
-                    itemProcName = String(match.process_id).split(",")
-                      .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
-                      .filter(Boolean).join(" / ");
+                    itemProcName = resolveProcessName(match.process_id, processes);
                   }
                 } catch {}
               }
@@ -974,9 +977,7 @@ export function OutwardVoucherPage() {
 
           let itemProcName = "";
           if (outwardItem.process_id) {
-            itemProcName = String(outwardItem.process_id).split(",")
-              .map(id => processes.find((p: any) => p.id === Number(id.trim()))?.name || "")
-              .filter(Boolean).join(" / ");
+            itemProcName = resolveProcessName(outwardItem.process_id, processes);
           }
 
           printRows.push({
@@ -999,6 +1000,9 @@ export function OutwardVoucherPage() {
     }
 
     printRows.sort((a, b) => (a.jobNo || "").localeCompare(b.jobNo || ""));
+
+    const totalOutwardQty = printRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+    const totalOutwardWeight = printRows.reduce((sum, r) => sum + (Number(r.total_weight) || 0), 0);
 
     let rowsHtml = "";
     let currentJobNo: string | null = null;
@@ -1088,9 +1092,13 @@ export function OutwardVoucherPage() {
           </table>
           <div class="totals-section">
             <div class="calculation-box">
+              <div class="calculation-row">
+                <span>Total Quantity:</span>
+                <span>${formatQty(totalOutwardQty)}</span>
+              </div>
               <div class="calculation-row grand-total">
-                <span style="margin-right: 12px;">Net Weight (kg):</span>
-                <span>${formatWeight(row.total_weight)} kg</span>
+                <span>Net Weight (kg):</span>
+                <span>${formatWeight(totalOutwardWeight)} kg</span>
               </div>
             </div>
           </div>
@@ -1192,12 +1200,14 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
   pendingInwards,
   selectedInwards,
   onSelect,
+  processes,
 }: {
   open: boolean;
   onClose: () => void;
   pendingInwards: any[];
   selectedInwards: any[];
   onSelect: (inv: any) => void;
+  processes: any[];
 }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -1264,7 +1274,7 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" color="text.secondary">{inv.process_id || "-"}</Typography>
+                      <Typography variant="body2" color="text.secondary">{resolveProcessName(inv.process_id, processes) || "-"}</Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" sx={{ fontWeight: 700, color: balanceQty > 0 ? "#023020" : "text.secondary" }}>
@@ -1981,6 +1991,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         pendingInwards={pendingInwards}
         selectedInwards={selectedInwards}
         onSelect={handleInwardSelect}
+        processes={processes}
       />
     </Dialog>
   );
