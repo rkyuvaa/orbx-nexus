@@ -464,17 +464,8 @@ export default function Sidebar() {
           flexShrink: 0,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          {sidebarOpen && (
-            <Box>
-              <Typography sx={{ fontWeight: 700, fontFamily: "'Comfortaa', sans-serif", fontSize: "16px", color: "#FFFFFF", WebkitTextStroke: "0.5px currentColor", letterSpacing: "-0.03em", lineHeight: 1.15 }}>
-                OrbX Nexus
-              </Typography>
-              <Typography sx={{ fontWeight: 500, fontSize: "10px", color: "rgba(255, 255, 255, 0.5)", lineHeight: 1.1 }}>
-                Enterprise ERP
-              </Typography>
-            </Box>
-          )}
+        <Box sx={{ display: "flex", alignItems: "center", height: sidebarOpen ? 36 : 24, justifyContent: "center", width: "100%" }}>
+          <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 36, objectFit: "contain" }} />
         </Box>
       </Box>
 

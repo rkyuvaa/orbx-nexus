@@ -65,32 +65,8 @@ export default function Topbar() {
           <MenuIcon sx={{ fontSize: 20 }} />
         </IconButton>
         {/* Left Section: Logo & Product Branding */}
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <Typography
-              sx={{
-                fontWeight: 700,
-                fontFamily: "'Comfortaa', sans-serif",
-                fontSize: "20px",
-                color: themeMode === "light" ? "#023020" : "#FFFFFF",
-                WebkitTextStroke: "0.6px currentColor",
-                lineHeight: 1.15,
-                letterSpacing: "-0.03em",
-              }}
-            >
-              OrbX Nexus
-            </Typography>
-            <Typography
-              sx={{
-                fontWeight: 500,
-                fontSize: "12px",
-                color: "#6B7280",
-                lineHeight: 1.1,
-              }}
-            >
-              Enterprise Manufacturing ERP
-            </Typography>
-          </Box>
+        <Box sx={{ display: "flex", alignItems: "center", height: 32 }}>
+          <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 32 }} />
         </Box>
 
         <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: "divider" }} />

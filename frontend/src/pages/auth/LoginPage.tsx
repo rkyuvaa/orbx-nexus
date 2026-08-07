@@ -174,52 +174,12 @@ export default function LoginPage() {
         }}
       >
         {/* Logo & Header */}
-        <Box sx={{ textAlign: "center", mb: 4 }}>
-          <Box
-            sx={{
-              width: 72,
-              height: 72,
-              borderRadius: 3,
-              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${isDark ? "#0b965f" : "#0c8052"} 100%)`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              mx: "auto",
-              mb: 2,
-              fontSize: "2rem",
-              fontWeight: 800,
-              color: isDark ? "#08140E" : "#FFFFFF",
-              boxShadow: isDark
-                ? `0 8px 32px ${alpha(theme.palette.primary.main, 0.25)}`
-                : `0 8px 24px ${alpha(theme.palette.primary.main, 0.20)}`,
-              transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-              "&:hover": {
-                transform: "translateY(-4px) scale(1.05)",
-                boxShadow: isDark
-                  ? `0 12px 40px ${alpha(theme.palette.primary.main, 0.4)}`
-                  : `0 12px 32px ${alpha(theme.palette.primary.main, 0.3)}`,
-              }
-            }}
-          >
-            O
-          </Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              fontFamily: "'Comfortaa', sans-serif",
-              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${isDark ? "#81f6c9" : "#0c8052"} 100%)`,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              WebkitTextStroke: "0.8px currentColor",
-              letterSpacing: "-0.03em",
-            }}
-          >
-            OrbX Nexus
-          </Typography>
-          <Typography sx={{ mt: 0.5 }} variant="body2" color="text.secondary">
-            Manufacturing ERP System
-          </Typography>
+        <Box sx={{ textAlign: "center", mb: 4, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <img 
+            src={isDark ? "/logo-dark.svg" : "/logo-light.svg"} 
+            alt="Logo" 
+            style={{ height: 80, objectFit: "contain", marginBottom: 8 }} 
+          />
         </Box>
 
         {/* Login Card */}
