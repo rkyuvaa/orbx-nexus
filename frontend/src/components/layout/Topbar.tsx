@@ -1,6 +1,7 @@
 import {
   AppBar, Toolbar, IconButton, Typography, Box,
   Avatar, Menu, MenuItem, Divider, Tooltip, ListItemIcon, Breadcrumbs, Link,
+  useMediaQuery,
 } from "@mui/material";
 import Logout from "@mui/icons-material/Logout";
 import Person from "@mui/icons-material/Person";
@@ -15,7 +16,7 @@ import { alpha, useTheme } from "@mui/material/styles";
 import { useAuthStore, useUIStore } from "../../store";
 
 export default function Topbar() {
-  const { toggleThemeMode, themeMode, headerState, toggleSidebar } = useUIStore();
+  const { toggleThemeMode, themeMode, headerState, toggleSidebar, sidebarOpen } = useUIStore();
   const { user, logout } = useAuthStore();
   const theme = useTheme();
   const navigate = useNavigate();
@@ -27,6 +28,8 @@ export default function Topbar() {
   };
 
   const logoSrc = themeMode === "dark" ? "/logo-dark.svg" : "/logo-light.svg";
+  const isMobile = useMediaQuery("(max-width: 600px)");
+  const sidebarWidth = sidebarOpen ? 240 : (isMobile ? 0 : 64);
 
   return (
     <AppBar
@@ -52,21 +55,35 @@ export default function Topbar() {
           gap: "12px",
         }}
       >
-        <IconButton
-          onClick={toggleSidebar}
-          size="small"
-          edge="start"
+        <Box
           sx={{
-            color: "text.secondary",
-            mr: 0.5,
-            "&:hover": { color: "text.primary" },
+            width: sidebarWidth > 0 ? sidebarWidth - 12 : "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            flexShrink: 0,
+            transition: (theme) =>
+              theme.transitions.create("width", {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.shorter,
+              }),
           }}
         >
-          <MenuIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-        {/* Left Section: Logo & Product Branding */}
-        <Box sx={{ display: "flex", alignItems: "center", height: 32 }}>
-          <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 32 }} />
+          <IconButton
+            onClick={toggleSidebar}
+            size="small"
+            edge="start"
+            sx={{
+              color: "text.secondary",
+              "&:hover": { color: "text.primary" },
+            }}
+          >
+            <MenuIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+          {/* Left Section: Logo & Product Branding */}
+          <Box sx={{ display: "flex", alignItems: "center", height: 32 }}>
+            <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 32 }} />
+          </Box>
         </Box>
 
         <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: "divider" }} />
