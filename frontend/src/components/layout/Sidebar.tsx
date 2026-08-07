@@ -426,7 +426,7 @@ export default function Sidebar() {
     }));
   };
 
-  const logoSrc = themeMode === "dark" ? "/logo-dark.svg" : "/logo-light.svg";
+  const logoSrc = "/logo-dark.svg";
 
   return (
     <Drawer
