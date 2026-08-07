@@ -484,7 +484,7 @@ async def delete_adjustment(
 class StockItemMovementIn(BaseModel):
     movement_no: str
     movement_date: str
-    movement_type: str  # 'Inward' or 'Outward'
+    movement_type: str  # 'Inward', 'Outward', 'Transfer', 'Consumption'
     stock_item_id: int
     ledger_id: int | None = None
     quantity: float = 0
@@ -493,6 +493,8 @@ class StockItemMovementIn(BaseModel):
     uom_id: int | None = None
     ref_no: str | None = None
     narration: str | None = None
+    location_id: int | None = None
+    to_location_id: int | None = None
 
 
 @router.get("/inventory")
@@ -554,11 +556,14 @@ async def list_inventory_movements(
     result = await db.execute(
         text(
             f"SELECT m.*, si.name AS stock_item_name, si.item_code, "
-            f"u.symbol AS uom_symbol, l.name AS ledger_name "
+            f"u.symbol AS uom_symbol, l.name AS ledger_name, "
+            f"loc.name AS location_name, to_loc.name AS to_location_name "
             f"FROM {s}.stock_item_movements m "
             f"LEFT JOIN master.stock_items si ON si.id = m.stock_item_id "
             f"LEFT JOIN master.units_of_measure u ON u.id = m.uom_id "
             f"LEFT JOIN master.ledgers l ON l.id = m.ledger_id "
+            f"LEFT JOIN master.locations loc ON loc.id = m.location_id "
+            f"LEFT JOIN master.locations to_loc ON to_loc.id = m.to_location_id "
             f"WHERE {where} ORDER BY m.movement_date DESC, m.id DESC"
         ),
         params
@@ -576,8 +581,8 @@ async def create_inventory_movement(
         text(
             f"INSERT INTO {s}.stock_item_movements "
             f"(movement_no, movement_date, movement_type, stock_item_id, ledger_id, "
-            f"quantity, rate, amount, uom_id, ref_no, narration, created_by) "
-            f"VALUES (:mno, :mdate, :mtype, :siid, :lid, :qty, :rate, :amt, :uom, :rno, :narr, :cby) "
+            f"quantity, rate, amount, uom_id, ref_no, narration, location_id, to_location_id, created_by) "
+            f"VALUES (:mno, :mdate, :mtype, :siid, :lid, :qty, :rate, :amt, :uom, :rno, :narr, :loc, :toloc, :cby) "
             f"RETURNING id"
         ),
         {
@@ -585,6 +590,7 @@ async def create_inventory_movement(
             "siid": body.stock_item_id, "lid": body.ledger_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "uom": body.uom_id, "rno": body.ref_no, "narr": body.narration,
+            "loc": body.location_id, "toloc": body.to_location_id,
             "cby": current_user.id
         },
     )
@@ -602,7 +608,7 @@ async def update_inventory_movement(
             f"UPDATE {s}.stock_item_movements SET "
             f"movement_no=:mno, movement_date=:mdate, movement_type=:mtype, "
             f"stock_item_id=:siid, ledger_id=:lid, quantity=:qty, rate=:rate, amount=:amt, "
-            f"uom_id=:uom, ref_no=:rno, narration=:narr, updated_at=NOW() "
+            f"uom_id=:uom, ref_no=:rno, narration=:narr, location_id=:loc, to_location_id=:toloc, updated_at=NOW() "
             f"WHERE id=:id"
         ),
         {
@@ -610,6 +616,7 @@ async def update_inventory_movement(
             "siid": body.stock_item_id, "lid": body.ledger_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "uom": body.uom_id, "rno": body.ref_no, "narr": body.narration,
+            "loc": body.location_id, "toloc": body.to_location_id,
             "id": movement_id
         },
     )
@@ -623,3 +630,201 @@ async def delete_inventory_movement(
     await db.execute(
         text(f"DELETE FROM {_schema(fy)}.stock_item_movements WHERE id = :id"), {"id": movement_id}
     )
+
+
+# ──── Locations CRUD & Tracking API ────
+
+from app.models.master import Location
+from sqlalchemy import select
+
+class LocationIn(BaseModel):
+    name: str
+    code: str | None = None
+    process_id: int | None = None
+
+@router.get("/locations")
+async def list_locations(current_user: CurrentUser, db: DBSession):
+    result = await db.execute(
+        text(
+            "SELECT l.*, p.name AS process_name "
+            "FROM master.locations l "
+            "LEFT JOIN master.processes p ON p.id = l.process_id "
+            "ORDER BY l.name"
+        )
+    )
+    return [dict(r) for r in result.mappings().all()]
+
+@router.post("/locations", status_code=201)
+async def create_location(body: LocationIn, current_user: CurrentUser, db: DBSession):
+    loc = Location(name=body.name, code=body.code, process_id=body.process_id)
+    db.add(loc)
+    await db.flush()
+    await db.refresh(loc)
+    return loc
+
+@router.put("/locations/{id}")
+async def update_location(id: int, body: LocationIn, current_user: CurrentUser, db: DBSession):
+    result = await db.execute(select(Location).where(Location.id == id))
+    loc = result.scalar_one_or_none()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    loc.name = body.name
+    loc.code = body.code
+    loc.process_id = body.process_id
+    await db.flush()
+    await db.refresh(loc)
+    return loc
+
+@router.delete("/locations/{id}", status_code=204)
+async def delete_location(id: int, current_user: CurrentUser, db: DBSession):
+    result = await db.execute(select(Location).where(Location.id == id))
+    loc = result.scalar_one_or_none()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+    await db.delete(loc)
+    await db.flush()
+
+
+@router.get("/locations/balances")
+async def get_location_balances(
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+):
+    s = _schema(fy)
+    query = f"""
+    WITH incoming AS (
+        SELECT 
+            NULL::integer AS location_id,
+            id AS stock_item_id,
+            opening_stock AS qty
+        FROM master.stock_items
+        WHERE opening_stock > 0 AND is_active = TRUE
+        
+        UNION ALL
+        
+        SELECT 
+            NULL::integer AS location_id,
+            stock_item_id,
+            SUM(quantity) AS qty
+        FROM {s}.stock_item_movements
+        WHERE to_location_id IS NULL AND movement_type IN ('Inward', 'Transfer')
+        GROUP BY stock_item_id
+
+        UNION ALL
+
+        SELECT 
+            to_location_id AS location_id,
+            stock_item_id,
+            SUM(quantity) AS qty
+        FROM {s}.stock_item_movements
+        WHERE to_location_id IS NOT NULL
+        GROUP BY to_location_id, stock_item_id
+    ),
+    outgoing AS (
+        SELECT 
+            NULL::integer AS location_id,
+            stock_item_id,
+            SUM(quantity) AS qty
+        FROM {s}.stock_item_movements
+        WHERE location_id IS NULL AND movement_type IN ('Outward', 'Transfer', 'Consumption')
+        GROUP BY stock_item_id
+
+        UNION ALL
+
+        SELECT 
+            location_id,
+            stock_item_id,
+            SUM(quantity) AS qty
+        FROM {s}.stock_item_movements
+        WHERE location_id IS NOT NULL
+        GROUP BY location_id, stock_item_id
+    ),
+    combined_moves AS (
+        SELECT 
+            location_id,
+            stock_item_id,
+            SUM(qty) AS in_qty,
+            0::numeric AS out_qty
+        FROM incoming
+        GROUP BY location_id, stock_item_id
+        
+        UNION ALL
+        
+        SELECT 
+            location_id,
+            stock_item_id,
+            0::numeric AS in_qty,
+            SUM(qty) AS out_qty
+        FROM outgoing
+        GROUP BY location_id, stock_item_id
+    ),
+    balances AS (
+        SELECT 
+            location_id,
+            stock_item_id,
+            SUM(in_qty) - SUM(out_qty) AS balance_qty
+        FROM combined_moves
+        GROUP BY location_id, stock_item_id
+    )
+    SELECT 
+        b.location_id,
+        COALESCE(loc.name, 'Main Store') AS location_name,
+        pr.name AS process_name,
+        b.stock_item_id,
+        si.name AS stock_item_name,
+        si.item_code,
+        u.symbol AS uom_symbol,
+        b.balance_qty
+    FROM balances b
+    LEFT JOIN master.locations loc ON loc.id = b.location_id
+    LEFT JOIN master.processes pr ON pr.id = loc.process_id
+    LEFT JOIN master.stock_items si ON si.id = b.stock_item_id
+    LEFT JOIN master.units_of_measure u ON u.id = si.uom_id
+    WHERE b.balance_qty != 0 OR b.location_id IS NULL
+    ORDER BY COALESCE(loc.name, 'Main Store'), si.name
+    """
+    result = await db.execute(text(query))
+    return [dict(r) for r in result.mappings().all()]
+
+
+@router.get("/locations/process-consumption")
+async def get_process_consumption(
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+):
+    s = _schema(fy)
+    conds = ["m.movement_type = 'Consumption'"]
+    params = {}
+    if from_date:
+        conds.append("m.movement_date >= :fd")
+        params["fd"] = from_date
+    if to_date:
+        conds.append("m.movement_date <= :td")
+        params["td"] = to_date
+        
+    where = " AND ".join(conds)
+    query = f"""
+    SELECT 
+        pr.id AS process_id,
+        pr.name AS process_name,
+        si.id AS stock_item_id,
+        si.name AS stock_item_name,
+        si.item_code,
+        u.symbol AS uom_symbol,
+        SUM(m.quantity) AS total_consumed,
+        SUM(m.amount) AS total_value
+    FROM {s}.stock_item_movements m
+    JOIN master.locations loc ON loc.id = m.location_id
+    JOIN master.processes pr ON pr.id = loc.process_id
+    JOIN master.stock_items si ON si.id = m.stock_item_id
+    LEFT JOIN master.units_of_measure u ON u.id = si.uom_id
+    WHERE {where}
+    GROUP BY pr.id, pr.name, si.id, si.name, si.item_code, u.symbol
+    ORDER BY pr.name, si.name
+    """
+    result = await db.execute(text(query), params)
+    return [dict(r) for r in result.mappings().all()]

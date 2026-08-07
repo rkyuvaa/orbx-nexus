@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS {schema}.stock_item_movements (
     id SERIAL PRIMARY KEY,
     movement_no   VARCHAR(50) UNIQUE NOT NULL,
     movement_date DATE NOT NULL,
-    movement_type VARCHAR(10) NOT NULL,  -- 'Inward' or 'Outward'
+    movement_type VARCHAR(15) NOT NULL,  -- 'Inward', 'Outward', 'Transfer', 'Consumption'
     stock_item_id INTEGER NOT NULL,
     ledger_id     INTEGER,
     quantity      NUMERIC(15,3) DEFAULT 0,
@@ -119,9 +119,11 @@ CREATE TABLE IF NOT EXISTS {schema}.stock_item_movements (
     amount        NUMERIC(15,2) DEFAULT 0,
     uom_id        INTEGER,
     ref_no        VARCHAR(100),
-    narration TEXT,
-    items JSONB DEFAULT '[]'::jsonb,
-    created_by INTEGER,
+    narration     TEXT,
+    items         JSONB DEFAULT '[]'::jsonb,
+    location_id   INTEGER,
+    to_location_id INTEGER,
+    created_by    INTEGER,
     created_at    TIMESTAMP DEFAULT NOW(),
     updated_at    TIMESTAMP DEFAULT NOW()
 );
@@ -202,20 +204,6 @@ CREATE TABLE IF NOT EXISTS {schema}.job_work_entries (
     created_by INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS {schema}.eb_readings (
-    id SERIAL PRIMARY KEY,
-    reading_date DATE NOT NULL,
-    meter_no VARCHAR(50),
-    previous_reading NUMERIC(15,3) DEFAULT 0,
-    current_reading NUMERIC(15,3) DEFAULT 0,
-    units_consumed NUMERIC(15,3) DEFAULT 0,
-    rate_per_unit NUMERIC(10,4) DEFAULT 0,
-    amount NUMERIC(15,2) DEFAULT 0,
-    narration TEXT,
-    created_by INTEGER,
-    created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS {schema}.biometric_entries (
@@ -314,6 +302,9 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS sgst_amount NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS round_off NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS net_amount NUMERIC(15,2) DEFAULT 0;
+        ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS to_location_id INTEGER;
         CREATE TABLE IF NOT EXISTS {schema}.stock_adjustments (
             id SERIAL PRIMARY KEY,
             adjustment_no VARCHAR(50) UNIQUE NOT NULL,
@@ -328,7 +319,7 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
             id SERIAL PRIMARY KEY,
             movement_no   VARCHAR(50) UNIQUE NOT NULL,
             movement_date DATE NOT NULL,
-            movement_type VARCHAR(10) NOT NULL,
+            movement_type VARCHAR(15) NOT NULL,
             stock_item_id INTEGER NOT NULL,
             ledger_id     INTEGER,
             quantity      NUMERIC(15,3) DEFAULT 0,
@@ -337,6 +328,8 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
             uom_id        INTEGER,
             ref_no        VARCHAR(100),
             narration     TEXT,
+            location_id   INTEGER,
+            to_location_id INTEGER,
             created_by    INTEGER,
             created_at    TIMESTAMP DEFAULT NOW(),
             updated_at    TIMESTAMP DEFAULT NOW()

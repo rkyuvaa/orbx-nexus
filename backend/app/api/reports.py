@@ -556,28 +556,6 @@ async def staff_salary_account(
     return [dict(r) for r in result.mappings().all()]
 
 
-# ─────── EB Consumption ───────
-
-@router.get("/eb-consumption")
-async def eb_consumption(
-    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
-    from_date: str = Query(...), to_date: str = Query(...)
-):
-    schema = s(fy)
-    result = await db.execute(
-        text(
-            f"SELECT reading_date::text, meter_no, previous_reading, current_reading, "
-            f"units_consumed, rate_per_unit, amount FROM {schema}.eb_readings "
-            f"WHERE reading_date BETWEEN :fd AND :td ORDER BY reading_date"
-        ),
-        {"fd": from_date, "td": to_date}
-    )
-    rows = [dict(r) for r in result.mappings().all()]
-    total_units = sum(float(r["units_consumed"] or 0) for r in rows)
-    total_amount = sum(float(r["amount"] or 0) for r in rows)
-    return {"entries": rows, "total_units": total_units, "total_amount": total_amount}
-
-
 # ─────── Stock Summary ───────
 
 @router.get("/stock-summary")

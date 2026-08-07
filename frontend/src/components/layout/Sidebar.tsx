@@ -103,7 +103,8 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Tools & Consumables", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Stock Adjustment", path: "/inventory/adjustments", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Unit of Measure", path: "/inventory/uom", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Stock Transfer", path: "/process-analyze/stock-transfer", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Stock Transfer", path: "/inventory/stock-transfer", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Location Inventory", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
 
@@ -137,13 +138,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Biometrics", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
-  {
-    label: "Quality",
-    icon: <Verified sx={{ fontSize: 20 }} />,
-    children: [
-      { label: "EB Reading", path: "/process-analyze/eb-reading", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-    ],
-  },
+
   {
     label: "Reports",
     icon: <BarChart sx={{ fontSize: 20 }} />,
@@ -161,7 +156,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Staff Salary A/c", path: "/reports/staff-salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Monthly Report", path: "/reports/monthly", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Trial Balance", path: "/reports/trial-balance", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "EB Consumption", path: "/reports/eb-consumption", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {

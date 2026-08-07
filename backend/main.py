@@ -23,7 +23,7 @@ from app.core.security import get_password_hash
 from app.api import (
     auth, company, ledgers, products, vouchers,
     stock, labour_bill, salary, contractor,
-    process_analyze, reports, biometrics, backups,
+    reports, biometrics, backups,
     audit, financial_years,
 )
 
@@ -140,7 +140,6 @@ app.include_router(stock.router, prefix=f"{settings.API_V1_STR}/stock", tags=["S
 app.include_router(labour_bill.router, prefix=f"{settings.API_V1_STR}/labour-bills", tags=["Labour Bills"])
 app.include_router(salary.router, prefix=f"{settings.API_V1_STR}/payroll", tags=["Payroll"])
 app.include_router(contractor.router, prefix=f"{settings.API_V1_STR}/contractor", tags=["Contractor"])
-app.include_router(process_analyze.router, prefix=f"{settings.API_V1_STR}/process-analyze", tags=["Process Analyze"])
 app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["Reports"])
 app.include_router(biometrics.router, prefix=f"{settings.API_V1_STR}/biometrics", tags=["Biometrics"])
 app.include_router(backups.router, prefix=f"{settings.API_V1_STR}/backups", tags=["Backups"])

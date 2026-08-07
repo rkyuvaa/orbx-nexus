@@ -22,7 +22,6 @@ TABLES_TO_TRUNCATE = [
     "salary_vouchers",
     "advance_payments",
     "job_work_entries",
-    "eb_readings",
     "biometric_entries",
     "audit_logs"
 ]

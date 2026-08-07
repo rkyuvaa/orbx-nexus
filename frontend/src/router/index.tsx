@@ -18,7 +18,7 @@ import {
 import {
   DayBookReport, InwardRegisterReport, OutwardRegisterReport,
   LabourBillRegisterReport, TrialBalanceReport, PendingBillsReport,
-  StockInHandReport, EBConsumptionReport, StockSummaryReport
+  StockInHandReport, StockSummaryReport
 } from "../pages/reports/ReportPages";
 import UserManagementPage from "../pages/admin/UserManagementPage";
 import BiometricsPage from "../pages/admin/BiometricsPage";
@@ -27,11 +27,12 @@ import AuditLogsPage from "../pages/admin/AuditLogsPage";
 import FinancialYearsPage from "../pages/admin/FinancialYearsPage";
 import PrintConfigPage from "../pages/admin/PrintConfigPage";
 import CompanyPage from "../pages/master/CompanyPage";
-import EBReadingPage from "../pages/process-analyze/EBReadingPage";
+import StockTransferPage from "../pages/inventory/StockTransferPage";
 import ContractorPages from "../pages/contractor/ContractorPages";
 import StockItemsPage from "../pages/inventory/StockItemsPage";
 import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
 import { InventoryInwardPage, InventoryOutwardPage } from "../pages/inventory/InventoryMovementPages";
+import LocationsPage from "../pages/inventory/LocationsPage";
 import { useAuthStore } from "../store";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -46,7 +47,7 @@ export const router = createBrowserRouter([
     path: "/",
     element: <ProtectedRoute><AppShell /></ProtectedRoute>,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { path: "", element: <DashboardPage /> },
 
       // Master
       { path: "master/company", element: <CompanyPage /> },
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
       { path: "inventory/inward",  element: <InventoryInwardPage /> },
       { path: "inventory/outward", element: <InventoryOutwardPage /> },
       { path: "inventory/adjustments", element: <StockAdjustmentPage /> },
+      { path: "inventory/locations", element: <LocationsPage /> },
 
       // Process Info
       { path: "process/products", element: <ProductRegisterPage /> },
@@ -97,9 +99,8 @@ export const router = createBrowserRouter([
       { path: "vouchers/journal", element: <JournalVoucherPage /> },
       { path: "vouchers/purchase", element: <PurchaseVoucherPage /> },
 
-      // Process Analyze
-      { path: "process-analyze/eb-reading", element: <EBReadingPage /> },
-      { path: "process-analyze/stock-transfer", element: <EBReadingPage mode="transfer" /> },
+      // Inventory Stock Transfer
+      { path: "inventory/stock-transfer", element: <StockTransferPage /> },
 
       // Reports
       { path: "reports/day-book", element: <DayBookReport /> },
@@ -115,7 +116,6 @@ export const router = createBrowserRouter([
       { path: "reports/monthly", element: <DayBookReport /> },
       { path: "reports/stock-in-hand", element: <StockInHandReport /> },
       { path: "reports/stock-summary", element: <StockSummaryReport /> },
-      { path: "reports/eb-consumption", element: <EBConsumptionReport /> },
 
       // Admin
       { path: "admin/users", element: <UserManagementPage /> },

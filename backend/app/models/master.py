@@ -224,3 +224,16 @@ class Rate(Base):
     process: Mapped["Process"] = relationship("Process", back_populates="rates")
     uom: Mapped["UnitOfMeasure | None"] = relationship("UnitOfMeasure")
     product: Mapped["Product | None"] = relationship("Product")
+
+
+class Location(Base):
+    __tablename__ = "locations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    code: Mapped[str | None] = mapped_column(String(50))
+    process_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.processes.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    process: Mapped["Process | None"] = relationship("Process")
+

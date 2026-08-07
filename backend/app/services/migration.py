@@ -366,7 +366,7 @@ def run_migration():
         with Session(pg_engine) as session:
             # Clear old year-specific data
             print(f"  Cleaning old transaction tables in {schema}...")
-            session.execute(text(f"TRUNCATE {schema}.voucher_lines, {schema}.vouchers, {schema}.labour_bills, {schema}.eb_readings, {schema}.stock_transfer, {schema}.stock_item_movements CASCADE"))
+            session.execute(text(f"TRUNCATE {schema}.voucher_lines, {schema}.vouchers, {schema}.labour_bills, {schema}.stock_transfer, {schema}.stock_item_movements CASCADE"))
             session.execute(text(f"ALTER TABLE {schema}.stock_inward ALTER COLUMN product_id DROP NOT NULL"))
             session.execute(text(f"ALTER TABLE {schema}.stock_outward ALTER COLUMN product_id DROP NOT NULL"))
             session.commit()
@@ -595,27 +595,6 @@ def run_migration():
             except Exception as e:
                 session.rollback()
                 print(f"    Error migrating labour bills: {e}")
-
-            # C. Migrate EB Readings
-            print("  Migrating electricity EB readings...")
-            try:
-                mdb_cursor.execute("SELECT ebrDate, ebrUnit FROM tblEBReading")
-                readings = mdb_cursor.fetchall()
-                for r in readings:
-                    session.execute(text(f"""
-                        INSERT INTO {schema}.eb_readings (
-                            reading_date, meter_no, previous_reading, current_reading, units_consumed, rate_per_unit, amount, narration, created_by, created_at
-                        ) VALUES (
-                            :reading_date, 'METER-01', 0.0, :reading, :reading, 0.0, 0.0, 'Legacy Import', 1, now()
-                        )
-                    """), {
-                        "reading_date": clean_date(r[0]), "reading": r[1]
-                    })
-                session.commit()
-                print(f"    EB readings loaded: {len(readings)} rows.")
-            except Exception as e:
-                session.rollback()
-                print(f"    Error migrating EB readings: {e}")
 
             # D. Migrate Stock Transfers
             print("  Migrating stock transfers...")

@@ -571,7 +571,7 @@ def migrate(json_store=None):
         schema = f"fy_{year}"
         
         with engine.begin() as conn:
-            conn.execute(text(f"TRUNCATE {schema}.voucher_lines, {schema}.vouchers, {schema}.stock_outward, {schema}.stock_inward, {schema}.stock_transfer, {schema}.labour_bills, {schema}.salary_vouchers, {schema}.advance_payments, {schema}.job_work_entries, {schema}.eb_readings CASCADE;"))
+            conn.execute(text(f"TRUNCATE {schema}.voucher_lines, {schema}.vouchers, {schema}.stock_outward, {schema}.stock_inward, {schema}.stock_transfer, {schema}.labour_bills, {schema}.salary_vouchers, {schema}.advance_payments, {schema}.job_work_entries CASCADE;"))
 
         # A. Accounts Vouchers
         print("  Migrating company vouchers...")
@@ -865,24 +865,6 @@ def migrate(json_store=None):
             print(f"    Migrated {jw_count} job work entries.")
         except Exception as e:
             print(f"    Error migrating jobwork entries: {e}")
-
-        # H. EB Readings
-        print("  Migrating EB readings...")
-        try:
-            cursor.execute("SELECT ebrDate, ebrUnit FROM tblEBReading")
-            readings = cursor.fetchall()
-            with engine.begin() as conn:
-                for row in readings:
-                    date_val, units = row
-                    conn.execute(text(f"""
-                        INSERT INTO {schema}.eb_readings (reading_date, units_consumed, amount, rate_per_unit)
-                        VALUES (:date, :units, 0, 0)
-                    """), {
-                        "date": clean_date(date_val), "units": clean_num(units)
-                    })
-            print(f"    EB readings loaded ({len(readings)} rows).")
-        except Exception as e:
-            print(f"    Error migrating EB readings: {e}")
 
         # I. Stock Transfers
         print("  Migrating stock transfers...")
