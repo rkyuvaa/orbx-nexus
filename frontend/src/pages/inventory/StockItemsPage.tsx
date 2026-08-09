@@ -16,7 +16,8 @@ import { useAuthStore } from "../../store";
 import { formatQty, formatAmount } from "../../utils/format";
 
 export default function StockItemsPage() {
-  const { activeFY } = useAuthStore();
+  const { activeFY, user } = useAuthStore();
+  const isAdmin = user?.role === "Admin";
   const qc = useQueryClient();
 
   // Create/Edit Dialog State
@@ -264,6 +265,7 @@ export default function StockItemsPage() {
                   label="Opening Stock"
                   fullWidth
                   size="small"
+                  disabled={!isAdmin}
                   {...register("opening_stock")}
                   slotProps={{ htmlInput: { step: "any" } }}
                 />
