@@ -641,14 +641,23 @@ class LocationIn(BaseModel):
     name: str
     code: str | None = None
     process_id: int | None = None
+    p1_id: int | None = None
+    p1_from: str | None = None
+    p1_to: str | None = None
+    p2_id: int | None = None
+    p2_from: str | None = None
+    p2_to: str | None = None
 
 @router.get("/locations")
 async def list_locations(current_user: CurrentUser, db: DBSession):
     result = await db.execute(
         text(
-            "SELECT l.*, p.name AS process_name "
+            "SELECT l.*, p.name AS process_name, "
+            "  l1.name AS p1_name, l2.name AS p2_name "
             "FROM master.locations l "
             "LEFT JOIN master.processes p ON p.id = l.process_id "
+            "LEFT JOIN master.ledgers l1 ON l1.id = l.p1_id "
+            "LEFT JOIN master.ledgers l2 ON l2.id = l.p2_id "
             "ORDER BY l.name"
         )
     )
@@ -656,7 +665,11 @@ async def list_locations(current_user: CurrentUser, db: DBSession):
 
 @router.post("/locations", status_code=201)
 async def create_location(body: LocationIn, current_user: CurrentUser, db: DBSession):
-    loc = Location(name=body.name, code=body.code, process_id=body.process_id)
+    loc = Location(
+        name=body.name, code=body.code, process_id=body.process_id,
+        p1_id=body.p1_id, p1_from=body.p1_from, p1_to=body.p1_to,
+        p2_id=body.p2_id, p2_from=body.p2_from, p2_to=body.p2_to
+    )
     db.add(loc)
     await db.flush()
     await db.refresh(loc)
@@ -671,6 +684,12 @@ async def update_location(id: int, body: LocationIn, current_user: CurrentUser, 
     loc.name = body.name
     loc.code = body.code
     loc.process_id = body.process_id
+    loc.p1_id = body.p1_id
+    loc.p1_from = body.p1_from
+    loc.p1_to = body.p1_to
+    loc.p2_id = body.p2_id
+    loc.p2_from = body.p2_from
+    loc.p2_to = body.p2_to
     await db.flush()
     await db.refresh(loc)
     return loc
@@ -890,4 +909,77 @@ async def get_locations_consumption_report(
     union_query = " UNION ALL ".join(queries) + " ORDER BY date DESC, shift_label"
     result = await db.execute(text(union_query), params)
     return [dict(r) for r in result.mappings().all()]
+
+
+@router.get("/locations/{id}/consumption")
+async def get_single_location_consumption(
+    id: int,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+):
+    loc_res = await db.execute(
+        text(
+            "SELECT l.*, "
+            "  l1.name AS p1_name, l2.name AS p2_name "
+            "FROM master.locations l "
+            "LEFT JOIN master.ledgers l1 ON l1.id = l.p1_id "
+            "LEFT JOIN master.ledgers l2 ON l2.id = l.p2_id "
+            "WHERE l.id = :id"
+        ),
+        {"id": id}
+    )
+    loc = loc_res.mappings().one_or_none()
+    if not loc:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    schema = _schema(fy)
+    
+    p1_from = loc.get("p1_from") or "1900-01-01"
+    p1_to = loc.get("p1_to") or "1900-01-01"
+    p2_from = loc.get("p2_from") or "1900-01-01"
+    p2_to = loc.get("p2_to") or "1900-01-01"
+    p1_name = loc.get("p1_name") or "Unassigned"
+    p2_name = loc.get("p2_name") or "Unassigned"
+
+    query = f"""
+    SELECT 
+        m.id,
+        m.movement_date::text AS date,
+        si.name AS tool_name,
+        si.item_code AS tool_code,
+        m.quantity AS qty,
+        u.symbol AS uom_symbol,
+        m.narration,
+        CASE 
+            WHEN m.movement_date BETWEEN :p1_from::date AND :p1_to::date THEN :p1_name
+            WHEN m.movement_date BETWEEN :p2_from::date AND :p2_to::date THEN :p2_name
+            ELSE 'Unassigned'
+        END AS contractor_name,
+        CASE 
+            WHEN m.movement_date BETWEEN :p1_from::date AND :p1_to::date THEN '1st Shift'
+            WHEN m.movement_date BETWEEN :p2_from::date AND :p2_to::date THEN '2nd Shift'
+            ELSE 'Unassigned'
+        END AS shift_label
+    FROM {schema}.stock_item_movements m
+    JOIN master.stock_items si ON si.id = m.stock_item_id
+    LEFT JOIN master.units_of_measure u ON u.id = si.uom_id
+    WHERE m.location_id = :location_id AND m.movement_type = 'Consumption'
+    ORDER BY m.movement_date DESC
+    """
+    
+    result = await db.execute(
+        text(query),
+        {
+            "location_id": id,
+            "p1_from": p1_from,
+            "p1_to": p1_to,
+            "p2_from": p2_from,
+            "p2_to": p2_to,
+            "p1_name": p1_name,
+            "p2_name": p2_name,
+        }
+    )
+    return [dict(r) for r in result.mappings().all()]
+
 

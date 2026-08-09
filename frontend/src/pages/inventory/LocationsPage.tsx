@@ -62,46 +62,42 @@ export default function LocationsPage() {
       ),
   });
 
-  // Shift filters for Consumption Report
-  const [p1Id, setP1Id] = useState<string>("");
-  const [p1From, setP1From] = useState<string>(today);
-  const [p1To, setP1To] = useState<string>(today);
-  const [p2Id, setP2Id] = useState<string>("");
-  const [p2From, setP2From] = useState<string>(today);
-  const [p2To, setP2To] = useState<string>(today);
-
   const { data: contractors = [] } = useQuery({
     queryKey: ["ledgers-contractors"],
     queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data,
   });
 
-  const { data: consumptionReport = [], isLoading: isConsLoading, refetch: refetchCons } = useQuery({
-    queryKey: ["consumption-report", activeFY, p1Id, p1From, p1To, p2Id, p2From, p2To],
+  const { data: processConsumption = [], isLoading: isConsLoading, refetch: refetchCons } = useQuery({
+    queryKey: ["process-consumption", activeFY],
+    queryFn: async () => (await api.get(`/stock/locations/process-consumption?fy=${activeFY}`)).data,
+  });
+
+  const { data: singleLocConsumption = [], isLoading: isSingleLocConsLoading } = useQuery({
+    queryKey: ["location-consumption", editingLoc?.id, activeFY],
     queryFn: async () => {
-      const params: any = { fy: activeFY };
-      if (p1Id) {
-        params.p1_id = p1Id;
-        params.p1_from = p1From;
-        params.p1_to = p1To;
-      }
-      if (p2Id) {
-        params.p2_id = p2Id;
-        params.p2_from = p2From;
-        params.p2_to = p2To;
-      }
-      if (!p1Id && !p2Id) {
-        return [];
-      }
-      return (await api.get("/stock/locations/consumption-report", { params })).data;
+      if (!editingLoc?.id) return [];
+      return (await api.get(`/stock/locations/${editingLoc.id}/consumption?fy=${activeFY}`)).data;
     },
+    enabled: !!editingLoc?.id,
   });
 
   // Mutate Locations
   const saveLocMutation = useMutation({
-    mutationFn: (data: any) =>
-      editingLoc
-        ? api.put(`/stock/locations/${editingLoc.id}`, data)
-        : api.post("/stock/locations", data),
+    mutationFn: (data: any) => {
+      const payload = {
+        ...data,
+        process_id: data.process_id === "" ? null : Number(data.process_id),
+        p1_id: data.p1_id === "" ? null : Number(data.p1_id),
+        p1_from: data.p1_from === "" ? null : data.p1_from,
+        p1_to: data.p1_to === "" ? null : data.p1_to,
+        p2_id: data.p2_id === "" ? null : Number(data.p2_id),
+        p2_from: data.p2_from === "" ? null : data.p2_from,
+        p2_to: data.p2_to === "" ? null : data.p2_to,
+      };
+      return editingLoc
+        ? api.put(`/stock/locations/${editingLoc.id}`, payload)
+        : api.post("/stock/locations", payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["locations"] });
       setLocOpen(false);
@@ -194,6 +190,12 @@ export default function LocationsPage() {
               name: p.data.name,
               code: p.data.code || "",
               process_id: p.data.process_id || "",
+              p1_id: p.data.p1_id || "",
+              p1_from: p.data.p1_from || "",
+              p1_to: p.data.p1_to || "",
+              p2_id: p.data.p2_id || "",
+              p2_from: p.data.p2_from || "",
+              p2_to: p.data.p2_to || "",
             });
             setLocOpen(true);
           }}>
@@ -271,38 +273,15 @@ export default function LocationsPage() {
   ];
 
   const consumptionColDefs: ColDef[] = [
+    { field: "process_name", headerName: "Production Process", flex: 1.5, minWidth: 200 },
+    { field: "stock_item_name", headerName: "Consumable Item", flex: 1.5, minWidth: 200 },
+    { field: "item_code", headerName: "Code", width: 130 },
     {
-      field: "shift_label",
-      headerName: "Shift",
-      width: 110,
-      cellRenderer: (p: any) => (
-        <Chip
-          label={p.value}
-          size="small"
-          color={p.value === "1st Shift" ? "primary" : "secondary"}
-          variant="outlined"
-          sx={{ fontWeight: 600, fontSize: "0.75rem" }}
-        />
-      ),
-    },
-    { field: "contractor_name", headerName: "Contractor", flex: 1.5, minWidth: 150 },
-    { field: "location_name", headerName: "Location", flex: 1.2, minWidth: 130 },
-    { field: "date", headerName: "Date", width: 110 },
-    { field: "inward_no", headerName: "Inward No", width: 130 },
-    { field: "inward_ref", headerName: "Inward Ref", width: 130 },
-    {
-      field: "qty",
-      headerName: "Qty",
-      width: 110,
+      field: "total_consumed",
+      headerName: "Total Consumed",
+      width: 160,
       type: "numericColumn",
-      valueFormatter: (p) => formatQty(p.value),
-    },
-    {
-      field: "weight",
-      headerName: "Weight",
-      width: 130,
-      type: "numericColumn",
-      valueFormatter: (p) => p.value !== undefined && p.value !== null ? `${Number(p.value).toFixed(3)} kg` : "-",
+      valueFormatter: (p) => `${formatQty(p.value)} ${p.data.uom_symbol || ""}`,
     },
   ];
 
@@ -330,7 +309,17 @@ export default function LocationsPage() {
           onRefresh={refetchLocs}
           onAdd={() => {
             setEditingLoc(null);
-            resetLoc({ name: "", code: "", process_id: "" });
+            resetLoc({
+              name: "",
+              code: "",
+              process_id: "",
+              p1_id: "",
+              p1_from: "",
+              p1_to: "",
+              p2_id: "",
+              p2_from: "",
+              p2_to: "",
+            });
             setLocOpen(true);
           }}
           addLabel="Add Location"
@@ -399,116 +388,11 @@ export default function LocationsPage() {
         </Box>
       )}
 
-      {/* TAB 3: SHIFT-WISE CONTRACTOR CONSUMPTION REPORT */}
+      {/* TAB 3: PROCESS-WISE CONSUMPTION REPORT */}
       {tabValue === 3 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Paper variant="outlined" sx={{ p: 2, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)", borderRadius: "12px" }}>
-            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: "text.secondary" }}>
-              Shift Comparison Filters
-            </Typography>
-            <Grid container spacing={2}>
-              {/* 1st Shift Filters */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: "8px", height: "100%", bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.005)" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5, color: "primary.main" }}>
-                    1st Shift Config
-                  </Typography>
-                  <Grid container spacing={1.5}>
-                    <Grid size={{ xs: 12 }}>
-                      <TextField
-                        select
-                        label="1st Shift Person (Contractor)"
-                        fullWidth
-                        size="small"
-                        value={p1Id}
-                        onChange={(e) => setP1Id(e.target.value)}
-                        slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                      >
-                        <MenuItem value=""><em>None / Unassigned</em></MenuItem>
-                        {contractors.map((c: any) => (
-                          <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                        ))}
-                      </TextField>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <TextField
-                        type="date"
-                        label="From Date"
-                        fullWidth
-                        size="small"
-                        value={p1From}
-                        onChange={(e) => setP1From(e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <TextField
-                        type="date"
-                        label="To Date"
-                        fullWidth
-                        size="small"
-                        value={p1To}
-                        onChange={(e) => setP1To(e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Grid>
-
-              {/* 2nd Shift Filters */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: "8px", height: "100%", bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.005)" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5, color: "secondary.main" }}>
-                    2nd Shift Config
-                  </Typography>
-                  <Grid container spacing={1.5}>
-                    <Grid size={{ xs: 12 }}>
-                      <TextField
-                        select
-                        label="2nd Shift Person (Contractor)"
-                        fullWidth
-                        size="small"
-                        value={p2Id}
-                        onChange={(e) => setP2Id(e.target.value)}
-                        slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                      >
-                        <MenuItem value=""><em>None / Unassigned</em></MenuItem>
-                        {contractors.map((c: any) => (
-                          <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                        ))}
-                      </TextField>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <TextField
-                        type="date"
-                        label="From Date"
-                        fullWidth
-                        size="small"
-                        value={p2From}
-                        onChange={(e) => setP2From(e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <TextField
-                        type="date"
-                        label="To Date"
-                        fullWidth
-                        size="small"
-                        value={p2To}
-                        onChange={(e) => setP2To(e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Grid>
-            </Grid>
-          </Paper>
-
+        <Box>
           <OrbxGrid
-            rowData={consumptionReport}
+            rowData={processConsumption}
             columnDefs={consumptionColDefs}
             loading={isConsLoading}
             onRefresh={refetchCons}
@@ -517,37 +401,189 @@ export default function LocationsPage() {
       )}
 
       {/* Location Create/Edit Dialog */}
-      <Dialog open={locOpen} onClose={() => setLocOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={locOpen} onClose={() => setLocOpen(false)} maxWidth="md" fullWidth>
         <form onSubmit={handleSubLoc((d) => saveLocMutation.mutate(d))}>
           <DialogTitle>{editingLoc ? "Edit Location" : "Add New Location"}</DialogTitle>
           <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 12 }}>
-                <TextField {...regLoc("name")} label="Location Name *" fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
+            <Grid container spacing={3} sx={{ mt: 0.5 }}>
+              {/* Left Side: General Info */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField {...regLoc("name")} label="Location Name *" fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField {...regLoc("code")} label="Location Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Controller
+                      name="process_id"
+                      control={controlLoc}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          select
+                          label="Associate with Process"
+                          fullWidth
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        >
+                          <MenuItem value=""><em>None (General Store / Main Stock)</em></MenuItem>
+                          {processes.map((p: any) => (
+                            <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    />
+                  </Grid>
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12 }}>
-                <TextField {...regLoc("code")} label="Location Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+
+              {/* Right Side: Shift Configuration */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Grid container spacing={2}>
+                  {/* 1st Shift */}
+                  <Grid size={12}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, color: "primary.main" }}>
+                      1st Shift Configuration
+                    </Typography>
+                    <Grid container spacing={1.5}>
+                      <Grid size={12}>
+                        <Controller
+                          name="p1_id"
+                          control={controlLoc}
+                          render={({ field }) => (
+                            <TextField
+                              {...field}
+                              select
+                              label="1st Shift Person (Contractor)"
+                              fullWidth
+                              size="small"
+                              slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                            >
+                              <MenuItem value=""><em>None / Unassigned</em></MenuItem>
+                              {contractors.map((c: any) => (
+                                <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                        />
+                      </Grid>
+                      <Grid size={6}>
+                        <TextField
+                          {...regLoc("p1_from")}
+                          type="date"
+                          label="From Date"
+                          fullWidth
+                          size="small"
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        />
+                      </Grid>
+                      <Grid size={6}>
+                        <TextField
+                          {...regLoc("p1_to")}
+                          type="date"
+                          label="To Date"
+                          fullWidth
+                          size="small"
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Grid>
+
+                  {/* 2nd Shift */}
+                  <Grid size={12}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, mt: 1, mb: 1, color: "secondary.main" }}>
+                      2nd Shift Configuration
+                    </Typography>
+                    <Grid container spacing={1.5}>
+                      <Grid size={12}>
+                        <Controller
+                          name="p2_id"
+                          control={controlLoc}
+                          render={({ field }) => (
+                            <TextField
+                              {...field}
+                              select
+                              label="2nd Shift Person (Contractor)"
+                              fullWidth
+                              size="small"
+                              slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                            >
+                              <MenuItem value=""><em>None / Unassigned</em></MenuItem>
+                              {contractors.map((c: any) => (
+                                <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                              ))}
+                            </TextField>
+                          )}
+                        />
+                      </Grid>
+                      <Grid size={6}>
+                        <TextField
+                          {...regLoc("p2_from")}
+                          type="date"
+                          label="From Date"
+                          fullWidth
+                          size="small"
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        />
+                      </Grid>
+                      <Grid size={6}>
+                        <TextField
+                          {...regLoc("p2_to")}
+                          type="date"
+                          label="To Date"
+                          fullWidth
+                          size="small"
+                          slotProps={{ inputLabel: { shrink: true } }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Grid>
+                </Grid>
               </Grid>
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="process_id"
-                  control={controlLoc}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      select
-                      label="Associate with Process"
-                      fullWidth
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    >
-                      <MenuItem value=""><em>None (General Store / Main Stock)</em></MenuItem>
-                      {processes.map((p: any) => (
-                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                />
-              </Grid>
+
+              {/* Bottom: Consumption sub-report for this location */}
+              {editingLoc && (
+                <Grid size={12} sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                    Tools/Consumables Consumed under Shifts
+                  </Typography>
+                  <Box sx={{ height: 260, width: "100%" }}>
+                    <OrbxGrid
+                      rowData={singleLocConsumption}
+                      columnDefs={[
+                        {
+                          field: "shift_label",
+                          headerName: "Shift",
+                          width: 100,
+                          cellRenderer: (p: any) => (
+                            <Chip
+                              label={p.value}
+                              size="small"
+                              color={p.value === "1st Shift" ? "primary" : p.value === "2nd Shift" ? "secondary" : "default"}
+                              variant="outlined"
+                              sx={{ fontWeight: 600, fontSize: "0.7rem" }}
+                            />
+                          ),
+                        },
+                        { field: "contractor_name", headerName: "Contractor", width: 140 },
+                        { field: "date", headerName: "Date", width: 100 },
+                        { field: "tool_name", headerName: "Tool / Consumable", flex: 1 },
+                        {
+                          field: "qty",
+                          headerName: "Qty",
+                          width: 80,
+                          type: "numericColumn",
+                          valueFormatter: (p) => formatQty(p.value),
+                        },
+                        { field: "narration", headerName: "Narration", width: 150 },
+                      ]}
+                      loading={isSingleLocConsLoading}
+                    />
+                  </Box>
+                </Grid>
+              )}
             </Grid>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>

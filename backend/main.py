@@ -55,6 +55,16 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(f"ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS {col}"))
         # Migrate products table if needed
         await conn.execute(text("ALTER TABLE master.products ADD COLUMN IF NOT EXISTS weight NUMERIC(15, 3) DEFAULT 0"))
+        # Migrate locations table if needed
+        for col in (
+            "p1_id INTEGER REFERENCES master.ledgers(id)",
+            "p1_from VARCHAR(10)",
+            "p1_to VARCHAR(10)",
+            "p2_id INTEGER REFERENCES master.ledgers(id)",
+            "p2_from VARCHAR(10)",
+            "p2_to VARCHAR(10)"
+        ):
+            await conn.execute(text(f"ALTER TABLE master.locations ADD COLUMN IF NOT EXISTS {col}"))
     print("[OK] Master tables created")
 
     # 3. Ensure financial year schemas exist and run migrations on year tables

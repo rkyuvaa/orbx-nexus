@@ -233,6 +233,12 @@ class Location(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str | None] = mapped_column(String(50))
     process_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.processes.id"), nullable=True)
+    p1_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.ledgers.id"), nullable=True)
+    p1_from: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    p1_to: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    p2_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.ledgers.id"), nullable=True)
+    p2_from: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    p2_to: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     process: Mapped["Process | None"] = relationship("Process")
