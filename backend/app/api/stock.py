@@ -828,3 +828,66 @@ async def get_process_consumption(
     """
     result = await db.execute(text(query), params)
     return [dict(r) for r in result.mappings().all()]
+
+
+@router.get("/locations/consumption-report")
+async def get_locations_consumption_report(
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    p1_id: Optional[int] = None,
+    p1_from: Optional[str] = None,
+    p1_to: Optional[str] = None,
+    p2_id: Optional[int] = None,
+    p2_from: Optional[str] = None,
+    p2_to: Optional[str] = None,
+):
+    schema = _schema(fy)
+    queries = []
+    params = {}
+
+    if p1_id and p1_from and p1_to:
+        queries.append(f"""
+        SELECT 
+            l.name AS contractor_name,
+            COALESCE(loc.name, 'Main Store') AS location_name,
+            lb.bill_date::text AS date,
+            si.inward_no,
+            si.ref_no AS inward_ref,
+            lb.quantity AS qty,
+            (lb.quantity * COALESCE(si.weight, 0)) AS weight,
+            '1st Shift' AS shift_label
+        FROM {schema}.labour_bills lb
+        LEFT JOIN master.ledgers l ON l.id = lb.ledger_id
+        LEFT JOIN {schema}.stock_inward si ON si.id = lb.inward_id
+        LEFT JOIN master.locations loc ON loc.process_id = lb.process_id
+        WHERE lb.ledger_id = :p1_id AND lb.bill_date BETWEEN :p1_from AND :p1_to
+        """)
+        params.update({"p1_id": p1_id, "p1_from": p1_from, "p1_to": p1_to})
+
+    if p2_id and p2_from and p2_to:
+        queries.append(f"""
+        SELECT 
+            l.name AS contractor_name,
+            COALESCE(loc.name, 'Main Store') AS location_name,
+            lb.bill_date::text AS date,
+            si.inward_no,
+            si.ref_no AS inward_ref,
+            lb.quantity AS qty,
+            (lb.quantity * COALESCE(si.weight, 0)) AS weight,
+            '2nd Shift' AS shift_label
+        FROM {schema}.labour_bills lb
+        LEFT JOIN master.ledgers l ON l.id = lb.ledger_id
+        LEFT JOIN {schema}.stock_inward si ON si.id = lb.inward_id
+        LEFT JOIN master.locations loc ON loc.process_id = lb.process_id
+        WHERE lb.ledger_id = :p2_id AND lb.bill_date BETWEEN :p2_from AND :p2_to
+        """)
+        params.update({"p2_id": p2_id, "p2_from": p2_from, "p2_to": p2_to})
+
+    if not queries:
+        return []
+
+    union_query = " UNION ALL ".join(queries) + " ORDER BY date DESC, shift_label"
+    result = await db.execute(text(union_query), params)
+    return [dict(r) for r in result.mappings().all()]
+
