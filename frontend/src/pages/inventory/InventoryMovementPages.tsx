@@ -123,7 +123,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
     const q = Number(qty) || 0;
     const r = Number(rate) || 0;
     if (q > 0 && r > 0) {
-      setValue("amount", String(formatAmount(q * r)));
+      setValue("amount", (q * r).toFixed(2));
     }
   }, [qty, rate, setValue]);
 
