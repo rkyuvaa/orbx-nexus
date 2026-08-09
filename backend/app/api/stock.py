@@ -933,14 +933,16 @@ async def get_single_location_consumption(
     if not loc:
         raise HTTPException(status_code=404, detail="Location not found")
 
+    loc_dict = dict(loc)
     schema = _schema(fy)
     
-    p1_from = loc.get("p1_from") or "1900-01-01"
-    p1_to = loc.get("p1_to") or "1900-01-01"
-    p2_from = loc.get("p2_from") or "1900-01-01"
-    p2_to = loc.get("p2_to") or "1900-01-01"
-    p1_name = loc.get("p1_name") or "Unassigned"
-    p2_name = loc.get("p2_name") or "Unassigned"
+    p1_from = loc_dict.get("p1_from") or "1900-01-01"
+    p1_to = loc_dict.get("p1_to") or "1900-01-01"
+    p2_from = loc_dict.get("p2_from") or "1900-01-01"
+    p2_to = loc_dict.get("p2_to") or "1900-01-01"
+    p1_name = loc_dict.get("p1_name") or "Unassigned"
+    p2_name = loc_dict.get("p2_name") or "Unassigned"
+
 
     query = f"""
     SELECT 
