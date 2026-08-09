@@ -106,6 +106,13 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Location Inventory", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
+  {
+    label: "Purchase",
+    icon: <Receipt sx={{ fontSize: 20 }} />,
+    children: [
+      { label: "Tools & Consumables", path: "/purchase/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+    ],
+  },
 
 
   {

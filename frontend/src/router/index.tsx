@@ -68,6 +68,9 @@ export const router = createBrowserRouter([
       { path: "inventory/adjustments", element: <StockAdjustmentPage /> },
       { path: "inventory/locations", element: <LocationsPage /> },
 
+      // Purchase
+      { path: "purchase/tools-consumables", element: <InventoryInwardPage /> },
+
       // Process Info
       { path: "process/products", element: <ProductRegisterPage /> },
       { path: "process/processes", element: <ProcessRegisterPage /> },

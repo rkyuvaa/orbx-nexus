@@ -200,14 +200,16 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
-        {editing ? `Edit ${movementType}` : `New Stock ${movementType}`}
+        {editing 
+          ? `Edit ${movementType === "Inward" ? "Purchase" : movementType}` 
+          : `New ${movementType === "Inward" ? "Purchase Entry" : "Stock " + movementType}`}
       </DialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         <Grid container spacing={2}>
           <Grid size={{ xs: 6 }}>
             <TextField
-              label="Movement No."
+              label={movementType === "Inward" ? "Purchase No." : "Movement No."}
               fullWidth
               size="small"
               {...register("movement_no", { required: "Required" })}
@@ -381,22 +383,22 @@ export function InventoryInwardPage() {
   const summaryCards = (
     <Box sx={{ display: "flex", gap: 2, mb: 1.5 }}>
       <Box sx={{ px: 2, py: 1, borderRadius: 2, bgcolor: "success.main", color: "#fff", minWidth: 140, textAlign: "center" }}>
-        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Inward Qty</Typography>
+        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Purchased Qty</Typography>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatQty(totalQty)}</Typography>
       </Box>
       <Box sx={{ px: 2, py: 1, borderRadius: 2, bgcolor: "success.dark", color: "#fff", minWidth: 160, textAlign: "center" }}>
-        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Inward Value</Typography>
+        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Purchase Value</Typography>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>₹{formatAmount(totalValue)}</Typography>
       </Box>
       <Box sx={{ px: 2, py: 1, borderRadius: 2, bgcolor: "primary.main", color: "#fff", minWidth: 120, textAlign: "center" }}>
-        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Entries</Typography>
+        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Purchase Entries</Typography>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>{movements.length}</Typography>
       </Box>
     </Box>
   );
 
   const colDefs: ColDef[] = [
-    { field: "movement_no", headerName: "Movement No.", width: 150 },
+    { field: "movement_no", headerName: "Purchase No.", width: 150 },
     { field: "movement_date", headerName: "Date", width: 110 },
     { field: "stock_item_name", headerName: "Stock Item", flex: 1, minWidth: 180 },
     { field: "item_code", headerName: "Code", width: 100 },
@@ -413,7 +415,7 @@ export function InventoryInwardPage() {
       field: "amount", headerName: "Amount", width: 120, type: "numericColumn",
       valueFormatter: (p) => p.value ? `₹${formatAmount(p.value)}` : "-",
     },
-    { field: "ref_no", headerName: "Ref No.", width: 110 },
+    { field: "ref_no", headerName: "Bill/Ref No.", width: 110 },
     {
       headerName: "Actions", width: 110, sortable: false, filter: false,
       cellRenderer: (p: any) => (
@@ -425,7 +427,7 @@ export function InventoryInwardPage() {
           </Tooltip>
           <Tooltip title="Delete">
             <IconButton size="small" color="error" onClick={() => {
-              if (window.confirm("Delete this inward entry?")) deleteMutation.mutate(p.data.id);
+              if (window.confirm("Delete this purchase entry?")) deleteMutation.mutate(p.data.id);
             }}>
               <Delete fontSize="small" />
             </IconButton>
@@ -438,8 +440,8 @@ export function InventoryInwardPage() {
   return (
     <Box>
       <PageHeader
-        title="Stock Inward"
-        breadcrumbs={[{ label: "Inventory" }, { label: "Stock Inward" }]}
+        title="Tools & Consumables Purchase"
+        breadcrumbs={[{ label: "Purchase" }, { label: "Tools & Consumables" }]}
       />
       <OrbxGrid
         rowData={movements}
@@ -447,7 +449,7 @@ export function InventoryInwardPage() {
         loading={isLoading}
         onRefresh={refetch}
         onAdd={() => { setEditing(null); setOpen(true); }}
-        addLabel="New Inward"
+        addLabel="New Purchase"
         summaryCards={summaryCards}
       />
       <MovementDialog
