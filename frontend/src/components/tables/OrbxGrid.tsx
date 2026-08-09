@@ -263,7 +263,7 @@ export default function OrbxGrid<T = any>({
             body { font-family: 'Inter', sans-serif; color: #1a1a1a; margin: 0; padding: 0; line-height: 1.5; font-size: 11px; }
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 12px; margin-bottom: 20px; }
             .logo-container { display: flex; align-items: center; gap: 12px; }
-            .logo { height: 38px; }
+            .logo { height: 57px; }
             .company-title { font-size: 18px; font-weight: 700; color: #104f32; letter-spacing: -0.01em; }
             .report-info { text-align: right; font-size: 10px; color: #718096; line-height: 1.4; }
             .report-title { font-size: 18px; font-weight: 700; color: #1c3f60; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; }

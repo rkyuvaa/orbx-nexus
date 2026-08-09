@@ -8,9 +8,9 @@ export const COMMON_PRINT_CSS = `
   
   /* Header & Branding */
   .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 0.5px solid #198754; padding-bottom: 12px; margin-bottom: 16px; }
-  .logo-wrapper { flex: 0 0 120px; }
-  .logo-wrapper img { max-height: 60px; max-width: 120px; object-fit: contain; }
-  .company-details { flex: 1; text-align: center; margin-right: 120px; }
+  .logo-wrapper { flex: 0 0 180px; }
+  .logo-wrapper img { max-height: 90px; max-width: 180px; object-fit: contain; }
+  .company-details { flex: 1; text-align: center; margin-right: 180px; }
   .company-details h1 { margin: 0; font-size: 22px; color: #0f5132; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
   .company-details p { margin: 3px 0 0 0; font-size: 11px; color: #2d3748; }
   .company-details .gstin { font-weight: 700; color: #0f5132; }
