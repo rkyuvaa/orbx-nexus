@@ -448,6 +448,7 @@ export default function LocationsPage() {
                       select
                       label={moveType === "Transfer" ? "Source Location (From)" : "Location *" }
                       fullWidth
+                      slotProps={{ select: { displayEmpty: true } }}
                     >
                       {moveType === "Transfer" && <MenuItem value="">Main Store</MenuItem>}
                       {locations.map((l: any) => (
@@ -473,6 +474,7 @@ export default function LocationsPage() {
                         fullWidth
                         error={!!fieldState.error}
                         helperText={fieldState.error?.message}
+                        slotProps={{ select: { displayEmpty: true } }}
                       >
                         <MenuItem value="" disabled>Select Location</MenuItem>
                         {locations.map((l: any) => (
