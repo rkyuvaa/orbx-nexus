@@ -507,7 +507,7 @@ async def get_inventory_balance(
     s = _schema(fy)
     result = await db.execute(
         text(
-            f"SELECT si.id, si.name, si.item_code, si.opening_stock, si.reorder_level, "
+            f"SELECT si.id, si.name, si.item_code, si.uom_id, si.opening_stock, si.reorder_level, "
             f"u.symbol AS uom_symbol, "
             f"COALESCE(SUM(CASE WHEN m.movement_type='Inward'  THEN m.quantity ELSE 0 END), 0) AS total_inward, "
             f"COALESCE(SUM(CASE WHEN m.movement_type='Outward' THEN m.quantity ELSE 0 END), 0) AS total_outward, "
@@ -520,7 +520,7 @@ async def get_inventory_balance(
             f"LEFT JOIN {s}.stock_item_movements m ON m.stock_item_id = si.id "
             f"LEFT JOIN master.units_of_measure u ON u.id = si.uom_id "
             f"WHERE si.is_active = TRUE "
-            f"GROUP BY si.id, si.name, si.item_code, si.opening_stock, si.reorder_level, u.symbol "
+            f"GROUP BY si.id, si.name, si.item_code, si.uom_id, si.opening_stock, si.reorder_level, u.symbol "
             f"ORDER BY si.name"
         )
     )

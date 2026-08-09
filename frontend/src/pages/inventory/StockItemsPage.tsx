@@ -94,11 +94,16 @@ export default function StockItemsPage() {
   };
 
   const handleOpenEdit = (item: any) => {
+    let uomId = item.uom_id;
+    if (!uomId && item.uom_symbol && uoms.length > 0) {
+      const matched = uoms.find((u: any) => u.symbol === item.uom_symbol);
+      if (matched) uomId = matched.id;
+    }
     setEditingItem(item);
     reset({
       name: item.name,
       item_code: item.item_code || "",
-      uom_id: item.uom_id || "",
+      uom_id: uomId || "",
       opening_stock: item.opening_stock ?? 0,
       reorder_level: item.reorder_level ?? 0,
     });
