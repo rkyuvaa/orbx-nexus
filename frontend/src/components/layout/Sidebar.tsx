@@ -464,8 +464,22 @@ export default function Sidebar() {
           flexShrink: 0,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", height: sidebarOpen ? 46 : 34, justifyContent: "center", width: "100%" }}>
+        <Box sx={{ display: "flex", alignItems: "center", height: sidebarOpen ? 46 : 34, justifyContent: sidebarOpen ? "flex-start" : "center", width: "100%", gap: 1.2, pl: sidebarOpen ? 0.5 : 0 }}>
           <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 46, objectFit: "contain" }} />
+          {sidebarOpen && (
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: "#E6F0EC",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
+                fontSize: "1.25rem",
+              }}
+            >
+              Nexus
+            </Typography>
+          )}
         </Box>
       </Box>
 

@@ -81,8 +81,20 @@ export default function Topbar() {
             <MenuIcon sx={{ fontSize: 20 }} />
           </IconButton>
           {/* Left Section: Logo & Product Branding */}
-          <Box sx={{ display: "flex", alignItems: "center", height: 42 }}>
+          <Box sx={{ display: "flex", alignItems: "center", height: 42, gap: 1.2 }}>
             <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 42 }} />
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: themeMode === "dark" ? "#E6F0EC" : "#0E1F18",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
+                fontSize: "1.25rem",
+              }}
+            >
+              Nexus
+            </Typography>
           </Box>
         </Box>
 
