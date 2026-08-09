@@ -92,7 +92,6 @@ export default function StockItemsPage() {
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <PageHeader
         title="Tools & Consumables"
-        subtitle="Live stock balance — Opening + Inward − Outward"
         breadcrumbs={[{ label: "Inventory" }, { label: "Tools & Consumables" }]}
       />
       <OrbxGrid

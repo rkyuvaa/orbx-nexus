@@ -103,7 +103,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Tools & Consumables", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Stock Adjustment", path: "/inventory/adjustments", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Unit of Measure", path: "/inventory/uom", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Stock Transfer", path: "/inventory/stock-transfer", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Location Inventory", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
