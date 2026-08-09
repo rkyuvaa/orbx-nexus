@@ -81,8 +81,8 @@ export default function Topbar() {
             <MenuIcon sx={{ fontSize: 20 }} />
           </IconButton>
           {/* Left Section: Logo & Product Branding */}
-          <Box sx={{ display: "flex", alignItems: "center", height: 32 }}>
-            <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 32 }} />
+          <Box sx={{ display: "flex", alignItems: "center", height: 42 }}>
+            <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 42 }} />
           </Box>
         </Box>
 

@@ -464,8 +464,8 @@ export default function Sidebar() {
           flexShrink: 0,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", height: sidebarOpen ? 36 : 24, justifyContent: "center", width: "100%" }}>
-          <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 36, objectFit: "contain" }} />
+        <Box sx={{ display: "flex", alignItems: "center", height: sidebarOpen ? 46 : 34, justifyContent: "center", width: "100%" }}>
+          <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 46, objectFit: "contain" }} />
         </Box>
       </Box>
 

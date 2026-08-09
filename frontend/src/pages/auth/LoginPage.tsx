@@ -178,7 +178,7 @@ export default function LoginPage() {
           <img 
             src={isDark ? "/logo-dark.svg" : "/logo-light.svg"} 
             alt="Logo" 
-            style={{ height: 80, objectFit: "contain", marginBottom: 8 }} 
+            style={{ height: 90, objectFit: "contain", marginBottom: 8 }} 
           />
         </Box>
 
