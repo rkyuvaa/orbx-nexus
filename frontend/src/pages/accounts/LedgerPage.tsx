@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography,
+  TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography, Divider,
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
 import Edit from "@mui/icons-material/Edit";
@@ -52,11 +52,14 @@ interface LedgerPageProps {
 export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPageProps) {
   const displayName = title === "Supplier" ? "Supplier" : ledgerType;
   const isStaff = ledgerType === "Staff";
+  const isContractor = ledgerType === "Contractor";
+  const isStaffOrContractor = isStaff || isContractor;
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: ledgers = [], isLoading, refetch } = useQuery({
     queryKey: ["ledgers", ledgerType],
@@ -199,68 +202,113 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
           <DialogTitle>{editing ? `Edit ${displayName}` : `Add ${displayName}`}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              {/* Photo Upload Row for Staff Ledger */}
-              {isStaff && (
-                <Grid size={12}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 1.5, border: "1px dashed", borderColor: "divider", borderRadius: "12px", bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)" }}>
-                    <Box sx={{ position: "relative" }}>
-                      {photo ? (
-                        <Box
-                          component="img"
-                          src={photo}
-                          sx={{ width: 64, height: 64, borderRadius: "8px", objectFit: "cover", border: "1px solid", borderColor: "divider" }}
-                        />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: 64,
-                            height: 64,
-                            borderRadius: "8px",
-                            bgcolor: "grey.100",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            border: "1px solid",
-                            borderColor: "divider",
-                          }}
-                        >
-                          <Person sx={{ fontSize: 32, color: "grey.400" }} />
-                        </Box>
-                      )}
-                      {photo && (
-                        <IconButton
-                          size="small"
-                          onClick={() => setPhoto(null)}
-                          sx={{
-                            position: "absolute",
-                            top: -8,
-                            right: -8,
-                            bgcolor: "error.main",
-                            color: "white",
-                            p: 0.25,
-                            "&:hover": { bgcolor: "error.dark" }
-                          }}
-                        >
-                          <Delete sx={{ fontSize: 12 }} />
-                        </IconButton>
-                      )}
-                    </Box>
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                        Upload employee photograph or capture using device camera
-                      </Typography>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("name")} label="Name *" fullWidth error={!!errors.name} helperText={errors.name?.message ? String(errors.name.message) : ""} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("ledger_code")} label="Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("opening_balance")} label="Opening Balance" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Controller name="balance_type" control={control} render={({ field }) => (
+                  <TextField {...field} select label="Balance Type" fullWidth slotProps={{ inputLabel: { shrink: true } }}>
+                    <MenuItem value="Dr">Dr (Debit)</MenuItem>
+                    <MenuItem value="Cr">Cr (Credit)</MenuItem>
+                  </TextField>
+                )} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("phone")} label="Phone" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("mobile")} label="Mobile" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              
+              {isStaffOrContractor ? (
+                <>
+                  <Grid size={{ xs: 12, sm: 9 }}>
+                    <TextField 
+                      {...register("address")} 
+                      label="Address" 
+                      fullWidth 
+                      multiline 
+                      rows={2} 
+                      slotProps={{ inputLabel: { shrink: true } }} 
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        border: "1px dashed",
+                        borderColor: "divider",
+                        borderRadius: "12px",
+                        p: 1,
+                        height: "100%",
+                        minHeight: 110,
+                        bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+                      }}
+                    >
+                      <Box sx={{ position: "relative", mb: 0.5 }}>
+                        {photo ? (
+                          <Tooltip title="Click to preview">
+                            <Box
+                              component="img"
+                              src={photo}
+                              onClick={() => setPreviewOpen(true)}
+                              sx={{
+                                width: 52,
+                                height: 52,
+                                borderRadius: "8px",
+                                objectFit: "cover",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                cursor: "pointer",
+                                "&:hover": { opacity: 0.8 },
+                              }}
+                            />
+                          </Tooltip>
+                        ) : (
+                          <Box
+                            sx={{
+                              width: 52,
+                              height: 52,
+                              borderRadius: "8px",
+                              bgcolor: (t) => t.palette.mode === "dark" ? "grey.800" : "grey.100",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              border: "1px solid",
+                              borderColor: "divider",
+                            }}
+                          >
+                            <Person sx={{ fontSize: 24, color: "grey.400" }} />
+                          </Box>
+                        )}
+                        {photo && (
+                          <IconButton
+                            size="small"
+                            onClick={() => setPhoto(null)}
+                            sx={{
+                              position: "absolute",
+                              top: -6,
+                              right: -6,
+                              bgcolor: "error.main",
+                              color: "white",
+                              p: 0.15,
+                              "&:hover": { bgcolor: "error.dark" }
+                            }}
+                          >
+                            <Delete sx={{ fontSize: 10 }} />
+                          </IconButton>
+                        )}
+                      </Box>
                       <Button
                         variant="outlined"
                         component="label"
                         size="small"
-                        startIcon={<PhotoCamera />}
-                        sx={{ textTransform: "none", alignSelf: "flex-start", borderRadius: "8px" }}
+                        startIcon={<PhotoCamera sx={{ fontSize: "12px !important" }} />}
+                        sx={{ textTransform: "none", fontSize: "0.65rem", py: 0.15, px: 1, borderRadius: "6px" }}
                       >
-                        Choose / Take Photo
+                        {photo ? "Edit" : "Photo"}
                         <input
                           type="file"
                           accept="image/*"
-                          capture="user"
                           hidden
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -275,37 +323,34 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                         />
                       </Button>
                     </Box>
-                  </Box>
+                  </Grid>
+                </>
+              ) : (
+                <Grid size={12}>
+                  <TextField 
+                    {...register("address")} 
+                    label="Address" 
+                    fullWidth 
+                    multiline 
+                    rows={2} 
+                    slotProps={{ inputLabel: { shrink: true } }} 
+                  />
                 </Grid>
               )}
 
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("name")} label="Name *" fullWidth error={!!errors.name} helperText={errors.name?.message ? String(errors.name.message) : ""} /></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("ledger_code")} label="Code" fullWidth /></Grid>
-              <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("opening_balance")} label="Opening Balance" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <Controller name="balance_type" control={control} render={({ field }) => (
-                  <TextField {...field} select label="Balance Type" fullWidth>
-                    <MenuItem value="Dr">Dr (Debit)</MenuItem>
-                    <MenuItem value="Cr">Cr (Credit)</MenuItem>
-                  </TextField>
-                )} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("phone")} label="Phone" fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("mobile")} label="Mobile" fullWidth /></Grid>
-              <Grid size={12}><TextField {...register("address")} label="Address" fullWidth multiline rows={2} /></Grid>
-              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("city")} label="City" fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("pincode")} label="Pincode" fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("state")} label="State" fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("gstin")} label={isStaff ? "Aadhar Number" : "GSTIN"} fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("pan")} label="PAN" fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_name")} label="Bank Name" fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_account_no")} label="Account No." fullWidth /></Grid>
-              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_ifsc")} label="IFSC Code" fullWidth /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("city")} label="City" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("pincode")} label="Pincode" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("state")} label="State" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("gstin")} label={isStaff || isContractor ? "Aadhar Number" : "GSTIN"} fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("pan")} label="PAN" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_name")} label="Bank Name" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_account_no")} label="Account No." fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_ifsc")} label="IFSC Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               {isStaff && (
                 <>
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("designation")} label="Designation" fullWidth /></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("department")} label="Department" fullWidth /></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("basic_salary")} label="Basic Salary" type="number" fullWidth /></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("designation")} label="Designation" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("department")} label="Department" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("basic_salary")} label="Basic Salary" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
                   <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("join_date")} label="Join Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
                 </>
               )}
@@ -325,6 +370,19 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
           <Button onClick={() => setDeleteId(null)} variant="outlined">Cancel</Button>
           <Button color="error" variant="contained" onClick={() => deleteMutation.mutate(deleteId!)} disabled={deleteMutation.isPending}>Delete</Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="sm">
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>Photo Preview</Typography>
+          <Button onClick={() => setPreviewOpen(false)} size="small" variant="text">Close</Button>
+        </DialogTitle>
+        <Divider />
+        <DialogContent sx={{ p: 1, textAlign: "center", display: "flex", justifyContent: "center", bgcolor: "action.hover" }}>
+          {photo && (
+            <img src={photo} alt="Preview" style={{ maxWidth: "100%", maxHeight: "70vh", objectFit: "contain", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.1)" }} />
+          )}
+        </DialogContent>
       </Dialog>
     </Box>
   );
