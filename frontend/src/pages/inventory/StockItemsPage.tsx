@@ -222,6 +222,7 @@ export default function StockItemsPage() {
                   label="Name"
                   fullWidth
                   size="small"
+                  slotProps={{ inputLabel: { shrink: true } }}
                   {...register("name", { required: "Name is required" })}
                   error={!!errors.name}
                   helperText={errors.name?.message as string}
@@ -232,6 +233,7 @@ export default function StockItemsPage() {
                   label="Item Code"
                   fullWidth
                   size="small"
+                  slotProps={{ inputLabel: { shrink: true } }}
                   {...register("item_code")}
                 />
               </Grid>
@@ -246,6 +248,7 @@ export default function StockItemsPage() {
                       label="Unit of Measure"
                       fullWidth
                       size="small"
+                      slotProps={{ inputLabel: { shrink: true } }}
                       {...field}
                       error={!!errors.uom_id}
                       helperText={errors.uom_id?.message as string}
@@ -267,7 +270,7 @@ export default function StockItemsPage() {
                   size="small"
                   disabled={!isAdmin}
                   {...register("opening_stock")}
-                  slotProps={{ htmlInput: { step: "any" } }}
+                  slotProps={{ htmlInput: { step: "any" }, inputLabel: { shrink: true } }}
                 />
               </Grid>
               <Grid size={{ xs: 6 }}>
@@ -277,7 +280,7 @@ export default function StockItemsPage() {
                   fullWidth
                   size="small"
                   {...register("reorder_level")}
-                  slotProps={{ htmlInput: { step: "any" } }}
+                  slotProps={{ htmlInput: { step: "any" }, inputLabel: { shrink: true } }}
                 />
               </Grid>
             </Grid>

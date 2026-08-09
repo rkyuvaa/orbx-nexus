@@ -366,10 +366,10 @@ export default function LocationsPage() {
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid size={{ xs: 12 }}>
-                <TextField {...regLoc("name")} label="Location Name *" fullWidth required />
+                <TextField {...regLoc("name")} label="Location Name *" fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid size={{ xs: 12 }}>
-                <TextField {...regLoc("code")} label="Location Code" fullWidth />
+                <TextField {...regLoc("code")} label="Location Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid size={{ xs: 12 }}>
                 <Controller
@@ -381,6 +381,7 @@ export default function LocationsPage() {
                       select
                       label="Associate with Process"
                       fullWidth
+                      slotProps={{ inputLabel: { shrink: true } }}
                     >
                       <MenuItem value=""><em>None (General Store / Main Stock)</em></MenuItem>
                       {processes.map((p: any) => (
@@ -406,7 +407,7 @@ export default function LocationsPage() {
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid size={{ xs: 6 }}>
-                <TextField {...regMove("movement_no")} label="Ref No. *" fullWidth required slotProps={{ htmlInput: { readOnly: true } }} />
+                <TextField {...regMove("movement_no")} label="Ref No. *" fullWidth required slotProps={{ htmlInput: { readOnly: true }, inputLabel: { shrink: true } }} />
               </Grid>
               <Grid size={{ xs: 6 }}>
                 <TextField {...regMove("movement_date")} label="Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
@@ -448,7 +449,7 @@ export default function LocationsPage() {
                       select
                       label={moveType === "Transfer" ? "Source Location (From)" : "Location *" }
                       fullWidth
-                      slotProps={{ select: { displayEmpty: true } }}
+                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
                     >
                       {moveType === "Transfer" && <MenuItem value="">Main Store</MenuItem>}
                       {locations.map((l: any) => (
@@ -474,7 +475,7 @@ export default function LocationsPage() {
                         fullWidth
                         error={!!fieldState.error}
                         helperText={fieldState.error?.message}
-                        slotProps={{ select: { displayEmpty: true } }}
+                        slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
                       >
                         <MenuItem value="" disabled>Select Location</MenuItem>
                         {locations.map((l: any) => (
@@ -510,11 +511,12 @@ export default function LocationsPage() {
                   type="number"
                   fullWidth
                   error={!!errors?.quantity}
+                  slotProps={{ inputLabel: { shrink: true } }}
                 />
               </Grid>
 
               <Grid size={{ xs: 6 }}>
-                <TextField {...regMove("narration")} label="Narration" fullWidth />
+                <TextField {...regMove("narration")} label="Narration" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
             </Grid>
           </DialogContent>

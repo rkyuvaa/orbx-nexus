@@ -212,6 +212,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               label={movementType === "Inward" ? "Purchase No." : "Movement No."}
               fullWidth
               size="small"
+              slotProps={{ inputLabel: { shrink: true } }}
               {...register("movement_no", { required: "Required" })}
               error={!!errors.movement_no}
               helperText={errors.movement_no?.message as string}
@@ -279,7 +280,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               type="number"
               fullWidth
               size="small"
-              slotProps={{ htmlInput: { step: "0.001", min: 0 } }}
+              slotProps={{ htmlInput: { step: "0.001", min: 0 }, inputLabel: { shrink: true } }}
               {...register("quantity", { required: "Required" })}
               error={!!errors.quantity}
             />
@@ -290,7 +291,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               type="number"
               fullWidth
               size="small"
-              slotProps={{ htmlInput: { step: "0.01", min: 0 } }}
+              slotProps={{ htmlInput: { step: "0.01", min: 0 }, inputLabel: { shrink: true } }}
               {...register("rate")}
             />
           </Grid>
@@ -300,7 +301,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               type="number"
               fullWidth
               size="small"
-              slotProps={{ htmlInput: { step: "0.01", min: 0 } }}
+              slotProps={{ htmlInput: { step: "0.01", min: 0 }, inputLabel: { shrink: true } }}
               {...register("amount")}
             />
           </Grid>
@@ -315,7 +316,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
             />
           </Grid>
           <Grid size={{ xs: 6 }}>
-            <TextField label="Ref No." fullWidth size="small" {...register("ref_no")} />
+            <TextField label="Ref No." fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...register("ref_no")} />
           </Grid>
 
           <Grid size={{ xs: 12 }}>
@@ -325,6 +326,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               size="small"
               multiline
               rows={2}
+              slotProps={{ inputLabel: { shrink: true } }}
               {...register("narration")}
             />
           </Grid>
