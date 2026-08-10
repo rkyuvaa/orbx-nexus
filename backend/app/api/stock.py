@@ -968,8 +968,8 @@ async def get_single_location_consumption(
         u.symbol AS uom_symbol,
         m.narration,
         CASE 
-            WHEN m.movement_date BETWEEN :p1_from::date AND :p1_to::date THEN :p1_name
-            WHEN m.movement_date BETWEEN :p2_from::date AND :p2_to::date THEN :p2_name
+            WHEN m.movement_date BETWEEN :p1_from::date AND :p1_to::date THEN :p1_name::text
+            WHEN m.movement_date BETWEEN :p2_from::date AND :p2_to::date THEN :p2_name::text
             ELSE 'Unassigned'
         END AS contractor_name,
         CASE 
