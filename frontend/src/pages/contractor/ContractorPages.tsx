@@ -233,6 +233,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     mutationFn: (formData: any) => {
       const payload = {
         ...formData,
+        outward_id: formData.outward_id ? Number(formData.outward_id) : null,
+        product_id: formData.product_id ? Number(formData.product_id) : null,
+        rate_id: formData.rate_id ? Number(formData.rate_id) : null,
+        outward_ids: Array.isArray(formData.outward_ids) ? formData.outward_ids.map((x: any) => Number(x)) : [],
         quantity: type === "job-work" ? totalQuantity : Number(formData.quantity) || 0,
         amount: type === "job-work" ? totalAmount : Number(formData.amount) || 0,
         process_id: type === "job-work" ? (lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null) : Number(formData.process_id) || null,
