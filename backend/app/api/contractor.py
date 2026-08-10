@@ -16,6 +16,7 @@ class JobWorkIn(BaseModel):
     entry_no: str
     entry_date: str
     ledger_id: int
+    outward_id: int | None = None
     product_id: int | None = None
     process_id: int | None = None
     rate_id: int | None = None
@@ -36,21 +37,34 @@ async def list_job_work(
     conds = ["1=1"]
     params: dict = {}
     if entry_type:
-        conds.append("entry_type = :et")
+        conds.append("j.entry_type = :et")
         params["et"] = entry_type
     if ledger_id:
-        conds.append("ledger_id = :lid")
+        conds.append("j.ledger_id = :lid")
         params["lid"] = ledger_id
     if from_date:
-        conds.append("entry_date >= :fd")
+        conds.append("j.entry_date >= :fd")
         params["fd"] = from_date
     if to_date:
-        conds.append("entry_date <= :td")
+        conds.append("j.entry_date <= :td")
         params["td"] = to_date
-    result = await db.execute(
-        text(f"SELECT * FROM {schema}.job_work_entries WHERE {' AND '.join(conds)} ORDER BY entry_date DESC"),
-        params
-    )
+
+    query = f"""
+    SELECT 
+        j.*,
+        so.outward_no,
+        p.name AS product_name,
+        pr.name AS process_name,
+        l.name AS contractor_name
+    FROM {schema}.job_work_entries j
+    LEFT JOIN {schema}.stock_outward so ON so.id = j.outward_id
+    LEFT JOIN master.products p ON p.id = j.product_id
+    LEFT JOIN master.processes pr ON pr.id = j.process_id
+    LEFT JOIN master.ledgers l ON l.id = j.ledger_id
+    WHERE {' AND '.join(conds)}
+    ORDER BY j.entry_date DESC, j.id DESC
+    """
+    result = await db.execute(text(query), params)
     return [dict(r) for r in result.mappings().all()]
 
 
@@ -62,12 +76,12 @@ async def create_job_work(
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.job_work_entries "
-            f"(entry_no, entry_date, ledger_id, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, created_by) "
-            f"VALUES (:eno, :edate, :lid, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :cby) RETURNING id"
+            f"(entry_no, entry_date, ledger_id, outward_id, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, created_by) "
+            f"VALUES (:eno, :edate, :lid, :oid, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :cby) RETURNING id"
         ),
         {
             "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
-            "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+            "oid": body.outward_id, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "cby": current_user.id
         }
@@ -84,12 +98,12 @@ async def update_job_work(
     await db.execute(
         text(
             f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
-            f"product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
+            f"outward_id=:oid, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
             f"entry_type=:et, narration=:narr, updated_at=NOW() WHERE id=:id"
         ),
         {
             "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
-            "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+            "oid": body.outward_id, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "id": entry_id
         }
