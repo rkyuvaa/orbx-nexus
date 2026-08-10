@@ -156,7 +156,18 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       updated[index].quantity = bal;
       updated[index].amount = Number((Number(bal) * (proc ? proc.contractor_rate || 0 : 0)).toFixed(2));
     }
-    if (field === "quantity" || field === "rate") {
+    if (field === "quantity") {
+      if (selectedOutwardIds.length > 0) {
+        const bal = Number(updated[index].balance_qty) || 0;
+        if ((Number(updated[index].quantity) || 0) > bal) {
+          updated[index].quantity = bal;
+        }
+      }
+      const q = Number(updated[index].quantity) || 0;
+      const r = Number(updated[index].rate) || 0;
+      updated[index].amount = Number((q * r).toFixed(2));
+    }
+    if (field === "rate") {
       const q = Number(updated[index].quantity) || 0;
       const r = Number(updated[index].rate) || 0;
       updated[index].amount = Number((q * r).toFixed(2));
@@ -227,6 +238,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       }
       if (validLines.some((it: any) => !(Number(it.quantity) > 0))) {
         setSubmitError("Each process line must have a quantity greater than zero.");
+        return;
+      }
+      if (selectedOutwardIds.length > 0 && validLines.some((it: any) => Number(it.quantity) > Number(it.balance_qty))) {
+        setSubmitError("Quantity cannot exceed the balance quantity for any process line.");
         return;
       }
     }
@@ -448,6 +463,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 value={item.quantity === "" ? "" : item.quantity}
                                 onChange={(e) => handleLineChange(idx, "quantity", e.target.value)}
                                 slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                                helperText={selectedOutwardIds.length > 0 && item.process_id ? `Max: ${item.balance_qty}` : undefined}
                               />
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
