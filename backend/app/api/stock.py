@@ -918,20 +918,19 @@ async def get_single_location_consumption(
     db: DBSession,
     fy: str = Query(default="2026_2027"),
 ):
-    def parse_db_date(date_str: str | None) -> str:
+    def to_date_obj(date_str):
         if not date_str:
-            return "1900-01-01"
+            return None
         date_str = str(date_str).strip()
-        if not date_str or date_str == "None" or date_str == "null":
-            return "1900-01-01"
+        if not date_str or date_str in ("None", "null"):
+            return None
         for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
             try:
                 from datetime import datetime
-                dt = datetime.strptime(date_str, fmt)
-                return dt.strftime("%Y-%m-%d")
+                return datetime.strptime(date_str, fmt).date()
             except ValueError:
                 pass
-        return "1900-01-01"
+        return None
 
     loc_res = await db.execute(
         text(
@@ -951,10 +950,10 @@ async def get_single_location_consumption(
     loc_dict = dict(loc)
     schema = _schema(fy)
     
-    p1_from = parse_db_date(loc_dict.get("p1_from"))
-    p1_to = parse_db_date(loc_dict.get("p1_to"))
-    p2_from = parse_db_date(loc_dict.get("p2_from"))
-    p2_to = parse_db_date(loc_dict.get("p2_to"))
+    p1_from_dt = to_date_obj(loc_dict.get("p1_from"))
+    p1_to_dt = to_date_obj(loc_dict.get("p1_to"))
+    p2_from_dt = to_date_obj(loc_dict.get("p2_from"))
+    p2_to_dt = to_date_obj(loc_dict.get("p2_to"))
     p1_name = loc_dict.get("p1_name") or "Unassigned"
     p2_name = loc_dict.get("p2_name") or "Unassigned"
 
@@ -966,17 +965,7 @@ async def get_single_location_consumption(
         si.item_code AS tool_code,
         m.quantity AS qty,
         u.symbol AS uom_symbol,
-        m.narration,
-        CASE 
-            WHEN m.movement_date BETWEEN :p1_from::date AND :p1_to::date THEN :p1_name::text
-            WHEN m.movement_date BETWEEN :p2_from::date AND :p2_to::date THEN :p2_name::text
-            ELSE 'Unassigned'
-        END AS contractor_name,
-        CASE 
-            WHEN m.movement_date BETWEEN :p1_from::date AND :p1_to::date THEN '1st Shift'
-            WHEN m.movement_date BETWEEN :p2_from::date AND :p2_to::date THEN '2nd Shift'
-            ELSE 'Unassigned'
-        END AS shift_label
+        m.narration
     FROM {schema}.stock_item_movements m
     JOIN master.stock_items si ON si.id = m.stock_item_id
     LEFT JOIN master.units_of_measure u ON u.id = si.uom_id
@@ -986,16 +975,29 @@ async def get_single_location_consumption(
     
     result = await db.execute(
         text(query),
-        {
-            "location_id": id,
-            "p1_from": p1_from,
-            "p1_to": p1_to,
-            "p2_from": p2_from,
-            "p2_to": p2_to,
-            "p1_name": p1_name,
-            "p2_name": p2_name,
-        }
+        {"location_id": id}
     )
-    return [dict(r) for r in result.mappings().all()]
+    
+    records = []
+    for r in result.mappings().all():
+        r_dict = dict(r)
+        m_date = to_date_obj(r_dict.get("date"))
+        
+        shift = "Unassigned"
+        contractor = "Unassigned"
+        
+        if m_date:
+            if p1_from_dt and p1_to_dt and p1_from_dt <= m_date <= p1_to_dt:
+                shift = "1st Shift"
+                contractor = p1_name
+            elif p2_from_dt and p2_to_dt and p2_from_dt <= m_date <= p2_to_dt:
+                shift = "2nd Shift"
+                contractor = p2_name
+                
+        r_dict["shift_label"] = shift
+        r_dict["contractor_name"] = contractor
+        records.append(r_dict)
+        
+    return records
 
 
