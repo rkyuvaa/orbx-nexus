@@ -17,13 +17,14 @@ class JobWorkIn(BaseModel):
     entry_date: str
     ledger_id: int
     outward_id: int | None = None
+    outward_ids: list[int] | None = None
     product_id: int | None = None
     process_id: int | None = None
     rate_id: int | None = None
     quantity: float = 0
     rate: float = 0
     amount: float = 0
-    entry_type: str = "Register"  # Register, Payment
+    entry_type: str = "Register"  # Register, Payment, Advance Payment, Advance Receipt
     narration: str | None = None
 
 
@@ -85,15 +86,19 @@ async def create_job_work(
     from app.services.sequences import generate_and_increment_sequence
     entry_no = await generate_and_increment_sequence(db, seq_type)
     
+    import json
+    oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+    first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
+
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.job_work_entries "
-            f"(entry_no, entry_date, ledger_id, outward_id, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, created_by) "
-            f"VALUES (:eno, :edate, :lid, :oid, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :cby) RETURNING id"
+            f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, created_by) "
+            f"VALUES (:eno, :edate, :lid, :oid, :oids, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :cby) RETURNING id"
         ),
         {
             "eno": entry_no, "edate": body.entry_date, "lid": body.ledger_id,
-            "oid": body.outward_id, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+            "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "cby": current_user.id
         }
@@ -107,15 +112,19 @@ async def update_job_work(
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    import json
+    oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+    first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
+
     await db.execute(
         text(
             f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
-            f"outward_id=:oid, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
+            f"outward_id=:oid, outward_ids=:oids, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
             f"entry_type=:et, narration=:narr, updated_at=NOW() WHERE id=:id"
         ),
         {
             "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
-            "oid": body.outward_id, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+            "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "id": entry_id
         }

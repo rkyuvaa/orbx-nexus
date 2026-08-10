@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem } from "@mui/material";
+import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Autocomplete, Typography } from "@mui/material";
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import { useForm, Controller } from "react-hook-form";
@@ -49,6 +49,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       entry_date: today,
       ledger_id: "",
       outward_id: "",
+      outward_ids: [] as number[],
       product_id: "",
       process_id: "",
       quantity: 0,
@@ -59,65 +60,79 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     },
   });
 
-  const selectedOutwardId = watch("outward_id");
-  const selectedProductId = watch("product_id");
-  const selectedProcess = watch("process_id");
+  const selectedOutwardIds = watch("outward_ids") || [];
+  const selectedProcessId = watch("process_id");
   const qty = watch("quantity");
   const rate = watch("rate");
 
-  // Resolve products within selected Outward
-  const selectedOutward = useMemo(() => {
-    return outwardVouchers.find((v: any) => v.id === Number(selectedOutwardId));
-  }, [outwardVouchers, selectedOutwardId]);
-
-  const outwardProducts = useMemo(() => {
-    if (!selectedOutward) return [];
-    if (selectedOutward.items && Array.isArray(selectedOutward.items) && selectedOutward.items.length > 0) {
-      return selectedOutward.items.map((it: any) => {
-        const prod = products.find((p: any) => p.id === it.product_id);
-        return {
-          id: it.product_id,
-          name: prod ? prod.name : `Product ID: ${it.product_id}`,
-          qty: it.quantity,
-        };
-      });
+  // Sum of quantities and weights for selectedProcessId inside the items list of selected Outward Vouchers
+  const { totalDispatchedQty, totalDispatchedWeight } = useMemo(() => {
+    let totalQty = 0;
+    let totalWt = 0;
+    if (!selectedProcessId || selectedOutwardIds.length === 0) {
+      return { totalDispatchedQty: 0, totalDispatchedWeight: 0 };
     }
-    if (selectedOutward.product_id) {
-      const prod = products.find((p: any) => p.id === selectedOutward.product_id);
-      return [{
-        id: selectedOutward.product_id,
-        name: prod ? prod.name : `Product ID: ${selectedOutward.product_id}`,
-        qty: selectedOutward.quantity,
-      }];
-    }
-    return [];
-  }, [selectedOutward, products]);
-
-  // Filter processes by selected Product
-  const productProcesses = useMemo(() => {
-    if (!selectedProductId) return [];
-    return processes.filter((p: any) => p.product_id === Number(selectedProductId));
-  }, [processes, selectedProductId]);
-
-  // Auto fill quantity when Product is selected
-  useEffect(() => {
-    if (type === "job-work" && selectedProductId && outwardProducts.length > 0) {
-      const matched = outwardProducts.find((p: any) => p.id === Number(selectedProductId));
-      if (matched) {
-        setValue("quantity", Number(matched.qty) as any);
+    selectedOutwardIds.forEach((id: number) => {
+      const v = outwardVouchers.find((out: any) => out.id === id);
+      if (v && v.items && Array.isArray(v.items)) {
+        v.items.forEach((item: any) => {
+          if (Number(item.process_id) === Number(selectedProcessId)) {
+            totalQty += Number(item.quantity) || 0;
+            totalWt += Number(item.total_weight) || 0;
+          }
+        });
       }
+    });
+    return { totalDispatchedQty: totalQty, totalDispatchedWeight: totalWt };
+  }, [selectedOutwardIds, selectedProcessId, outwardVouchers]);
+
+  // Sum of previously registered quantities for these outward vouchers and process in other register entries
+  const { prevCompletedQty, prevCompletedWeight } = useMemo(() => {
+    let totalQty = 0;
+    let totalWt = 0;
+    if (!selectedProcessId || selectedOutwardIds.length === 0) {
+      return { prevCompletedQty: 0, prevCompletedWeight: 0 };
     }
-  }, [selectedProductId, outwardProducts, type, setValue]);
+    data.forEach((entry: any) => {
+      if (editing && entry.id === editing.id) return;
+      if (entry.entry_type === "Register" && Number(entry.process_id) === Number(selectedProcessId)) {
+        const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
+        const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
+        if (intersects) {
+          totalQty += Number(entry.quantity) || 0;
+        }
+      }
+    });
+    if (totalDispatchedQty > 0) {
+      totalWt = (totalQty / totalDispatchedQty) * totalDispatchedWeight;
+    }
+    return { prevCompletedQty: totalQty, prevCompletedWeight: totalWt };
+  }, [selectedOutwardIds, selectedProcessId, data, editing, totalDispatchedQty, totalDispatchedWeight]);
+
+  const balanceQty = useMemo(() => {
+    return Math.max(0, totalDispatchedQty - prevCompletedQty);
+  }, [totalDispatchedQty, prevCompletedQty]);
+
+  const balanceWeight = useMemo(() => {
+    return Math.max(0, totalDispatchedWeight - prevCompletedWeight);
+  }, [totalDispatchedWeight, prevCompletedWeight]);
+
+  // Auto fill quantity with balanceQty when Process or Outward Vouchers change
+  useEffect(() => {
+    if (type === "job-work" && (selectedProcessId || selectedOutwardIds.length > 0)) {
+      setValue("quantity", balanceQty as any);
+    }
+  }, [balanceQty, type, setValue, selectedProcessId, selectedOutwardIds.length]);
 
   // Auto fill rate with Contractor Rate when Process is selected
   useEffect(() => {
-    if (selectedProcess && processes.length > 0) {
-      const match = processes.find((p: any) => p.id === Number(selectedProcess));
+    if (selectedProcessId && processes.length > 0) {
+      const match = processes.find((p: any) => p.id === Number(selectedProcessId));
       if (match) {
         setValue("rate", (match.contractor_rate ?? 0) as any);
       }
     }
-  }, [selectedProcess, processes, setValue]);
+  }, [selectedProcessId, processes, setValue]);
 
   // Auto calculate amount when quantity or rate changes
   useEffect(() => {
@@ -142,7 +157,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const handleOpen = async (row?: any) => {
     if (row) {
       setEditing(row);
-      reset(row);
+      reset({
+        ...row,
+        outward_ids: row.outward_ids || (row.outward_id ? [row.outward_id] : []),
+      });
     } else {
       setEditing(null);
       let nextNo = "";
@@ -158,6 +176,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         entry_date: today,
         ledger_id: "",
         outward_id: "",
+        outward_ids: [],
         product_id: "",
         process_id: "",
         quantity: 0,
@@ -179,7 +198,16 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     { field: "contractor_name", headerName: "Contractor", width: 180, valueFormatter: (p) => p.value || "General" },
     { field: "process_name", headerName: "Process", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
     ...(type === "job-work" ? [
-      { field: "outward_no", headerName: "Outward No", width: 130, valueFormatter: (p: any) => p.value || "-" },
+      {
+        field: "outward_ids",
+        headerName: "Outward No(s)",
+        width: 180,
+        cellRenderer: (p: any) => {
+          const ids = p.data.outward_ids || (p.data.outward_id ? [p.data.outward_id] : []);
+          const names = ids.map((id: number) => outwardVouchers.find((v: any) => v.id === id)?.outward_no).filter(Boolean);
+          return names.length > 0 ? names.join(", ") : (p.data.outward_no || "-");
+        }
+      },
       { field: "product_name", headerName: "Product", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
     ] : []),
     { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
@@ -233,60 +261,32 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               </Grid>
 
               {type === "job-work" && (
-                <>
-                  <Grid size={{ xs: 12 }}>
-                    <Controller
-                      name="outward_id"
-                      control={control}
-                      render={({ field }) => (
-                        <LazyAutocomplete
-                          options={outwardVouchers}
-                          getOptionLabel={(o: any) => `${o.outward_no} (${o.outward_date})`}
-                          value={outwardVouchers.find((v: any) => v.id === field.value) || null}
-                          onChange={(_, v) => {
-                            field.onChange(v ? v.id : "");
-                            setValue("product_id", "");
-                            setValue("process_id", "");
-                            setValue("quantity", 0);
-                            setValue("rate", 0);
-                            setValue("amount", 0);
-                          }}
-                          renderInput={(params) => <TextField {...params} label="Outward Voucher / Dispatch" />}
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  <Grid size={{ xs: 6 }}>
-                    <Controller
-                      name="product_id"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          select
-                          label="Product"
-                          fullWidth
-                          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                          onChange={(e) => {
-                            field.onChange(e.target.value);
-                            setValue("process_id", "");
-                            setValue("rate", 0);
-                            setValue("amount", 0);
-                          }}
-                        >
-                          <MenuItem value=""><em>Select Product</em></MenuItem>
-                          {outwardProducts.map((p: any) => (
-                            <MenuItem key={p.id} value={p.id}>{p.name} (Qty: {p.qty})</MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                    />
-                  </Grid>
-                </>
+                <Grid size={{ xs: 12 }}>
+                  <Controller
+                    name="outward_ids"
+                    control={control}
+                    render={({ field }) => (
+                      <Autocomplete
+                        multiple
+                        options={outwardVouchers}
+                        getOptionLabel={(o: any) => `${o.outward_no} (${o.outward_date})`}
+                        value={outwardVouchers.filter((v: any) => field.value?.includes(v.id))}
+                        onChange={(_, v) => {
+                          const ids = v ? (v as any[]).map((x) => x.id) : [];
+                          field.onChange(ids);
+                          setValue("process_id", "");
+                          setValue("quantity", 0);
+                          setValue("rate", 0);
+                          setValue("amount", 0);
+                        }}
+                        renderInput={(params) => <TextField {...params} label="Outward Vouchers / Dispatches *" required={field.value?.length === 0} />}
+                      />
+                    )}
+                  />
+                </Grid>
               )}
 
-              <Grid size={{ xs: type === "job-work" ? 6 : 12 }}>
+              <Grid size={{ xs: 12 }}>
                 <Controller
                   name="process_id"
                   control={control}
@@ -303,13 +303,36 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
                     >
                       <MenuItem value=""><em>Select Process</em></MenuItem>
-                      {(type === "job-work" ? productProcesses : processes).map((p: any) => (
+                      {processes.map((p: any) => (
                         <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
                       ))}
                     </TextField>
                   )}
                 />
               </Grid>
+
+              {type === "job-work" && selectedProcessId && selectedOutwardIds.length > 0 && (
+                <Grid size={{ xs: 12 }}>
+                  <Box sx={{ p: 2, bgcolor: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 1, display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Total Dispatched Qty</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#135200" }}>{totalDispatchedQty} units ({totalDispatchedWeight.toFixed(2)} kg)</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Previously Completed Qty</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#135200" }}>{prevCompletedQty} units ({prevCompletedWeight.toFixed(2)} kg)</Typography>
+                    </Box>
+                    <Box sx={{ borderLeft: "1px solid #d9d9d9", pl: 3 }}>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Balance Qty to Complete</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#389e0d" }}>{balanceQty} units</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Balance Weight</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#389e0d" }}>{balanceWeight.toFixed(2)} kg</Typography>
+                    </Box>
+                  </Box>
+                </Grid>
+              )}
 
               <Grid size={{ xs: 4 }}>
                 <TextField {...register("quantity")} label="Quantity" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
