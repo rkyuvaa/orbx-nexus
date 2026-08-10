@@ -14,6 +14,34 @@ import { formatAmount } from "../../utils/format";
 
 const today = new Date().toISOString().split("T")[0];
 
+// Resolve a group process into its child process ids (empty array for non-group processes)
+const getChildProcessIds = (proc: any, processes: any[]): number[] => {
+  if (!proc) return [];
+  const ids: number[] = [];
+  if (proc.process_ids) {
+    proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean).forEach((cid: string) => ids.push(Number(cid)));
+    return ids;
+  }
+  if (proc.process_code && proc.process_code.includes(" / ")) {
+    const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+    parts.forEach((part: any) => {
+      const child = processes.find((p: any) => p.process_code === part);
+      if (child) ids.push(child.id);
+    });
+  }
+  return ids;
+};
+
+// True when an outward voucher item's process (possibly a group) covers the given (child) process
+const dispatchCoversProcess = (itemProcId: any, targetProcId: any, processes: any[]) => {
+  if (itemProcId === null || itemProcId === undefined || itemProcId === "") return false;
+  const itemId = Number(itemProcId);
+  const targetId = Number(targetProcId);
+  if (itemId === targetId) return true;
+  const proc = processes.find((p: any) => p.id === itemId);
+  return getChildProcessIds(proc, processes).includes(targetId);
+};
+
 export default function ContractorPages({ type }: { type: "rates" | "job-work" | "payment" }) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
@@ -72,7 +100,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       const v = outwardVouchers.find((out: any) => out.id === id);
       if (v && v.items && Array.isArray(v.items)) {
         v.items.forEach((item: any) => {
-          if (Number(item.process_id) === Number(processId)) {
+          if (dispatchCoversProcess(item.process_id, processId, processes)) {
             totalDispatched += Number(item.quantity) || 0;
           }
         });
@@ -123,16 +151,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         v.items.forEach((item: any) => {
           const procId = Number(item.process_id);
           const proc = processes.find((p: any) => p.id === procId);
-          
-          if (proc && proc.process_ids) {
-            const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
-            childIds.forEach((cid: string) => resolvedIds.add(Number(cid)));
-          } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
-            const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
-            parts.forEach((part: any) => {
-              const child = processes.find((p: any) => p.process_code === part);
-              if (child) resolvedIds.add(child.id);
-            });
+          const childIds = proc ? getChildProcessIds(proc, processes) : [];
+          if (childIds.length > 0) {
+            childIds.forEach((cid: number) => resolvedIds.add(cid));
           } else if (proc) {
             resolvedIds.add(proc.id);
           }
