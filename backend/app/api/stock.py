@@ -918,6 +918,21 @@ async def get_single_location_consumption(
     db: DBSession,
     fy: str = Query(default="2026_2027"),
 ):
+    def parse_db_date(date_str: str | None) -> str:
+        if not date_str:
+            return "1900-01-01"
+        date_str = str(date_str).strip()
+        if not date_str or date_str == "None" or date_str == "null":
+            return "1900-01-01"
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(date_str, fmt)
+                return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        return "1900-01-01"
+
     loc_res = await db.execute(
         text(
             "SELECT l.*, "
@@ -936,13 +951,12 @@ async def get_single_location_consumption(
     loc_dict = dict(loc)
     schema = _schema(fy)
     
-    p1_from = loc_dict.get("p1_from") or "1900-01-01"
-    p1_to = loc_dict.get("p1_to") or "1900-01-01"
-    p2_from = loc_dict.get("p2_from") or "1900-01-01"
-    p2_to = loc_dict.get("p2_to") or "1900-01-01"
+    p1_from = parse_db_date(loc_dict.get("p1_from"))
+    p1_to = parse_db_date(loc_dict.get("p1_to"))
+    p2_from = parse_db_date(loc_dict.get("p2_from"))
+    p2_to = parse_db_date(loc_dict.get("p2_to"))
     p1_name = loc_dict.get("p1_name") or "Unassigned"
     p2_name = loc_dict.get("p2_name") or "Unassigned"
-
 
     query = f"""
     SELECT 
