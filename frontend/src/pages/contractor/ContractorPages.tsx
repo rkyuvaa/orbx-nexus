@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Autocomplete, Typography } from "@mui/material";
+import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Autocomplete, Typography, Table, TableHead, TableRow, TableCell, TableBody, Paper, Select } from "@mui/material";
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import { useForm, Controller } from "react-hook-form";
@@ -43,6 +43,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     enabled: type === "job-work",
   });
 
+  const [lineItems, setLineItems] = useState<any[]>([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+
   const { register, handleSubmit, reset, control, watch, setValue } = useForm({
     defaultValues: {
       entry_no: "",
@@ -65,87 +67,171 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const qty = watch("quantity");
   const rate = watch("rate");
 
-  // Sum of quantities and weights for selectedProcessId inside the items list of selected Outward Vouchers
-  const { totalDispatchedQty, totalDispatchedWeight } = useMemo(() => {
-    let totalQty = 0;
-    let totalWt = 0;
-    if (!selectedProcessId || selectedOutwardIds.length === 0) {
-      return { totalDispatchedQty: 0, totalDispatchedWeight: 0 };
-    }
+  // Sum of previously registered quantities for these outward vouchers and process in other register entries
+  const getBalanceQtyForProcess = (processId: number | string) => {
+    if (!processId || selectedOutwardIds.length === 0) return 0;
+    
+    let totalDispatched = 0;
     selectedOutwardIds.forEach((id: number) => {
       const v = outwardVouchers.find((out: any) => out.id === id);
       if (v && v.items && Array.isArray(v.items)) {
         v.items.forEach((item: any) => {
-          if (Number(item.process_id) === Number(selectedProcessId)) {
-            totalQty += Number(item.quantity) || 0;
-            totalWt += Number(item.total_weight) || 0;
+          if (Number(item.process_id) === Number(processId)) {
+            totalDispatched += Number(item.quantity) || 0;
           }
         });
       }
     });
-    return { totalDispatchedQty: totalQty, totalDispatchedWeight: totalWt };
-  }, [selectedOutwardIds, selectedProcessId, outwardVouchers]);
 
-  // Sum of previously registered quantities for these outward vouchers and process in other register entries
-  const { prevCompletedQty, prevCompletedWeight } = useMemo(() => {
-    let totalQty = 0;
-    let totalWt = 0;
-    if (!selectedProcessId || selectedOutwardIds.length === 0) {
-      return { prevCompletedQty: 0, prevCompletedWeight: 0 };
-    }
+    let totalCompleted = 0;
     data.forEach((entry: any) => {
       if (editing && entry.id === editing.id) return;
-      if (entry.entry_type === "Register" && Number(entry.process_id) === Number(selectedProcessId)) {
-        const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
-        const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
-        if (intersects) {
-          totalQty += Number(entry.quantity) || 0;
+      if (entry.entry_type === "Register") {
+        let entryItems: any[] = [];
+        if (entry.items) {
+          try {
+            entryItems = typeof entry.items === "string" ? JSON.parse(entry.items) : entry.items;
+          } catch (e) {}
+        }
+        if (entryItems && entryItems.length > 0) {
+          entryItems.forEach((it: any) => {
+            if (Number(it.process_id) === Number(processId)) {
+              const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
+              const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
+              if (intersects) {
+                totalCompleted += Number(it.quantity) || 0;
+              }
+            }
+          });
+        } else if (Number(entry.process_id) === Number(processId)) {
+          const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
+          const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
+          if (intersects) {
+            totalCompleted += Number(entry.quantity) || 0;
+          }
         }
       }
     });
-    if (totalDispatchedQty > 0) {
-      totalWt = (totalQty / totalDispatchedQty) * totalDispatchedWeight;
-    }
-    return { prevCompletedQty: totalQty, prevCompletedWeight: totalWt };
-  }, [selectedOutwardIds, selectedProcessId, data, editing, totalDispatchedQty, totalDispatchedWeight]);
 
-  const balanceQty = useMemo(() => {
-    return Math.max(0, totalDispatchedQty - prevCompletedQty);
-  }, [totalDispatchedQty, prevCompletedQty]);
+    return Math.max(0, totalDispatched - totalCompleted);
+  };
 
-  const balanceWeight = useMemo(() => {
-    return Math.max(0, totalDispatchedWeight - prevCompletedWeight);
-  }, [totalDispatchedWeight, prevCompletedWeight]);
+  // Filter processes by selected Outward Vouchers, including group processes child expansion
+  const outwardProcesses = useMemo(() => {
+    if (selectedOutwardIds.length === 0) return [];
+    const resolvedIds = new Set<number>();
+    
+    selectedOutwardIds.forEach((id: number) => {
+      const v = outwardVouchers.find((out: any) => out.id === id);
+      if (v && v.items && Array.isArray(v.items)) {
+        v.items.forEach((item: any) => {
+          const procId = Number(item.process_id);
+          const proc = processes.find((p: any) => p.id === procId);
+          
+          if (proc && proc.process_ids) {
+            const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
+            childIds.forEach((cid: string) => resolvedIds.add(Number(cid)));
+          } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
+            const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+            parts.forEach((part: any) => {
+              const child = processes.find((p: any) => p.process_code === part);
+              if (child) resolvedIds.add(child.id);
+            });
+          } else if (proc) {
+            resolvedIds.add(proc.id);
+          }
+        });
+      }
+    });
+    
+    return processes.filter((p: any) => resolvedIds.has(p.id));
+  }, [selectedOutwardIds, outwardVouchers, processes]);
 
-  // Auto fill quantity with balanceQty when Process or Outward Vouchers change
+  // Auto fill lineItems with all valid processes for selected Outward Vouchers
   useEffect(() => {
-    if (type === "job-work" && (selectedProcessId || selectedOutwardIds.length > 0)) {
-      setValue("quantity", balanceQty as any);
+    if (type === "job-work" && outwardProcesses.length > 0 && !editing) {
+      const items = outwardProcesses.map((proc: any) => {
+        const bal = getBalanceQtyForProcess(proc.id);
+        return {
+          process_id: proc.id,
+          quantity: bal,
+          balance_qty: bal,
+          rate: proc.contractor_rate || 0,
+          amount: Number((bal * (proc.contractor_rate || 0)).toFixed(2))
+        };
+      });
+      setLineItems(items);
     }
-  }, [balanceQty, type, setValue, selectedProcessId, selectedOutwardIds.length]);
+  }, [outwardProcesses, type, editing]);
 
-  // Auto fill rate with Contractor Rate when Process is selected
+  const handleLineChange = (index: number, field: string, val: any) => {
+    const updated = [...lineItems];
+    updated[index][field] = val;
+    if (field === "process_id") {
+      const proc = processes.find((p: any) => p.id === Number(val));
+      const bal = getBalanceQtyForProcess(val);
+      updated[index].rate = proc ? proc.contractor_rate || 0 : 0;
+      updated[index].balance_qty = bal;
+      updated[index].quantity = bal;
+      updated[index].amount = Number((Number(bal) * (proc ? proc.contractor_rate || 0 : 0)).toFixed(2));
+    }
+    if (field === "quantity" || field === "rate") {
+      const q = Number(updated[index].quantity) || 0;
+      const r = Number(updated[index].rate) || 0;
+      updated[index].amount = Number((q * r).toFixed(2));
+    }
+    setLineItems(updated);
+  };
+
+  const handleAddLine = () => {
+    setLineItems([...lineItems, { process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+  };
+
+  const handleRemoveLine = (index: number) => {
+    setLineItems(lineItems.filter((_, i) => i !== index));
+  };
+
+  // Auto fill rate with Contractor Rate when Process is selected (for payments only)
   useEffect(() => {
-    if (selectedProcessId && processes.length > 0) {
+    if (type === "payment" && selectedProcessId && processes.length > 0) {
       const match = processes.find((p: any) => p.id === Number(selectedProcessId));
       if (match) {
         setValue("rate", (match.contractor_rate ?? 0) as any);
       }
     }
-  }, [selectedProcessId, processes, setValue]);
+  }, [selectedProcessId, processes, setValue, type]);
 
-  // Auto calculate amount when quantity or rate changes
+  // Auto calculate amount when quantity or rate changes (for payments only)
   useEffect(() => {
-    const q = Number(qty || 0);
-    const r = Number(rate || 0);
-    const amt = q * r;
-    if (amt > 0) {
-      setValue("amount", amt as any);
+    if (type === "payment") {
+      const q = Number(qty || 0);
+      const r = Number(rate || 0);
+      const amt = q * r;
+      if (amt > 0) {
+        setValue("amount", amt as any);
+      }
     }
-  }, [qty, rate, setValue]);
+  }, [qty, rate, setValue, type]);
+
+  const totalQuantity = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const totalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
   const saveMutation = useMutation({
-    mutationFn: (data: any) => editing ? api.put(`/contractor/${editing.id}?fy=${activeFY}`, data) : api.post(`/contractor/?fy=${activeFY}`, data),
+    mutationFn: (formData: any) => {
+      const payload = {
+        ...formData,
+        quantity: type === "job-work" ? totalQuantity : Number(formData.quantity) || 0,
+        amount: type === "job-work" ? totalAmount : Number(formData.amount) || 0,
+        process_id: type === "job-work" ? (lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null) : Number(formData.process_id) || null,
+        items: type === "job-work" ? lineItems.map(item => ({
+          process_id: Number(item.process_id),
+          quantity: Number(item.quantity) || 0,
+          rate: Number(item.rate) || 0,
+          amount: Number(item.amount) || 0
+        })) : []
+      };
+      return editing ? api.put(`/contractor/${editing.id}?fy=${activeFY}`, payload) : api.post(`/contractor/?fy=${activeFY}`, payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["contractor", type] }); setOpen(false); },
   });
 
@@ -161,6 +247,23 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         ...row,
         outward_ids: row.outward_ids || (row.outward_id ? [row.outward_id] : []),
       });
+      let parsedItems: any[] = [];
+      if (row.items) {
+        try {
+          parsedItems = typeof row.items === "string" ? JSON.parse(row.items) : row.items;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (parsedItems && parsedItems.length > 0) {
+        setLineItems(parsedItems.map(it => ({
+          ...it,
+          balance_qty: getBalanceQtyForProcess(it.process_id) + (Number(it.quantity) || 0)
+        })));
+      } else {
+        const bal = getBalanceQtyForProcess(row.process_id) + (Number(row.quantity) || 0);
+        setLineItems([{ process_id: row.process_id || "", quantity: row.quantity || 0, balance_qty: bal, rate: row.rate || 0, amount: row.amount || 0 }]);
+      }
     } else {
       setEditing(null);
       let nextNo = "";
@@ -185,6 +288,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         entry_type: type === "payment" ? "Payment" : "Register",
         narration: "",
       });
+      setLineItems([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
     }
     setOpen(true);
   };
@@ -286,63 +390,143 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                 </Grid>
               )}
 
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="process_id"
-                  control={control}
-                  rules={{ required: "Required" }}
-                  render={({ field, fieldState }) => (
-                    <TextField
-                      {...field}
-                      select
-                      label="Process *"
-                      fullWidth
-                      required
-                      error={!!fieldState.error}
-                      helperText={fieldState.error?.message}
-                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                    >
-                      <MenuItem value=""><em>Select Process</em></MenuItem>
-                      {processes.map((p: any) => (
-                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                />
-              </Grid>
-
-              {type === "job-work" && selectedProcessId && selectedOutwardIds.length > 0 && (
+              {type === "job-work" ? (
                 <Grid size={{ xs: 12 }}>
-                  <Box sx={{ p: 2, bgcolor: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 1, display: "flex", flexWrap: "wrap", gap: 3 }}>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Total Dispatched Qty</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#135200" }}>{totalDispatchedQty} units ({totalDispatchedWeight.toFixed(2)} kg)</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Previously Completed Qty</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#135200" }}>{prevCompletedQty} units ({prevCompletedWeight.toFixed(2)} kg)</Typography>
-                    </Box>
-                    <Box sx={{ borderLeft: "1px solid #d9d9d9", pl: 3 }}>
-                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Balance Qty to Complete</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#389e0d" }}>{balanceQty} units</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>Balance Weight</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#389e0d" }}>{balanceWeight.toFixed(2)} kg</Typography>
-                    </Box>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020" }}>
+                      Registered Process Items
+                    </Typography>
+                    <Button size="small" variant="outlined" onClick={handleAddLine} sx={{ textTransform: "none" }}>
+                      + Add Process Line
+                    </Button>
                   </Box>
+                  <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
+                    <Table size="small">
+                      <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                        <TableRow>
+                          <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
+                          <TableCell sx={{ width: "40%", fontWeight: 700 }}>Process *</TableCell>
+                          <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
+                          <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Balance Qty</TableCell>
+                          <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Rate *</TableCell>
+                          <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
+                          <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {lineItems.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell align="center">{idx + 1}</TableCell>
+                            <TableCell>
+                              <Select
+                                size="small"
+                                fullWidth
+                                value={item.process_id || ""}
+                                onChange={(e) => handleLineChange(idx, "process_id", e.target.value)}
+                                displayEmpty
+                              >
+                                <MenuItem value=""><em>Select Process</em></MenuItem>
+                                {(selectedOutwardIds.length > 0 ? outwardProcesses : processes).map((p: any) => (
+                                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                                ))}
+                              </Select>
+                            </TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={item.quantity === "" ? "" : item.quantity}
+                                onChange={(e) => handleLineChange(idx, "quantity", e.target.value)}
+                                slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              />
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                              {item.balance_qty}
+                            </TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={item.rate}
+                                onChange={(e) => handleLineChange(idx, "rate", e.target.value)}
+                                slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              />
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                              ₹{formatAmount(item.amount)}
+                            </TableCell>
+                            <TableCell align="center">
+                              <IconButton size="small" color="error" onClick={() => handleRemoveLine(idx)}>
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {lineItems.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={7} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                              No processes added. Please select Outward Vouchers or add a line manually.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {lineItems.length > 0 && (
+                          <TableRow sx={{ bgcolor: "#fafafa" }}>
+                            <TableCell colSpan={2} sx={{ fontWeight: 700 }} align="right">
+                              Total:
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 700 }} align="right">
+                              {totalQuantity}
+                            </TableCell>
+                            <TableCell colSpan={2}></TableCell>
+                            <TableCell sx={{ fontWeight: 700 }} align="right">
+                              ₹{formatAmount(totalAmount)}
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </Paper>
                 </Grid>
+              ) : (
+                <>
+                  <Grid size={{ xs: 12 }}>
+                    <Controller
+                      name="process_id"
+                      control={control}
+                      rules={{ required: "Required" }}
+                      render={({ field, fieldState }) => (
+                        <TextField
+                          {...field}
+                          select
+                          label="Process *"
+                          fullWidth
+                          required
+                          error={!!fieldState.error}
+                          helperText={fieldState.error?.message}
+                          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                        >
+                          <MenuItem value=""><em>Select Process</em></MenuItem>
+                          {processes.map((p: any) => (
+                            <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 4 }}>
+                    <TextField {...register("quantity")} label="Quantity" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+                  </Grid>
+                  <Grid size={{ xs: 4 }}>
+                    <TextField {...register("rate")} label="Rate" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+                  </Grid>
+                  <Grid size={{ xs: 4 }}>
+                    <TextField {...register("amount")} label="Amount" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+                  </Grid>
+                </>
               )}
 
-              <Grid size={{ xs: 4 }}>
-                <TextField {...register("quantity")} label="Quantity" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-              </Grid>
-              <Grid size={{ xs: 4 }}>
-                <TextField {...register("rate")} label="Rate" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-              </Grid>
-              <Grid size={{ xs: 4 }}>
-                <TextField {...register("amount")} label="Amount" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-              </Grid>
               <Grid size={{ xs: 12 }}>
                 <TextField {...register("narration")} label="Narration" fullWidth multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>

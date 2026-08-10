@@ -26,6 +26,7 @@ class JobWorkIn(BaseModel):
     amount: float = 0
     entry_type: str = "Register"  # Register, Payment, Advance Payment, Advance Receipt
     narration: str | None = None
+    items: list | None = None
 
 
 @router.get("/")
@@ -89,18 +90,19 @@ async def create_job_work(
     import json
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
+    items_json = json.dumps(body.items) if body.items else "[]"
 
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.job_work_entries "
-            f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, created_by) "
-            f"VALUES (:eno, :edate, :lid, :oid, :oids, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :cby) RETURNING id"
+            f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, created_by) "
+            f"VALUES (:eno, :edate, :lid, :oid, :oids, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items, :cby) RETURNING id"
         ),
         {
             "eno": entry_no, "edate": body.entry_date, "lid": body.ledger_id,
             "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "et": body.entry_type, "narr": body.narration, "cby": current_user.id
+            "et": body.entry_type, "narr": body.narration, "items": items_json, "cby": current_user.id
         }
     )
     return {"id": result.scalar_one(), "message": "Job work entry created"}
@@ -115,18 +117,19 @@ async def update_job_work(
     import json
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
+    items_json = json.dumps(body.items) if body.items else "[]"
 
     await db.execute(
         text(
             f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
             f"outward_id=:oid, outward_ids=:oids, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
-            f"entry_type=:et, narration=:narr, updated_at=NOW() WHERE id=:id"
+            f"entry_type=:et, narration=:narr, items=:items, updated_at=NOW() WHERE id=:id"
         ),
         {
             "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
             "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "et": body.entry_type, "narr": body.narration, "id": entry_id
+            "et": body.entry_type, "narr": body.narration, "items": items_json, "id": entry_id
         }
     )
     return {"message": "Updated"}
