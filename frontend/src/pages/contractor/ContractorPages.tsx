@@ -109,15 +109,15 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     }
   }, [selectedProductId, outwardProducts, type, setValue]);
 
-  // Auto fill rate with Contractor Rate when Process is selected (for Job Work)
+  // Auto fill rate with Contractor Rate when Process is selected
   useEffect(() => {
-    if (type === "job-work" && selectedProcess && productProcesses.length > 0) {
-      const match = productProcesses.find((p: any) => p.id === Number(selectedProcess));
+    if (selectedProcess && processes.length > 0) {
+      const match = processes.find((p: any) => p.id === Number(selectedProcess));
       if (match) {
         setValue("rate", (match.contractor_rate ?? 0) as any);
       }
     }
-  }, [selectedProcess, productProcesses, type, setValue]);
+  }, [selectedProcess, processes, setValue]);
 
   // Auto calculate amount when quantity or rate changes
   useEffect(() => {
@@ -177,10 +177,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     { field: "entry_no", headerName: "Entry No.", width: 130 },
     { field: "entry_date", headerName: "Date", width: 100 },
     { field: "contractor_name", headerName: "Contractor", width: 180, valueFormatter: (p) => p.value || "General" },
+    { field: "process_name", headerName: "Process", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
     ...(type === "job-work" ? [
       { field: "outward_no", headerName: "Outward No", width: 130, valueFormatter: (p: any) => p.value || "-" },
       { field: "product_name", headerName: "Product", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
-      { field: "process_name", headerName: "Process", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
     ] : []),
     { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
     { field: "rate", headerName: "Rate", width: 80, type: "numericColumn" },
@@ -283,29 +283,33 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       )}
                     />
                   </Grid>
-
-                  <Grid size={{ xs: 6 }}>
-                    <Controller
-                      name="process_id"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          select
-                          label="Process"
-                          fullWidth
-                          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                        >
-                          <MenuItem value=""><em>Select Process</em></MenuItem>
-                          {productProcesses.map((p: any) => (
-                            <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                    />
-                  </Grid>
                 </>
               )}
+
+              <Grid size={{ xs: type === "job-work" ? 6 : 12 }}>
+                <Controller
+                  name="process_id"
+                  control={control}
+                  rules={{ required: "Required" }}
+                  render={({ field, fieldState }) => (
+                    <TextField
+                      {...field}
+                      select
+                      label="Process *"
+                      fullWidth
+                      required
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value=""><em>Select Process</em></MenuItem>
+                      {(type === "job-work" ? productProcesses : processes).map((p: any) => (
+                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Grid>
 
               <Grid size={{ xs: 4 }}>
                 <TextField {...register("quantity")} label="Quantity" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
