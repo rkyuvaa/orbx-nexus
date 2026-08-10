@@ -176,6 +176,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Settings sx={{ fontSize: 20 }} />,
     children: [
       { label: "Company Info", path: "/master/company", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Document Numbering", path: "/settings/document-numbering", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Print Configurations", path: "/settings/print-config", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Backups", path: "/backups", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Audit Logs", path: "/audit", icon: <ChevronRight sx={{ fontSize: 12 }} /> },

@@ -99,13 +99,18 @@ async def create_voucher(
     fy: str = Query(default="2026_2027"),
 ):
     schema = f"fy_{fy}"
+    vtype = body.voucher_type.lower()
+    seq_type = f"voucher_{vtype}"
+    from app.services.sequences import generate_and_increment_sequence
+    voucher_no = await generate_and_increment_sequence(db, seq_type)
+    
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.vouchers (voucher_no, voucher_type, voucher_date, ledger_id, amount, narration, ref_no, created_by) "
             f"VALUES (:vno, :vtype, :vdate, :lid, :amt, :narr, :ref, :cby) RETURNING id"
         ),
         {
-            "vno": body.voucher_no,
+            "vno": voucher_no,
             "vtype": body.voucher_type,
             "vdate": body.voucher_date,
             "lid": body.ledger_id,

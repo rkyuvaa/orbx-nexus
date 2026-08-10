@@ -28,6 +28,7 @@ import FinancialYearsPage from "../pages/admin/FinancialYearsPage";
 import PrintConfigPage from "../pages/admin/PrintConfigPage";
 import CompanyPage from "../pages/master/CompanyPage";
 import StockTransferPage from "../pages/inventory/StockTransferPage";
+import DocumentNumberingPage from "../pages/settings/DocumentNumberingPage";
 import ContractorPages from "../pages/contractor/ContractorPages";
 import StockItemsPage from "../pages/inventory/StockItemsPage";
 import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
@@ -123,6 +124,7 @@ export const router = createBrowserRouter([
       // Admin
       { path: "admin/users", element: <UserManagementPage /> },
       { path: "admin/financial-years", element: <FinancialYearsPage /> },
+      { path: "settings/document-numbering", element: <DocumentNumberingPage /> },
       { path: "settings/print-config", element: <PrintConfigPage /> },
       { path: "biometrics", element: <BiometricsPage /> },
       { path: "backups", element: <BackupsPage /> },

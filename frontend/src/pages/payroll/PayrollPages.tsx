@@ -1,13 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Grid, IconButton, Chip, Tooltip, MenuItem, Tab, Tabs,
+  TextField, Grid, IconButton, Tooltip,
 } from "@mui/material";
-import Add from "@mui/icons-material/Add";
-import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
-import Refresh from "@mui/icons-material/Refresh";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
@@ -27,7 +24,6 @@ function VoucherModule({
   queryKey,
   ledgerType,
   paymentType,
-  extraFields,
 }: any) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
@@ -76,7 +72,28 @@ function VoucherModule({
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
-        onAdd={() => { reset({ voucher_date: today, amount: 0 }); setOpen(true); }}
+        onAdd={async () => {
+          let nextNo = "";
+          try {
+            const ltype = ledgerType.toLowerCase();
+            const ptype = paymentType.toLowerCase();
+            const seqType = `${ltype}_advance_${ptype}`;
+            const res = await api.get(`/sequences/preview/${seqType}`);
+            nextNo = res.data.next_no;
+          } catch (e) {
+            console.error(e);
+          }
+          reset({
+            voucher_no: nextNo,
+            voucher_date: today,
+            ledger_id: "",
+            payment_type: paymentType,
+            ledger_type: ledgerType,
+            amount: 0,
+            narration: "",
+          });
+          setOpen(true);
+        }}
         addLabel="New Entry"
       />
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
@@ -84,13 +101,13 @@ function VoucherModule({
           <DialogTitle>{title}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required /></Grid>
+              <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_date")} label="Date *" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12 }}><Controller name="ledger_id" control={control} rules={{ required: "Required" }} render={({ field, fieldState }) => (
                 <LazyAutocomplete options={ledgers} getOptionLabel={(o: any) => o.name} value={ledgers.find((l: any) => l.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label={`${ledgerType} *`} error={!!fieldState.error} helperText={fieldState.error?.message} />} />
               )} /></Grid>
-              <Grid size={{ xs: 12 }}><TextField {...register("amount")} label="Amount" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 12 }}><TextField {...register("narration")} label="Narration" fullWidth multiline rows={2} /></Grid>
+              <Grid size={{ xs: 12 }}><TextField {...register("amount")} label="Amount" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12 }}><TextField {...register("narration")} label="Narration" fullWidth multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
             </Grid>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
@@ -154,7 +171,29 @@ export function SalaryVoucherPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
-        onAdd={() => { reset({ month: new Date().getMonth() + 1, year: new Date().getFullYear(), voucher_date: today, days_worked: 0, basic_salary: 0, allowances: 0, deductions: 0, net_salary: 0 }); setOpen(true); }}
+        onAdd={async () => {
+          let nextNo = "";
+          try {
+            const res = await api.get("/sequences/preview/salary_voucher");
+            nextNo = res.data.next_no;
+          } catch (e) {
+            console.error(e);
+          }
+          reset({
+            voucher_no: nextNo,
+            month: new Date().getMonth() + 1,
+            year: new Date().getFullYear(),
+            voucher_date: today,
+            days_worked: 0,
+            basic_salary: 0,
+            allowances: 0,
+            deductions: 0,
+            net_salary: 0,
+            ledger_id: "",
+            narration: "",
+          });
+          setOpen(true);
+        }}
         addLabel="New Salary"
       />
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
@@ -162,19 +201,19 @@ export function SalaryVoucherPage() {
           <DialogTitle>New Salary Voucher</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required /></Grid>
+              <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_date")} label="Date *" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12 }}><Controller name="ledger_id" control={control} rules={{ required: "Required" }} render={({ field, fieldState }) => (
                 <LazyAutocomplete options={ledgers} getOptionLabel={(o: any) => o.name} value={ledgers.find((l: any) => l.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label="Staff Member *" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
               )} /></Grid>
               <Grid size={{ xs: 3 }}><TextField {...register("month")} label="Month" type="number" fullWidth slotProps={{ htmlInput: { min: 1, max: 12 } }} /></Grid>
-              <Grid size={{ xs: 3 }}><TextField {...register("year")} label="Year" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 3 }}><TextField {...register("days_worked")} label="Days Worked" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 3 }}><TextField {...register("basic_salary")} label="Basic Salary" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("allowances")} label="Allowances" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("deductions")} label="Deductions" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 4 }}><TextField {...register("net_salary")} label="Net Salary" type="number" fullWidth /></Grid>
-              <Grid size={{ xs: 12 }}><TextField {...register("narration")} label="Narration" fullWidth multiline rows={2} /></Grid>
+              <Grid size={{ xs: 3 }}><TextField {...register("year")} label="Year" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 3 }}><TextField {...register("days_worked")} label="Days Worked" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 3 }}><TextField {...register("basic_salary")} label="Basic Salary" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 4 }}><TextField {...register("allowances")} label="Allowances" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 4 }}><TextField {...register("deductions")} label="Deductions" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 4 }}><TextField {...register("net_salary")} label="Net Salary" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12 }}><TextField {...register("narration")} label="Narration" fullWidth multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
             </Grid>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>

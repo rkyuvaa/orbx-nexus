@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.db.session import engine, AsyncSessionLocal
 from app.db.base_class import Base
 from app.db.schema_manager import ensure_master_schema, ensure_year_schema
-from app.models.master import User, FinancialYear
+from app.models.master import User, FinancialYear, DocumentSequence
 from app.core.security import get_password_hash
 
 # Import all API routers
@@ -24,7 +24,7 @@ from app.api import (
     auth, company, ledgers, products, vouchers,
     stock, labour_bill, salary, contractor,
     reports, biometrics, backups,
-    audit, financial_years,
+    audit, financial_years, sequences,
 )
 
 DEFAULT_YEARS = [
@@ -104,7 +104,34 @@ async def lifespan(app: FastAPI):
                 ))
         await db.commit()
 
-    # 5. Ensure default admin user
+    # 5. Initialize default document sequences
+    async with AsyncSessionLocal() as db:
+        default_sequences = [
+            {"document_type": "stock_inward", "prefix": "INW-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "stock_outward", "prefix": "OUT-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "job_work_register", "prefix": "JWR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "job_work_payment", "prefix": "JWP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "job_work_advance_payment", "prefix": "JWA-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "job_work_advance_receipt", "prefix": "JWAR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "voucher_payment", "prefix": "PAY-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "voucher_receipt", "prefix": "REC-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "voucher_contra", "prefix": "CON-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "voucher_journal", "prefix": "JOU-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "voucher_purchase", "prefix": "PUR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "labour_bill", "prefix": "LBB-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "staff_advance_payment", "prefix": "SAP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "staff_advance_receipt", "prefix": "SAR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "salary_voucher", "prefix": "SAL-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+        ]
+        for seq in default_sequences:
+            result = await db.execute(
+                select(DocumentSequence).where(DocumentSequence.document_type == seq["document_type"])
+            )
+            if not result.scalar_one_or_none():
+                db.add(DocumentSequence(**seq))
+        await db.commit()
+
+    # 6. Ensure default admin user
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(func.count(User.id)))
         count = result.scalar()
@@ -161,6 +188,7 @@ app.include_router(biometrics.router, prefix=f"{settings.API_V1_STR}/biometrics"
 app.include_router(backups.router, prefix=f"{settings.API_V1_STR}/backups", tags=["Backups"])
 app.include_router(audit.router, prefix=f"{settings.API_V1_STR}/audit", tags=["Audit"])
 app.include_router(financial_years.router, prefix=f"{settings.API_V1_STR}/financial-years", tags=["Financial Years"])
+app.include_router(sequences.router, prefix=f"{settings.API_V1_STR}/sequences", tags=["Sequences"])
 
 
 @app.get("/")

@@ -332,9 +332,16 @@ function AccountsVoucherDialog({ open, onClose, voucherType, generateNextVoucher
   useEffect(() => {
     if (open) {
       setLines([{ ledger_id: "", dr_amount: "", cr_amount: "", narration: "" }]);
-      reset({ voucher_no: generateNextVoucherNo(), voucher_date: today, ledger_id: "", amount: "" as any, narration: "", ref_no: "" });
+      reset({ voucher_no: "", voucher_date: today, ledger_id: "", amount: "" as any, narration: "", ref_no: "" });
+
+      const vtype = voucherType.toLowerCase();
+      api.get(`/sequences/preview/voucher_${vtype}`)
+        .then((res) => {
+          setValue("voucher_no", res.data.next_no);
+        })
+        .catch((e) => console.error(e));
     }
-  }, [open, reset, generateNextVoucherNo]);
+  }, [open, reset, voucherType, setValue]);
 
   const addLine = () => {
     setLines((l) => [...l, { ledger_id: "", dr_amount: "", cr_amount: "", narration: "" }]);
@@ -402,7 +409,7 @@ function AccountsVoucherDialog({ open, onClose, voucherType, generateNextVoucher
         <DialogTitle>New {voucherType} Voucher</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
-            <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required size="small" /></Grid>
+            <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required size="small" disabled /></Grid>
             <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("voucher_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} /></Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <LazyAutocomplete

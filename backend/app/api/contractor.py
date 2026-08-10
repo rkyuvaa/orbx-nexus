@@ -73,6 +73,18 @@ async def create_job_work(
     body: JobWorkIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    
+    seq_type = "job_work_register"
+    if body.entry_type == "Payment":
+        seq_type = "job_work_payment"
+    elif body.entry_type == "Advance Payment":
+        seq_type = "job_work_advance_payment"
+    elif body.entry_type == "Advance Receipt":
+        seq_type = "job_work_advance_receipt"
+        
+    from app.services.sequences import generate_and_increment_sequence
+    entry_no = await generate_and_increment_sequence(db, seq_type)
+    
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.job_work_entries "
@@ -80,7 +92,7 @@ async def create_job_work(
             f"VALUES (:eno, :edate, :lid, :oid, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :cby) RETURNING id"
         ),
         {
-            "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
+            "eno": entry_no, "edate": body.entry_date, "lid": body.ledger_id,
             "oid": body.outward_id, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "cby": current_user.id

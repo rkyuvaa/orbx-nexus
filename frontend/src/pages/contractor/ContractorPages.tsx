@@ -29,7 +29,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   });
 
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
-  const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Account"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data });
+  const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
 
   const { data: outwardVouchers = [] } = useQuery<any>({
     queryKey: ["outward-vouchers", activeFY],
@@ -139,21 +139,34 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     onSuccess: () => qc.invalidateQueries({ queryKey: ["contractor", type] }),
   });
 
-  const handleOpen = (row?: any) => {
-    setEditing(row || null);
-    reset(row || {
-      entry_no: "",
-      entry_date: today,
-      ledger_id: "",
-      outward_id: "",
-      product_id: "",
-      process_id: "",
-      quantity: 0,
-      rate: 0,
-      amount: 0,
-      entry_type: type === "payment" ? "Payment" : "Register",
-      narration: "",
-    });
+  const handleOpen = async (row?: any) => {
+    if (row) {
+      setEditing(row);
+      reset(row);
+    } else {
+      setEditing(null);
+      let nextNo = "";
+      try {
+        const seqType = type === "job-work" ? "job_work_register" : "job_work_payment";
+        const res = await api.get(`/sequences/preview/${seqType}`);
+        nextNo = res.data.next_no;
+      } catch (e) {
+        console.error("Error fetching document sequence preview:", e);
+      }
+      reset({
+        entry_no: nextNo,
+        entry_date: today,
+        ledger_id: "",
+        outward_id: "",
+        product_id: "",
+        process_id: "",
+        quantity: 0,
+        rate: 0,
+        amount: 0,
+        entry_type: type === "payment" ? "Payment" : "Register",
+        narration: "",
+      });
+    }
     setOpen(true);
   };
 
@@ -197,7 +210,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid size={{ xs: 6 }}>
-                <TextField {...register("entry_no")} label="Entry No. *" fullWidth required slotProps={{ inputLabel: { shrink: true } }} />
+                <TextField {...register("entry_no")} label="Entry No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid size={{ xs: 6 }}>
                 <TextField {...register("entry_date")} label="Date *" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} />

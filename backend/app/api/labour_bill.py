@@ -70,6 +70,8 @@ async def create_labour_bill(
     body: LabourBillIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    from app.services.sequences import generate_and_increment_sequence
+    bill_no = await generate_and_increment_sequence(db, "labour_bill")
     import json
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
@@ -82,7 +84,7 @@ async def create_labour_bill(
             f"RETURNING id"
         ),
         {
-            "bno": body.bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
+            "bno": bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
             "iid": body.inward_id, "pid": body.product_id, "prid": body.process_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "gp": body.gst_percent, "ga": body.gst_amount,

@@ -212,6 +212,8 @@ async def create_inward(
     body: StockInwardIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     s = _schema(fy)
+    from app.services.sequences import generate_and_increment_sequence
+    inward_no = await generate_and_increment_sequence(db, "stock_inward")
     items_json = json.dumps(body.items) if body.items else "[]"
     result = await db.execute(
         text(
@@ -222,7 +224,7 @@ async def create_inward(
             f":sno, :rno, :rdate, :edays, :wt, :twt, :items, :cby) RETURNING id"
         ),
         {
-            "ino": body.inward_no, "idate": body.inward_date, "pid": body.product_id,
+            "ino": inward_no, "idate": body.inward_date, "pid": body.product_id,
             "prid": body.process_id, "lid": body.ledger_id, "qty": body.quantity,
             "rate": body.rate, "amt": body.amount, "uom": body.uom_id,
             "narr": body.narration, "sno": body.serial_no, "rno": body.ref_no,
@@ -323,6 +325,8 @@ async def create_outward(
     body: StockOutwardIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     s = _schema(fy)
+    from app.services.sequences import generate_and_increment_sequence
+    outward_no = await generate_and_increment_sequence(db, "stock_outward")
     items_json = json.dumps(body.items) if body.items else "[]"
     iids_json = json.dumps(body.inward_ids) if body.inward_ids else "[]"
     result = await db.execute(
@@ -332,7 +336,7 @@ async def create_outward(
             f"VALUES (:ono, :odate, :iid, :pid, :prid, :lid, :qty, :rate, :amt, :wt, :twt, :uom, :sno, :rno, :narr, :dt, :items, :iids, :cby) RETURNING id"
         ),
         {
-            "ono": body.outward_no, "odate": body.outward_date, "iid": body.inward_id,
+            "ono": outward_no, "odate": body.outward_date, "iid": body.inward_id,
             "pid": body.product_id, "prid": body.process_id, "lid": body.ledger_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "wt": body.weight, "twt": body.total_weight,

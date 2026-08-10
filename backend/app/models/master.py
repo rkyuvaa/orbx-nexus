@@ -243,3 +243,14 @@ class Location(Base):
 
     process: Mapped["Process | None"] = relationship("Process")
 
+
+class DocumentSequence(Base):
+    __tablename__ = "document_sequences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    document_type: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    prefix: Mapped[str] = mapped_column(String(20), default="")
+    suffix: Mapped[str] = mapped_column(String(20), default="")
+    current_number: Mapped[int] = mapped_column(Integer, default=0)
+    padding_width: Mapped[int] = mapped_column(Integer, default=3)
+

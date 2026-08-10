@@ -418,7 +418,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
         }
       } else {
         reset({
-          inward_no: generateNextInwardNo(),
+          inward_no: "",
           inward_date: new Date().toISOString().split("T")[0],
           ledger_id: "",
           serial_no: "",
@@ -429,6 +429,12 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
           narration: ""
         });
         setLineItems([{ product_id: "", quantity: "", weight: "", total_weight: "" }]);
+
+        api.get("/sequences/preview/stock_inward")
+          .then((res) => {
+            setValue("inward_no", res.data.next_no);
+          })
+          .catch((e) => console.error(e));
       }
     }
   }, [open, editing, reset]);
@@ -549,7 +555,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
           <Grid container spacing={2}>
             {/* Header Details */}
             <Grid size={{ xs: 6, sm: 3 }}>
-              <TextField {...register("inward_no")} label="Voucher Number *" fullWidth required size="small" />
+              <TextField {...register("inward_no")} label="Voucher Number *" fullWidth required size="small" disabled />
             </Grid>
             <Grid size={{ xs: 6, sm: 3 }}>
               <TextField {...register("inward_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
@@ -813,18 +819,30 @@ export function OutwardVoucherPage() {
     },
   });
 
-  const handleOpen = (row?: any) => {
-    setEditing(row || null);
-    reset(row || {
-      outward_no: generateNextOutwardNo(),
-      outward_date: new Date().toISOString().split("T")[0],
-      product_id: "",
-      ledger_id: "",
-      quantity: 0,
-      rate: 0,
-      amount: 0,
-      narration: ""
-    });
+  const handleOpen = async (row?: any) => {
+    if (row) {
+      setEditing(row);
+      reset(row);
+    } else {
+      setEditing(null);
+      let nextNo = "";
+      try {
+        const res = await api.get("/sequences/preview/stock_outward");
+        nextNo = res.data.next_no;
+      } catch (e) {
+        console.error(e);
+      }
+      reset({
+        outward_no: nextNo,
+        outward_date: new Date().toISOString().split("T")[0],
+        product_id: "",
+        ledger_id: "",
+        quantity: 0,
+        rate: 0,
+        amount: 0,
+        narration: ""
+      });
+    }
     setOpen(true);
   };
 
@@ -1542,7 +1560,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         }
       } else {
         reset({
-          outward_no: generateNextOutwardNo(),
+          outward_no: "",
           outward_date: new Date().toISOString().split("T")[0],
           ledger_id: "",
           narration: "",
@@ -1552,6 +1570,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         setSelectedInwards([]);
         setInwardPickerOpen(false);
         setPickerLedgerId(null);
+
+        api.get("/sequences/preview/stock_outward")
+          .then((res) => {
+            setValue("outward_no", res.data.next_no);
+          })
+          .catch((e) => console.error(e));
       }
     }
   }, [open, editing, reset, inwardMap]);
@@ -1701,7 +1725,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           <Grid container spacing={2}>
             {/* Header Details */}
             <Grid size={{ xs: 6, sm: 3 }}>
-              <TextField {...register("outward_no")} label="Voucher Number *" fullWidth required size="small" />
+              <TextField {...register("outward_no")} label="Voucher Number *" fullWidth required size="small" disabled />
             </Grid>
             <Grid size={{ xs: 6, sm: 3 }}>
               <TextField {...register("outward_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />

@@ -901,20 +901,26 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             amount: editing.amount || ""
           }]);
         }
+        reset(editing);
       } else {
         setSelectedOutwards([]);
         setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+        reset({
+          bill_no: "",
+          bill_date: today,
+          ledger_id: "",
+          gst_percent: "" as any,
+          narration: "",
+          dispatch_through: ""
+        });
+        api.get("/sequences/preview/labour_bill")
+          .then((res) => {
+            setValue("bill_no", res.data.next_no);
+          })
+          .catch((e) => console.error(e));
       }
-      reset(editing || {
-        bill_no: generateNextBillNo(),
-        bill_date: today,
-        ledger_id: "",
-        gst_percent: "" as any,
-        narration: "",
-        dispatch_through: ""
-      });
     }
-  }, [open, editing, reset, outwardVouchers]);
+  }, [open, editing, reset, outwardVouchers, setValue]);
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
@@ -999,7 +1005,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             <Grid container spacing={2}>
               {/* Header Details */}
               <Grid size={{ xs: 6, sm: 2 }}>
-                <TextField {...register("bill_no")} label="Bill No. *" fullWidth required size="small" />
+                <TextField {...register("bill_no")} label="Bill No. *" fullWidth required size="small" disabled />
               </Grid>
               <Grid size={{ xs: 6, sm: 2 }}>
                 <TextField {...register("bill_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
