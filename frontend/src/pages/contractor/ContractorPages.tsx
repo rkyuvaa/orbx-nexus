@@ -213,7 +213,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       getOptionLabel={(o: any) => o.name}
                       value={ledgers.find((l: any) => l.id === field.value) || null}
                       onChange={(_, v) => field.onChange(v ? v.id : "")}
-                      renderInput={(params) => <TextField {...params} label="Contractor *" error={!!fieldState.error} helperText={fieldState.error?.message} slotProps={{ inputLabel: { shrink: true } }} />}
+                      renderInput={(params) => <TextField {...params} label="Contractor *" error={!!fieldState.error} helperText={fieldState.error?.message} />}
                     />
                   )}
                 />
@@ -238,7 +238,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                             setValue("rate", 0);
                             setValue("amount", 0);
                           }}
-                          renderInput={(params) => <TextField {...params} label="Outward Voucher / Dispatch" slotProps={{ inputLabel: { shrink: true } }} />}
+                          renderInput={(params) => <TextField {...params} label="Outward Voucher / Dispatch" />}
                         />
                       )}
                     />
