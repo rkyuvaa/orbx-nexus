@@ -37,13 +37,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     enabled: type === "job-work",
   });
 
-  const { data: products = [] } = useQuery<any>({
-    queryKey: ["products"],
-    queryFn: async () => (await api.get("/products/")).data,
-    enabled: type === "job-work",
-  });
-
   const [lineItems, setLineItems] = useState<any[]>([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+  const [submitError, setSubmitError] = useState("");
 
   const { register, handleSubmit, reset, control, watch, setValue } = useForm({
     defaultValues: {
@@ -62,7 +57,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     },
   });
 
-  const selectedOutwardIds = watch("outward_ids") || [];
+  const watchedOutwardIds = watch("outward_ids");
+  const selectedOutwardIds = useMemo(() => watchedOutwardIds || [], [watchedOutwardIds]);
   const selectedProcessId = watch("process_id");
   const qty = watch("quantity");
   const rate = watch("rate");
@@ -147,22 +143,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return processes.filter((p: any) => resolvedIds.has(p.id));
   }, [selectedOutwardIds, outwardVouchers, processes]);
 
-  // Auto fill lineItems with all valid processes for selected Outward Vouchers
-  useEffect(() => {
-    if (type === "job-work" && outwardProcesses.length > 0 && !editing) {
-      const items = outwardProcesses.map((proc: any) => {
-        const bal = getBalanceQtyForProcess(proc.id);
-        return {
-          process_id: proc.id,
-          quantity: bal,
-          balance_qty: bal,
-          rate: proc.contractor_rate || 0,
-          amount: Number((bal * (proc.contractor_rate || 0)).toFixed(2))
-        };
-      });
-      setLineItems(items);
-    }
-  }, [outwardProcesses, type, editing]);
+  // We do not auto-fill lineItems with processes, the user selects them manually
 
   const handleLineChange = (index: number, field: string, val: any) => {
     const updated = [...lineItems];
@@ -223,17 +204,35 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         quantity: type === "job-work" ? totalQuantity : Number(formData.quantity) || 0,
         amount: type === "job-work" ? totalAmount : Number(formData.amount) || 0,
         process_id: type === "job-work" ? (lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null) : Number(formData.process_id) || null,
-        items: type === "job-work" ? lineItems.map(item => ({
-          process_id: Number(item.process_id),
-          quantity: Number(item.quantity) || 0,
-          rate: Number(item.rate) || 0,
-          amount: Number(item.amount) || 0
-        })) : []
+        items: type === "job-work" ? lineItems
+          .filter((item: any) => item.process_id && Number(item.process_id) > 0)
+          .map(item => ({
+            process_id: Number(item.process_id),
+            quantity: Number(item.quantity) || 0,
+            rate: Number(item.rate) || 0,
+            amount: Number(item.amount) || 0
+          })) : []
       };
       return editing ? api.put(`/contractor/${editing.id}?fy=${activeFY}`, payload) : api.post(`/contractor/?fy=${activeFY}`, payload);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["contractor", type] }); setOpen(false); },
   });
+
+  const handleSave = (d: any) => {
+    if (type === "job-work") {
+      const validLines = lineItems.filter((it: any) => it.process_id && Number(it.process_id) > 0);
+      if (validLines.length === 0) {
+        setSubmitError("Add at least one process line with a process selected.");
+        return;
+      }
+      if (validLines.some((it: any) => !(Number(it.quantity) > 0))) {
+        setSubmitError("Each process line must have a quantity greater than zero.");
+        return;
+      }
+    }
+    setSubmitError("");
+    saveMutation.mutate(d);
+  };
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/contractor/${id}?fy=${activeFY}`),
@@ -243,6 +242,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const handleOpen = async (row?: any) => {
     if (row) {
       setEditing(row);
+      setSubmitError("");
       reset({
         ...row,
         outward_ids: row.outward_ids || (row.outward_id ? [row.outward_id] : []),
@@ -266,6 +266,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       }
     } else {
       setEditing(null);
+      setSubmitError("");
       let nextNo = "";
       try {
         const seqType = type === "job-work" ? "job_work_register" : "job_work_payment";
@@ -336,8 +337,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         onAdd={() => handleOpen()}
         addLabel="Add Entry"
       />
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
-        <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))}>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="lg" fullWidth>
+        <form onSubmit={handleSubmit(handleSave)}>
           <DialogTitle>{editing ? "Edit Entry" : TITLES[type]}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
@@ -382,6 +383,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                           setValue("quantity", 0);
                           setValue("rate", 0);
                           setValue("amount", 0);
+                          setLineItems([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
                         }}
                         renderInput={(params) => <TextField {...params} label="Outward Vouchers / Dispatches *" required={field.value?.length === 0} />}
                       />
@@ -400,17 +402,22 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       + Add Process Line
                     </Button>
                   </Box>
+                  {submitError && (
+                    <Typography color="error" variant="body2" sx={{ mt: 1, mb: 1 }}>
+                      {submitError}
+                    </Typography>
+                  )}
                   <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                     <Table size="small">
                       <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                         <TableRow>
-                          <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
-                          <TableCell sx={{ width: "40%", fontWeight: 700 }}>Process *</TableCell>
-                          <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
-                          <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Balance Qty</TableCell>
-                          <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Rate *</TableCell>
-                          <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
-                          <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
+                          <TableCell sx={{ width: 50, fontWeight: 700 }} align="center">S. No</TableCell>
+                          <TableCell sx={{ minWidth: 200, fontWeight: 700 }}>Process *</TableCell>
+                          <TableCell sx={{ width: 140, fontWeight: 700 }} align="right">Qty *</TableCell>
+                          <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Balance Qty</TableCell>
+                          <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Rate *</TableCell>
+                          <TableCell sx={{ width: 150, fontWeight: 700 }} align="right">Amount</TableCell>
+                          <TableCell sx={{ width: 60 }} align="center">Del</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -426,15 +433,18 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 displayEmpty
                               >
                                 <MenuItem value=""><em>Select Process</em></MenuItem>
-                                {(selectedOutwardIds.length > 0 ? outwardProcesses : processes).map((p: any) => (
-                                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                                ))}
+                                {(selectedOutwardIds.length > 0 ? outwardProcesses : processes)
+                                  .filter((p: any) => lineItems.every((other: any, oi: number) => oi === idx || Number(other.process_id) !== Number(p.id)))
+                                  .map((p: any) => (
+                                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                                  ))}
                               </Select>
                             </TableCell>
                             <TableCell align="right">
                               <TextField
                                 size="small"
                                 type="number"
+                                fullWidth
                                 value={item.quantity === "" ? "" : item.quantity}
                                 onChange={(e) => handleLineChange(idx, "quantity", e.target.value)}
                                 slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
@@ -447,6 +457,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                               <TextField
                                 size="small"
                                 type="number"
+                                fullWidth
                                 value={item.rate}
                                 onChange={(e) => handleLineChange(idx, "rate", e.target.value)}
                                 slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
