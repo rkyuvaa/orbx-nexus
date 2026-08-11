@@ -336,33 +336,18 @@ export default function LabourBillPage() {
       const freightRows = freightArray.map((f) => {
         const prName = resolveProcessName(f.process_id, processes) || "-";
         return `
-          <tr>
-            <td style="text-align: center;">1</td>
-            <td style="font-weight: 600;">${prName}</td>
-            <td style="text-align: right;">${formatWeight(f.quantity)}</td>
-            <td style="text-align: center;">KG</td>
-            <td style="text-align: right;">₹${formatAmount(f.rate)}</td>
-            <td style="text-align: right; font-weight: 600;">₹${formatAmount(f.amount)}</td>
-          </tr>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 14px; padding: 3px 0;">
+            <span style="font-weight: 600; color: #0f5132;">${prName}</span>
+            <span style="text-align: right; white-space: nowrap;">${formatWeight(f.quantity)} kg × ₹${formatAmount(f.rate)}</span>
+            <span style="text-align: right; font-weight: 700; min-width: 90px; white-space: nowrap;">₹${formatAmount(f.amount)}</span>
+          </div>
         `;
       }).join("");
       freightHtml = `
-        <h4 style="margin: 14px 0 6px 0; font-size: 13px; color: #0f5132;">FREIGHT / OTHER CHARGES</h4>
-        <table class="items-table">
-          <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-            <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-              <th style="width: 50px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
-              <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
-              <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
-              <th style="text-align: center; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">UOM</th>
-              <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">RATE</th>
-              <th style="text-align: right; width: 120px; background-color: #0f5132 !important; color: #ffffff !important;">SUBTOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${freightRows}
-          </tbody>
-        </table>
+        <div style="margin: 14px 0 8px 0; text-align: right;">
+          <div style="font-size: 12px; font-weight: 700; color: #0f5132; letter-spacing: 0.5px; margin-bottom: 2px;">FREIGHT / OTHER CHARGES</div>
+          ${freightRows}
+        </div>
       `;
     }
 
