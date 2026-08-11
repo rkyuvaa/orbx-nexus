@@ -31,6 +31,7 @@ class LabourBillIn(BaseModel):
     items: list[dict] | None = None
     outward_ids: list[int] | None = None
     dispatch_through: str | None = None
+    freight_items: list[dict] | None = None
 
 
 def s(fy: str) -> str:
@@ -75,12 +76,13 @@ async def create_labour_bill(
     import json
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+    freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.labour_bills "
             f"(bill_no, bill_date, ledger_id, inward_id, product_id, process_id, quantity, rate, "
-            f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, net_amount, total_amount, narration, items, outward_ids, dispatch_through, created_by) "
-            f"VALUES (:bno, :bdate, :lid, :iid, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :cby) "
+            f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, net_amount, total_amount, narration, items, outward_ids, dispatch_through, freight_items, created_by) "
+            f"VALUES (:bno, :bdate, :lid, :iid, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :fright, :cby) "
             f"RETURNING id"
         ),
         {
@@ -92,7 +94,7 @@ async def create_labour_bill(
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
             "ro": body.round_off, "namt": body.net_amount or body.total_amount,
             "ta": body.total_amount,
-            "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "cby": current_user.id
+            "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "fright": freight_json, "cby": current_user.id
         }
     )
     return {"id": result.scalar_one(), "message": "Labour bill created"}
@@ -107,6 +109,7 @@ async def update_labour_bill(
     import json
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+    freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
     await db.execute(
         text(
             f"UPDATE {schema}.labour_bills SET bill_no=:bno, bill_date=:bdate, ledger_id=:lid, "
@@ -114,7 +117,7 @@ async def update_labour_bill(
             f"amount=:amt, gst_percent=:gp, gst_amount=:ga, "
             f"cgst_percent=:cgp, cgst_amount=:cga, sgst_percent=:sgp, sgst_amount=:sga, "
             f"round_off=:ro, net_amount=:namt, total_amount=:ta, narration=:narr, "
-            f"items=:items, outward_ids=:oids, dispatch_through=:dt, updated_at=NOW() WHERE id=:id"
+            f"items=:items, outward_ids=:oids, dispatch_through=:dt, freight_items=:fright, updated_at=NOW() WHERE id=:id"
         ),
         {
             "bno": body.bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
@@ -125,7 +128,7 @@ async def update_labour_bill(
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
             "ro": body.round_off, "namt": body.net_amount or body.total_amount,
             "ta": body.total_amount,
-            "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "id": bill_id
+            "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "fright": freight_json, "id": bill_id
         }
     )
     return {"message": "Updated"}

@@ -285,11 +285,21 @@ export default function LabourBillPage() {
     const processName = resolveProcessName(row.process_id, processes) || "-";
     const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
 
+    let freightArray: any[] = [];
+    if (typeof row.freight_items === "string") {
+      try { freightArray = JSON.parse(row.freight_items); } catch (e) {}
+    } else if (Array.isArray(row.freight_items)) {
+      freightArray = row.freight_items;
+    }
+    if (!Array.isArray(freightArray)) freightArray = [];
+    const freightAmount = freightArray.reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
+    const taxableBasePrint = Number(row.amount || 0) + freightAmount;
+
     const gstP = Number(row.gst_percent || 0);
     const cgstP = Number(row.cgst_percent !== undefined && row.cgst_percent !== null ? row.cgst_percent : (gstP / 2));
     const sgstP = Number(row.sgst_percent !== undefined && row.sgst_percent !== null ? row.sgst_percent : (gstP / 2));
-    const cgstAmt = row.cgst_amount !== undefined && row.cgst_amount !== null ? Number(row.cgst_amount) : Number(((Number(row.amount || 0) * cgstP) / 100).toFixed(2));
-    const sgstAmt = row.sgst_amount !== undefined && row.sgst_amount !== null ? Number(row.sgst_amount) : Number(((Number(row.amount || 0) * sgstP) / 100).toFixed(2));
+    const cgstAmt = row.cgst_amount !== undefined && row.cgst_amount !== null ? Number(row.cgst_amount) : Number(((taxableBasePrint * cgstP) / 100).toFixed(2));
+    const sgstAmt = row.sgst_amount !== undefined && row.sgst_amount !== null ? Number(row.sgst_amount) : Number(((taxableBasePrint * sgstP) / 100).toFixed(2));
     const roundOffVal = Number(row.round_off || 0);
     const netPayableVal = Number(row.net_amount || row.total_amount || 0);
     const amountInWordsStr = toWords(netPayableVal);
@@ -320,6 +330,41 @@ export default function LabourBillPage() {
         </tr>
       `;
     });
+
+    let freightHtml = "";
+    if (freightArray.length > 0) {
+      const freightRows = freightArray.map((f) => {
+        const prName = resolveProcessName(f.process_id, processes) || "-";
+        return `
+          <tr>
+            <td style="text-align: center;">1</td>
+            <td style="font-weight: 600;">${prName}</td>
+            <td style="text-align: right;">${formatWeight(f.quantity)}</td>
+            <td style="text-align: center;">KG</td>
+            <td style="text-align: right;">₹${formatAmount(f.rate)}</td>
+            <td style="text-align: right; font-weight: 600;">₹${formatAmount(f.amount)}</td>
+          </tr>
+        `;
+      }).join("");
+      freightHtml = `
+        <h4 style="margin: 14px 0 6px 0; font-size: 13px; color: #0f5132;">FREIGHT / OTHER CHARGES</h4>
+        <table class="items-table">
+          <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+            <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+              <th style="width: 50px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
+              <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
+              <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
+              <th style="text-align: center; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">UOM</th>
+              <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">RATE</th>
+              <th style="text-align: right; width: 120px; background-color: #0f5132 !important; color: #ffffff !important;">SUBTOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${freightRows}
+          </tbody>
+        </table>
+      `;
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -374,12 +419,19 @@ export default function LabourBillPage() {
               ${itemsHtml}
             </tbody>
           </table>
+          ${freightHtml}
           <div class="totals-section">
             <div class="calculation-box">
               <div class="calculation-row">
                 <span>Taxable Subtotal:</span>
                 <span>₹${formatAmount(row.amount)}</span>
               </div>
+              ${freightAmount > 0 ? `
+                <div class="calculation-row">
+                  <span>Freight:</span>
+                  <span>₹${formatAmount(freightAmount)}</span>
+                </div>
+              ` : ""}
               <div class="calculation-row">
                 <span>CGST (${cgstP}%):</span>
                 <span>₹${formatAmount(cgstAmt)}</span>
@@ -611,6 +663,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const [lineItems, setLineItems] = useState<any[]>([
     { product_id: "", process_id: "", quantity: "", rate: "", amount: "" }
   ]);
+  const [freightOpen, setFreightOpen] = useState(false);
+  const [freightItem, setFreightItem] = useState<any>({ process_id: "", quantity: "", rate: "", amount: "" });
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", "Account"],
@@ -667,6 +721,36 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const getCompanyRate = (productId: any, processId: any) => {
     const proc = processes.find((p: any) => p.id === Number(processId));
     return proc ? proc.company_rate || 0 : 0;
+  };
+
+  const getShotBlastingWeight = () => {
+    const shotItem = lineItems.find((item: any) => {
+      const proc = processMapObj[item.process_id];
+      const name = (proc && proc.name) || "";
+      return /shot/i.test(name);
+    });
+    return Number(shotItem?.quantity) || 0;
+  };
+
+  const handleFreightChange = (field: string, value: any) => {
+    setFreightItem((prev: any) => {
+      const updated = { ...prev, [field]: value };
+      if (field === "process_id") {
+        updated.quantity = getShotBlastingWeight();
+        updated.rate = getCompanyRate(undefined, value);
+      }
+      if (field === "process_id" || field === "quantity" || field === "rate") {
+        updated.amount = Number((Number(updated.quantity || 0) * Number(updated.rate || 0)).toFixed(2));
+      }
+      return updated;
+    });
+  };
+
+  const handleToggleFreight = () => {
+    if (freightOpen) {
+      setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
+    }
+    setFreightOpen((prev) => !prev);
   };
 
   const handleOutwardSelect = (out: any) => {
@@ -824,12 +908,14 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const subtotalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const freightAmount = Number(freightItem.amount) || 0;
+  const taxableBase = subtotalAmount + freightAmount;
 
-  const cgstAmount = Number(((subtotalAmount * cgstPercent) / 100).toFixed(2));
-  const sgstAmount = Number(((subtotalAmount * sgstPercent) / 100).toFixed(2));
+  const cgstAmount = Number(((taxableBase * cgstPercent) / 100).toFixed(2));
+  const sgstAmount = Number(((taxableBase * sgstPercent) / 100).toFixed(2));
   const totalGstAmount = Number((cgstAmount + sgstAmount).toFixed(2));
 
-  const unroundedTotal = subtotalAmount + totalGstAmount;
+  const unroundedTotal = taxableBase + totalGstAmount;
   const netAmount = enableRoundOff ? Math.round(unroundedTotal) : Number(unroundedTotal.toFixed(2));
   const roundOffAmount = Number((netAmount - unroundedTotal).toFixed(2));
 
@@ -873,10 +959,27 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             amount: editing.amount || ""
           }]);
         }
+
+        let parsedFreight: any[] = [];
+        if (typeof editing.freight_items === "string") {
+          try { parsedFreight = JSON.parse(editing.freight_items); } catch (e) {}
+        } else if (Array.isArray(editing.freight_items)) {
+          parsedFreight = editing.freight_items;
+        }
+        if (parsedFreight && parsedFreight.length > 0) {
+          setFreightItem({ ...parsedFreight[0] });
+          setFreightOpen(true);
+        } else {
+          setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
+          setFreightOpen(false);
+        }
+
         reset(editing);
       } else {
         setSelectedOutwards([]);
         setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+        setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
+        setFreightOpen(false);
         reset({
           bill_no: "",
           bill_date: today,
@@ -924,7 +1027,13 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           rate: Number(item.rate) || 0,
           amount: Number(item.amount) || 0
         })),
-        outward_ids: selectedOutwards.map((o) => o.id)
+        outward_ids: selectedOutwards.map((o) => o.id),
+        freight_items: freightItem.process_id ? [{
+          process_id: Number(freightItem.process_id),
+          quantity: Number(freightItem.quantity) || 0,
+          rate: Number(freightItem.rate) || 0,
+          amount: Number(freightItem.amount) || 0
+        }] : []
       };
       return editing
         ? api.put(`/labour-bills/${editing.id}?fy=${activeFY}`, payload)
@@ -1105,14 +1214,91 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                 <Button size="small" variant="text" startIcon={<Add />} sx={{ mt: 1, textTransform: "none", color: "#023020", fontWeight: 600 }} onClick={handleAddLineItem}>
                   Add Item Row
                 </Button>
+                {!freightOpen && (
+                  <Button size="small" variant="outlined" startIcon={<Add />} sx={{ ml: 1, mt: 1, textTransform: "none", color: "#023020", borderColor: "#023020", fontWeight: 600 }} onClick={handleToggleFreight}>
+                    Add Freight Section
+                  </Button>
+                )}
               </Grid>
+
+              {freightOpen && (
+                <Grid size={{ xs: 12 }}>
+                  <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+                    Freight / Other Charges
+                  </Typography>
+                  <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
+                    <Table size="small">
+                      <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                        <TableRow>
+                          <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
+                          <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Weight (kg) *</TableCell>
+                          <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Rate *</TableCell>
+                          <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
+                          <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>
+                            <LazyAutocomplete
+                              size="small"
+                              value={processMapObj[freightItem.process_id] || null}
+                              onChange={(_, val) => handleFreightChange("process_id", val ? val.id : "")}
+                              options={processes.filter((p: any) =>
+                                (p.is_active || p.id === Number(freightItem.process_id)) &&
+                                (p.process_ids || (p.process_code && p.process_code.includes(" / ")))
+                              )}
+                              getOptionLabel={(option: any) => option.name || ""}
+                              noOptionsText="No matching processes"
+                              renderInput={(params) => <TextField {...params} required={!freightItem.process_id} />}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={freightItem.quantity}
+                              onChange={(e) => handleFreightChange("quantity", e.target.value)}
+                              slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              required
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={freightItem.rate}
+                              onChange={(e) => handleFreightChange("rate", e.target.value)}
+                              slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              required
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              ₹{formatAmount(freightItem.amount)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <IconButton size="small" color="error" onClick={handleToggleFreight}>
+                              <RemoveCircle fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </Paper>
+                </Grid>
+              )}
 
               {/* Subtotals & Taxes & Round Off */}
               <Grid size={{ xs: 12 }}>
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f8fafc", borderRadius: "8px" }}>
                   <Grid container spacing={2} sx={{ alignItems: "center" }}>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 12, sm: 2 }}>
                       <TextField label="Taxable Subtotal" type="number" fullWidth size="small" value={subtotalAmount} slotProps={{ input: { readOnly: true } }} />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 2 }}>
+                      <TextField label="Freight" type="number" fullWidth size="small" value={freightAmount} slotProps={{ input: { readOnly: true } }} />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 2 }}>
                       <TextField {...register("gst_percent")} label="GST %" type="number" fullWidth size="small" slotProps={{ htmlInput: { step: "any" } }} />
@@ -1123,7 +1309,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                     <Grid size={{ xs: 6, sm: 2 }}>
                       <TextField label={`SGST (${sgstPercent}%)`} type="number" fullWidth size="small" value={sgstAmount} slotProps={{ input: { readOnly: true } }} />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
+                    <Grid size={{ xs: 6, sm: 2 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <TextField label="Round Off" type="number" fullWidth size="small" value={roundOffAmount} slotProps={{ input: { readOnly: true } }} />
                         <FormControlLabel

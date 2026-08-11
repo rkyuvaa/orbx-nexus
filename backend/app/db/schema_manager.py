@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS {schema}.labour_bills (
     narration TEXT,
     is_paid BOOLEAN DEFAULT FALSE,
     payment_date DATE,
+    freight_items JSONB DEFAULT '[]'::jsonb,
     created_by INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -304,6 +305,7 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS sgst_amount NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS round_off NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS net_amount NUMERIC(15,2) DEFAULT 0;
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS freight_items JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS to_location_id INTEGER;
