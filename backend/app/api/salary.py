@@ -139,3 +139,23 @@ async def delete_advance(
     vid: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     await db.execute(text(f"DELETE FROM {s(fy)}.advance_payments WHERE id = :id"), {"id": vid})
+
+
+@router.delete("/advances", status_code=200)
+async def delete_all_advances(
+    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
+    ledger_type: Optional[str] = None, payment_type: Optional[str] = None
+):
+    schema = s(fy)
+    conds = ["1=1"]
+    params: dict = {}
+    if ledger_type:
+        conds.append("ledger_type = :lt")
+        params["lt"] = ledger_type
+    if payment_type:
+        conds.append("payment_type = :pt")
+        params["pt"] = payment_type
+    result = await db.execute(
+        text(f"DELETE FROM {schema}.advance_payments WHERE {' AND '.join(conds)}"), params
+    )
+    return {"deleted": result.rowcount}
