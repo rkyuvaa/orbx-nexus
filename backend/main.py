@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
             await ensure_year_schema(fy["year_str"], engine)
             print(f"[OK] Schema fy_{fy['year_str']} ready")
             async with engine.begin() as conn:
-                for col in ("items JSONB DEFAULT '[]'::jsonb", "outward_ids JSONB DEFAULT '[]'::jsonb", "dispatch_through VARCHAR(255)"):
+                for col in ("items JSONB DEFAULT '[]'::jsonb", "outward_ids JSONB DEFAULT '[]'::jsonb", "dispatch_through VARCHAR(255)", "transport_amount NUMERIC(15,2) DEFAULT 0"):
                     await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.labour_bills ADD COLUMN IF NOT EXISTS {col}"))
                 await conn.execute(
                     text(

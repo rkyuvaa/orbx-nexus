@@ -380,6 +380,12 @@ export default function LabourBillPage() {
                 <span>Taxable Subtotal:</span>
                 <span>₹${formatAmount(row.amount)}</span>
               </div>
+              ${Number(row.transport_amount || 0) > 0 ? `
+                <div class="calculation-row">
+                  <span>Transport:</span>
+                  <span>₹${formatAmount(row.transport_amount)}</span>
+                </div>
+              ` : ""}
               <div class="calculation-row">
                 <span>CGST (${cgstP}%):</span>
                 <span>₹${formatAmount(cgstAmt)}</span>
@@ -646,7 +652,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const today = new Date().toISOString().split("T")[0];
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
-    defaultValues: { bill_no: "", bill_date: today, ledger_id: "", gst_percent: "" as any, narration: "", dispatch_through: "" },
+    defaultValues: { bill_no: "", bill_date: today, ledger_id: "", gst_percent: "" as any, narration: "", dispatch_through: "", transport_amount: 0 },
   });
 
   const selectedLedger = watch("ledger_id");
@@ -825,11 +831,14 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const subtotalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-  const cgstAmount = Number(((subtotalAmount * cgstPercent) / 100).toFixed(2));
-  const sgstAmount = Number(((subtotalAmount * sgstPercent) / 100).toFixed(2));
+  const transportAmount = Number(watch("transport_amount")) || 0;
+  const taxableBase = Number((subtotalAmount + transportAmount).toFixed(2));
+
+  const cgstAmount = Number(((taxableBase * cgstPercent) / 100).toFixed(2));
+  const sgstAmount = Number(((taxableBase * sgstPercent) / 100).toFixed(2));
   const totalGstAmount = Number((cgstAmount + sgstAmount).toFixed(2));
 
-  const unroundedTotal = subtotalAmount + totalGstAmount;
+  const unroundedTotal = taxableBase + totalGstAmount;
   const netAmount = enableRoundOff ? Math.round(unroundedTotal) : Number(unroundedTotal.toFixed(2));
   const roundOffAmount = Number((netAmount - unroundedTotal).toFixed(2));
 
@@ -883,7 +892,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           ledger_id: "",
           gst_percent: "" as any,
           narration: "",
-          dispatch_through: ""
+          dispatch_through: "",
+          transport_amount: 0
         });
         api.get("/sequences/preview/labour_bill")
           .then((res) => {
@@ -913,6 +923,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         sgst_percent: sgstPercent,
         sgst_amount: sgstAmount,
         round_off: roundOffAmount,
+        transport_amount: transportAmount,
         net_amount: netAmount,
         total_amount: netAmount,
         narration: formData.narration || null,
@@ -981,7 +992,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
               <Grid size={{ xs: 6, sm: 2 }}>
                 <TextField {...register("bill_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
-              <Grid size={{ xs: 12, sm: 5 }}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <LazyAutocomplete
                   size="small"
                   value={ledgerMapObj[watch("ledger_id")] || null}
@@ -992,8 +1003,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                   renderInput={(params) => <TextField {...params} label="Supplier *" required={!watch("ledger_id")} />}
                 />
               </Grid>
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <TextField {...register("dispatch_through")} label="Dispatch Through" fullWidth size="small" placeholder="Transport details" />
+              <Grid size={{ xs: 12, sm: 2 }}>
+                <TextField {...register("dispatch_through")} label="Dispatch" fullWidth size="small" placeholder="Transport details" />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 2 }}>
+                <TextField {...register("transport_amount")} label="Transport ₹" type="number" fullWidth size="small" slotProps={{ htmlInput: { step: "any", min: 0 } }} />
               </Grid>
 
               {/* Linked Outward Vouchers */}
@@ -1111,8 +1125,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
               <Grid size={{ xs: 12 }}>
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f8fafc", borderRadius: "8px" }}>
                   <Grid container spacing={2} sx={{ alignItems: "center" }}>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 6, sm: 2 }}>
                       <TextField label="Taxable Subtotal" type="number" fullWidth size="small" value={subtotalAmount} slotProps={{ input: { readOnly: true } }} />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 2 }}>
+                      <TextField label="Transport" type="number" fullWidth size="small" value={transportAmount} slotProps={{ input: { readOnly: true } }} />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 2 }}>
                       <TextField {...register("gst_percent")} label="GST %" type="number" fullWidth size="small" slotProps={{ htmlInput: { step: "any" } }} />
@@ -1123,7 +1140,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                     <Grid size={{ xs: 6, sm: 2 }}>
                       <TextField label={`SGST (${sgstPercent}%)`} type="number" fullWidth size="small" value={sgstAmount} slotProps={{ input: { readOnly: true } }} />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
+                    <Grid size={{ xs: 6, sm: 2 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <TextField label="Round Off" type="number" fullWidth size="small" value={roundOffAmount} slotProps={{ input: { readOnly: true } }} />
                         <FormControlLabel

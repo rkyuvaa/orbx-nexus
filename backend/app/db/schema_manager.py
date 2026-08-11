@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS {schema}.labour_bills (
     sgst_percent NUMERIC(5,2) DEFAULT 0,
     sgst_amount NUMERIC(15,2) DEFAULT 0,
     round_off NUMERIC(15,2) DEFAULT 0,
+    transport_amount NUMERIC(15,2) DEFAULT 0,
     net_amount NUMERIC(15,2) DEFAULT 0,
     total_amount NUMERIC(15,2) DEFAULT 0,
     narration TEXT,
@@ -303,6 +304,7 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS sgst_percent NUMERIC(5,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS sgst_amount NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS round_off NUMERIC(15,2) DEFAULT 0;
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS transport_amount NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS net_amount NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;

@@ -68,6 +68,7 @@ async def flush_all_data():
                 "items JSONB DEFAULT '[]'::jsonb",
                 "outward_ids JSONB DEFAULT '[]'::jsonb",
                 "dispatch_through VARCHAR(255)",
+                "transport_amount NUMERIC(15,2) DEFAULT 0",
             ):
                 await conn.execute(
                     text(f"ALTER TABLE fy_{fy['year_str']}.labour_bills ADD COLUMN IF NOT EXISTS {col}")
