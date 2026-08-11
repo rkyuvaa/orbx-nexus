@@ -345,7 +345,6 @@ export default function LabourBillPage() {
       }).join("");
       freightHtml = `
         <div style="margin: 14px 0 8px 0; text-align: right;">
-          <div style="font-size: 12px; font-weight: 700; color: #0f5132; letter-spacing: 0.5px; margin-bottom: 2px;">FREIGHT / OTHER CHARGES</div>
           ${freightRows}
         </div>
       `;
@@ -411,12 +410,6 @@ export default function LabourBillPage() {
                 <span>Taxable Subtotal:</span>
                 <span>₹${formatAmount(row.amount)}</span>
               </div>
-              ${freightAmount > 0 ? `
-                <div class="calculation-row">
-                  <span>Freight:</span>
-                  <span>₹${formatAmount(freightAmount)}</span>
-                </div>
-              ` : ""}
               <div class="calculation-row">
                 <span>CGST (${cgstP}%):</span>
                 <span>₹${formatAmount(cgstAmt)}</span>
