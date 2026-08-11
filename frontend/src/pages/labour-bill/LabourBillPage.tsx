@@ -336,17 +336,22 @@ export default function LabourBillPage() {
       const freightRows = freightArray.map((f) => {
         const prName = resolveProcessName(f.process_id, processes) || "-";
         return `
-          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 14px; padding: 3px 0;">
-            <span style="font-weight: 600; color: #0f5132;">${prName}</span>
-            <span style="text-align: right; white-space: nowrap;">${formatWeight(f.quantity)} kg × ₹${formatAmount(f.rate)}</span>
-            <span style="text-align: right; font-weight: 700; min-width: 90px; white-space: nowrap;">₹${formatAmount(f.amount)}</span>
-          </div>
+          <tr>
+            <td style="width: 50px; text-align: center;"></td>
+            <td style="font-weight: 600; color: #0f5132;">${prName}</td>
+            <td style="text-align: right; width: 110px;">${formatWeight(f.quantity)}</td>
+            <td style="text-align: center; width: 80px;">KG</td>
+            <td style="text-align: right; width: 100px;">₹${formatAmount(f.rate)}</td>
+            <td style="text-align: right; width: 120px; font-weight: 700;">₹${formatAmount(f.amount)}</td>
+          </tr>
         `;
       }).join("");
       freightHtml = `
-        <div style="margin: 14px 0 8px 0; text-align: right;">
-          ${freightRows}
-        </div>
+        <table class="items-table">
+          <tbody>
+            ${freightRows}
+          </tbody>
+        </table>
       `;
     }
 
