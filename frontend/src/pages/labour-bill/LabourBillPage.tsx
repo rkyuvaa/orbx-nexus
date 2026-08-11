@@ -12,6 +12,7 @@ import Delete from "@mui/icons-material/Delete";
 import Refresh from "@mui/icons-material/Refresh";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Print from "@mui/icons-material/Print";
+import Description from "@mui/icons-material/Description";
 import RemoveCircle from "@mui/icons-material/RemoveCircle";
 import { useForm } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
@@ -474,6 +475,584 @@ export default function LabourBillPage() {
     printWindow.document.close();
   };
 
+  const handlePrintLabourWorkDetails = (row: any) => {
+
+    const printWindow = window.open("", "_blank");
+
+    if (!printWindow) return;
+
+
+
+    // Load custom configuration
+
+    const savedConfig = localStorage.getItem("orbx_print_config");
+
+    let printConfig = {
+
+      showLogo: true,
+
+      billPaperSize: "A4",
+
+    };
+
+    if (savedConfig) {
+
+      try {
+
+        printConfig = { ...printConfig, ...JSON.parse(savedConfig) };
+
+      } catch (e) {}
+
+    }
+
+
+
+    const logoBase64 = localStorage.getItem("company_logo");
+
+    const logoHtml = (printConfig.showLogo && logoBase64)
+
+      ? `<img src="${logoBase64}" />`
+
+      : "";
+
+
+
+    // Company details
+
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+
+    const cName = compData?.name || "SRI METAL";
+
+    const cAddress1 = compData?.address || "";
+
+    const cAddress2 = "";
+
+    const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
+
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+
+    const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
+
+    const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+
+
+
+    const dateStr = new Date(row.bill_date).toLocaleDateString("en-IN", {
+
+      day: "2-digit",
+
+      month: "2-digit",
+
+      year: "numeric"
+
+    }).replace(/\//g, "-");
+
+
+
+    const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
+
+    const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
+
+    const supplierAddr1 = supplierLedger?.address || [supplierLedger?.address_line1, supplierLedger?.address_line2].filter(Boolean).join(", ") || "";
+
+    const supplierCityStatePin = [supplierLedger?.city, supplierLedger?.state, supplierLedger?.pincode].filter(Boolean).join(" - ");
+
+    const supplierPhone = supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "";
+
+    const supplierGstin = supplierLedger?.gstin || "";
+
+
+
+    const parseJsonArray = (x: any): any[] => {
+
+      if (typeof x === "string") {
+
+        try { return JSON.parse(x); } catch (e) { return []; }
+
+      }
+
+      return Array.isArray(x) ? x : [];
+
+    };
+
+
+
+    const toDateStr = (val: any): string => {
+
+      if (!val) return "-";
+
+      try {
+
+        return new Date(val).toLocaleDateString("en-IN", {
+
+          day: "2-digit",
+
+          month: "2-digit",
+
+          year: "numeric"
+
+        }).replace(/\//g, "-");
+
+      } catch (e) { return "-"; }
+
+    };
+
+
+
+    // Resolve linked outward vouchers
+
+    const outwardIds = parseJsonArray(row.outward_ids);
+
+    const linkedOutwards = outwardIds
+
+      .map((id: number) => outwardVouchers.find((v: any) => v.id === id))
+
+      .filter(Boolean);
+
+
+
+    // Resolve linked inward vouchers: bill's own inward_id + every inward referenced by linked outwards
+
+    const inwardIdSet = new Set<number | string>();
+
+    if (row.inward_id !== undefined && row.inward_id !== null) inwardIdSet.add(row.inward_id);
+
+    linkedOutwards.forEach((out: any) => {
+
+      const outInwardIds = out.inward_ids
+
+        ? parseJsonArray(out.inward_ids)
+
+        : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
+
+      outInwardIds.forEach((inwId: number | string) => inwardIdSet.add(inwId));
+
+    });
+
+    const linkedInwards = Array.from(inwardIdSet)
+
+      .map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id)))
+
+      .filter(Boolean);
+
+
+
+    // Build INWARD rows (one row per items line, header fallback when items is empty)
+
+    const inwardRows: any[] = [];
+
+    linkedInwards.forEach((inv: any) => {
+
+      const invItems = parseJsonArray(inv.items);
+
+      const invRef = inv.ref_no || inv.serial_no || "-";
+
+      if (invItems.length === 0) {
+
+        inwardRows.push({
+
+          inward_no: inv.inward_no,
+
+          ref: invRef,
+
+          inward_date: inv.inward_date,
+
+          productName: products.find((p: any) => p.id === Number(inv.product_id))?.name || `Product #${inv.product_id}`,
+
+          quantity: inv.quantity || 0,
+
+          weight: inv.total_weight || inv.weight || 0,
+
+        });
+
+      } else {
+
+        invItems.forEach((item: any) => {
+
+          inwardRows.push({
+
+            inward_no: inv.inward_no,
+
+            ref: invRef,
+
+            inward_date: inv.inward_date,
+
+            productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+
+            quantity: item.quantity || 0,
+
+            weight: item.total_weight || item.weight || 0,
+
+          });
+
+        });
+
+      }
+
+    });
+
+
+
+    // Build OUTWARD rows (one row per items line, header fallback when items is empty)
+
+    const outwardRows: any[] = [];
+
+    linkedOutwards.forEach((out: any) => {
+
+      const outItems = parseJsonArray(out.items);
+
+      if (outItems.length === 0) {
+
+        outwardRows.push({
+
+          outward_no: out.outward_no,
+
+          outward_date: out.outward_date,
+
+          productName: products.find((p: any) => p.id === Number(out.product_id))?.name || `Product #${out.product_id}`,
+
+          processName: resolveProcessName(out.process_id, processes) || "-",
+
+          quantity: out.quantity || 0,
+
+          weight: out.total_weight || out.weight || 0,
+
+        });
+
+      } else {
+
+        outItems.forEach((item: any) => {
+
+          outwardRows.push({
+
+            outward_no: out.outward_no,
+
+            outward_date: out.outward_date,
+
+            productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+
+            processName: resolveProcessName(item.process_id || out.process_id, processes) || "-",
+
+            quantity: item.quantity || 0,
+
+            weight: item.total_weight || item.weight || 0,
+
+          });
+
+        });
+
+      }
+
+    });
+
+
+
+    const inwardTotalQty = inwardRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+
+    const inwardTotalWeight = inwardRows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+
+    const outwardTotalQty = outwardRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+
+    const outwardTotalWeight = outwardRows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+
+
+
+    let inwardRowsHtml = "";
+
+    if (inwardRows.length === 0) {
+
+      inwardRowsHtml = `<tr><td colspan="7" style="text-align: center; padding: 12px;">No linked inward vouchers</td></tr>`;
+
+    } else {
+
+      inwardRows.forEach((r, idx) => {
+
+        inwardRowsHtml += `
+
+          <tr>
+
+            <td style="text-align: center;">${idx + 1}</td>
+
+            <td style="font-weight: 600; white-space: nowrap;">${r.inward_no || "-"}</td>
+
+            <td style="white-space: nowrap;">${r.ref}</td>
+
+            <td style="white-space: nowrap;">${toDateStr(r.inward_date)}</td>
+
+            <td style="font-weight: 600;">${r.productName}</td>
+
+            <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
+
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.weight)} kg</td>
+
+          </tr>`;
+
+      });
+
+      inwardRowsHtml += `
+
+          <tr class="total-row">
+
+            <td colspan="5" style="text-align: right;">Total</td>
+
+            <td style="text-align: right;">${formatQty(inwardTotalQty)}</td>
+
+            <td style="text-align: right; font-weight: 700;">${formatWeight(inwardTotalWeight)} kg</td>
+
+          </tr>`;
+
+    }
+
+
+
+    let outwardRowsHtml = "";
+
+    if (outwardRows.length === 0) {
+
+      outwardRowsHtml = `<tr><td colspan="7" style="text-align: center; padding: 12px;">No linked outward vouchers</td></tr>`;
+
+    } else {
+
+      outwardRows.forEach((r, idx) => {
+
+        outwardRowsHtml += `
+
+          <tr>
+
+            <td style="text-align: center;">${idx + 1}</td>
+
+            <td style="font-weight: 600; white-space: nowrap;">${r.outward_no || "-"}</td>
+
+            <td style="white-space: nowrap;">${toDateStr(r.outward_date)}</td>
+
+            <td style="font-weight: 600;">${r.productName}</td>
+
+            <td style="white-space: nowrap;">${r.processName}</td>
+
+            <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
+
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.weight)} kg</td>
+
+          </tr>`;
+
+      });
+
+      outwardRowsHtml += `
+
+          <tr class="total-row">
+
+            <td colspan="5" style="text-align: right;">Total</td>
+
+            <td style="text-align: right;">${formatQty(outwardTotalQty)}</td>
+
+            <td style="text-align: right; font-weight: 700;">${formatWeight(outwardTotalWeight)} kg</td>
+
+          </tr>`;
+
+    }
+
+
+
+    const hasBothSections = inwardRows.length > 0 && outwardRows.length > 0;
+
+    const pageBreakHint = (printConfig.billPaperSize === "A5" && hasBothSections)
+      ? " page-break-before: always;"
+      : "";
+
+
+
+    printWindow.document.write(`
+
+      <!DOCTYPE html>
+
+      <html>
+
+        <head>
+
+          <title>Print Work Details - ${row.bill_no}</title>
+
+          <style>
+
+            @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 15mm; }
+
+            ${COMMON_PRINT_CSS}
+
+          </style>
+
+        </head>
+
+        <body>
+
+          <div class="header-container">
+
+            <div class="logo-wrapper">${logoHtml}</div>
+
+            <div class="company-details">
+
+              <h1>${cName}</h1>
+
+              ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
+
+              ${cAddress2 ? `<p>${cAddress2}</p>` : ""}
+
+              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+
+              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+
+              ${cTax ? `<p class="gstin">GSTIN: ${cTax}</p>` : ""}
+
+            </div>
+
+          </div>
+
+          <div class="title-section">
+
+            <h2>WORK DETAILS</h2>
+
+            <div class="doc-no">Bill No: ${row.bill_no}</div>
+
+            <div class="doc-date">Date: ${dateStr}</div>
+
+          </div>
+
+          <div class="address-section">
+
+            <div class="address-column" style="width: 100%;">
+
+              <h3>SUPPLIER DETAILS:</h3>
+
+              <div class="name">${supplierName}</div>
+
+              ${supplierAddr1 ? `<div class="address-lines">${supplierAddr1}</div>` : ""}
+
+              ${supplierCityStatePin ? `<div class="address-lines">${supplierCityStatePin}</div>` : ""}
+
+              ${supplierPhone ? `<div class="address-lines">${supplierPhone}</div>` : ""}
+
+              ${supplierGstin ? `<div class="gstin">GSTIN: ${supplierGstin}</div>` : ""}
+
+            </div>
+
+          </div>
+
+          <div class="title-section" style="align-items: flex-start;">
+
+            <h2 style="font-size: 14px;">INWARD DETAILS</h2>
+
+          </div>
+
+          <table class="items-table">
+
+            <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+
+              <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+
+                <th style="width: 40px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD NO</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">REF NO</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD DATE</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
+
+                <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
+
+                <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${inwardRowsHtml}
+
+            </tbody>
+
+          </table>
+
+          <div class="title-section" style="align-items: flex-start;${pageBreakHint}">
+
+            <h2 style="font-size: 14px;">OUTWARD DETAILS</h2>
+
+          </div>
+
+          <table class="items-table">
+
+            <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+
+              <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+
+                <th style="width: 40px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD NO</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">DATE</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
+
+                <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
+
+                <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${outwardRowsHtml}
+
+            </tbody>
+
+          </table>
+
+          <div class="signatures-container">
+
+            <div class="signature-block">
+
+              <div class="signature-line"></div>
+
+              <div class="signature-label">Prepared By</div>
+
+            </div>
+
+            <div class="signature-block">
+
+              <div class="signature-line"></div>
+
+              <div class="signature-label">Authorized Signatory for ${cName}</div>
+
+            </div>
+
+          </div>
+
+          <script>
+
+            window.onload = function() {
+
+              window.print();
+
+              setTimeout(function() { window.close(); }, 500);
+
+            };
+
+          </script>
+
+        </body>
+
+      </html>
+
+    `);
+
+    printWindow.document.close();
+
+  };
+
   const colDefs: ColDef[] = [
     { field: "bill_no", headerName: "Bill No.", width: 110 },
     { field: "bill_date", headerName: "Date", width: 95 },
@@ -481,8 +1060,9 @@ export default function LabourBillPage() {
     { field: "quantity", headerName: "Weight", width: 80, type: "numericColumn", valueFormatter: (p) => formatWeight(p.value) },
     { field: "total_amount", headerName: "Total Amount", width: 130, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value || p.data?.net_amount)}` },
     { field: "is_paid", headerName: "Status", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Paid" : "Pending"} color={p.value ? "success" : "warning"} /> },
-    { headerName: "Actions", width: 160, sortable: false, filter: false, cellRenderer: (p: any) => (
+    { headerName: "Actions", width: 200, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
+        <Tooltip title="Work Details"><IconButton size="small" onClick={() => handlePrintLabourWorkDetails(p.data)}><Description fontSize="small" /></IconButton></Tooltip>
         <Tooltip title="Print Bill"><IconButton size="small" onClick={() => handlePrintLabourBill(p.data)}><Print fontSize="small" /></IconButton></Tooltip>
         {!p.data.is_paid && <Tooltip title="Mark Paid"><IconButton size="small" color="success" onClick={() => markPaidMutation.mutate(p.data.id)}><CheckCircle fontSize="small" /></IconButton></Tooltip>}
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
