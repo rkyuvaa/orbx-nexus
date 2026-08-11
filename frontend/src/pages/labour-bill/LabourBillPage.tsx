@@ -645,34 +645,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const generateNextBillNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        const prefix = config.billPrefix || "LBL/";
-        const suffix = config.billSuffix || "";
-        const nextNo = config.billNextNo || 1;
-        const padding = config.billPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
-      } catch (e) {}
-    }
-    return `LBL/${String(1).padStart(4, "0")}`;
-  };
-
-  const incrementBillNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        if (config.billNextNo !== undefined) {
-          config.billNextNo = Number(config.billNextNo) + 1;
-          localStorage.setItem("orbx_print_config", JSON.stringify(config));
-        }
-      } catch (e) {}
-    }
-  };
-
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: { bill_no: "", bill_date: today, ledger_id: "", gst_percent: "" as any, narration: "", dispatch_through: "" },
   });
@@ -959,7 +931,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         : api.post(`/labour-bills/?fy=${activeFY}`, payload);
     },
     onSuccess: () => {
-      if (!editing) incrementBillNo();
       qc.invalidateQueries({ queryKey: ["labour-bills"] });
       onClose();
     },

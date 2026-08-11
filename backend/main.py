@@ -134,6 +134,7 @@ async def lifespan(app: FastAPI):
             {"document_type": "staff_advance_payment", "prefix": "SAP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "staff_advance_receipt", "prefix": "SAR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "salary_voucher", "prefix": "SAL-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "stock_adjustment", "prefix": "ADJ-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
         ]
         for seq in default_sequences:
             result = await db.execute(

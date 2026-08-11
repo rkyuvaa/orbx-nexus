@@ -437,6 +437,8 @@ async def create_adjustment(
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     s = _schema(fy)
+    from app.services.sequences import generate_and_increment_sequence
+    adjustment_no = await generate_and_increment_sequence(db, "stock_adjustment")
     result = await db.execute(
         text(
             f"INSERT INTO {s}.stock_adjustments "
@@ -444,7 +446,7 @@ async def create_adjustment(
             f"VALUES (:ano, :adate, :pid, :qty, :reason, :cby) RETURNING id"
         ),
         {
-            "ano": body.adjustment_no, "adate": body.adjustment_date,
+            "ano": adjustment_no, "adate": body.adjustment_date,
             "pid": body.product_id, "qty": body.quantity,
             "reason": body.reason, "cby": current_user.id
         },

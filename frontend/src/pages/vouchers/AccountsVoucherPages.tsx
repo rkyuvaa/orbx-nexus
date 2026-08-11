@@ -43,34 +43,6 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     return map;
   }, [ledgers]);
 
-  const generateNextVoucherNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        const prefix = config.voucherPrefix || "VCH/";
-        const suffix = config.voucherSuffix || "";
-        const nextNo = config.voucherNextNo || 1;
-        const padding = config.voucherPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
-      } catch (e) {}
-    }
-    return `VCH/${String(1).padStart(4, "0")}`;
-  };
-
-  const incrementVoucherNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        if (config.voucherNextNo !== undefined) {
-          config.voucherNextNo = Number(config.voucherNextNo) + 1;
-          localStorage.setItem("orbx_print_config", JSON.stringify(config));
-        }
-      } catch (e) {}
-    }
-  };
-
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/vouchers/${id}?fy=${activeFY}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
@@ -297,8 +269,6 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
         open={open}
         onClose={() => setOpen(false)}
         voucherType={voucherType}
-        generateNextVoucherNo={generateNextVoucherNo}
-        incrementVoucherNo={incrementVoucherNo}
       />
     </Box>
   );
@@ -308,11 +278,9 @@ interface AccountsVoucherDialogProps {
   open: boolean;
   onClose: () => void;
   voucherType: string;
-  generateNextVoucherNo: () => string;
-  incrementVoucherNo: () => void;
 }
 
-function AccountsVoucherDialog({ open, onClose, voucherType, generateNextVoucherNo, incrementVoucherNo }: AccountsVoucherDialogProps) {
+function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
   const [lines, setLines] = useState<VoucherLine[]>([{ ledger_id: "", dr_amount: 0, cr_amount: 0, narration: "" }]);
@@ -360,7 +328,6 @@ function AccountsVoucherDialog({ open, onClose, voucherType, generateNextVoucher
   const saveMutation = useMutation({
     mutationFn: (data: any) => api.post(`/vouchers/?fy=${activeFY}`, { ...data, voucher_type: voucherType, lines }),
     onSuccess: () => {
-      incrementVoucherNo();
       qc.invalidateQueries({ queryKey: ["vouchers"] });
       onClose();
     },

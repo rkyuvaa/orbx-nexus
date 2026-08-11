@@ -14,26 +14,6 @@ interface PrintConfig {
   reportPaperSize: "A4" | "A5";
   gridPaperSize: "A4" | "A5";
 
-  voucherPrefix: string;
-  voucherSuffix: string;
-  voucherNextNo: number;
-  voucherPadding: number;
-
-  inwardPrefix: string;
-  inwardSuffix: string;
-  inwardNextNo: number;
-  inwardPadding: number;
-
-  outwardPrefix: string;
-  outwardSuffix: string;
-  outwardNextNo: number;
-  outwardPadding: number;
-
-  billPrefix: string;
-  billSuffix: string;
-  billNextNo: number;
-  billPadding: number;
-
   voucherTitle: string;
   voucherTerms: string;
   inwardTitle: string;
@@ -42,11 +22,6 @@ interface PrintConfig {
   outwardTerms: string;
   billTitle: string;
   billTerms: string;
-
-  adjustmentPrefix: string;
-  adjustmentSuffix: string;
-  adjustmentNextNo: number;
-  adjustmentPadding: number;
 }
 
 const DEFAULTS: PrintConfig = {
@@ -59,26 +34,6 @@ const DEFAULTS: PrintConfig = {
   reportPaperSize: "A4",
   gridPaperSize: "A4",
 
-  voucherPrefix: "VCH/",
-  voucherSuffix: "/26-27",
-  voucherNextNo: 1,
-  voucherPadding: 4,
-
-  inwardPrefix: "INW/",
-  inwardSuffix: "",
-  inwardNextNo: 1,
-  inwardPadding: 4,
-
-  outwardPrefix: "OUT/",
-  outwardSuffix: "",
-  outwardNextNo: 1,
-  outwardPadding: 4,
-
-  billPrefix: "LBL/",
-  billSuffix: "/26-27",
-  billNextNo: 1,
-  billPadding: 4,
-
   voucherTitle: "Voucher Receipt",
   voucherTerms: "1. Subject to local jurisdiction.\n2. This is a computer-generated voucher and requires no physical signature.",
   inwardTitle: "Inward Challan",
@@ -87,10 +42,6 @@ const DEFAULTS: PrintConfig = {
   outwardTerms: "1. Goods once sold/delivered cannot be taken back.\n2. Subject to company terms of carriage.",
   billTitle: "Labour Bill Invoice",
   billTerms: "1. Payment terms: Net 15 days.\n2. Interest @ 18% p.a. will be charged for delayed payments.",
-  adjustmentPrefix: "ADJ/",
-  adjustmentSuffix: "",
-  adjustmentNextNo: 1,
-  adjustmentPadding: 4,
 };
 
 export default function PrintConfigPage() {
@@ -122,12 +73,6 @@ export default function PrintConfigPage() {
       setConfig(DEFAULTS);
       localStorage.setItem("orbx_print_config", JSON.stringify(DEFAULTS));
     }
-  };
-
-  // Helper to preview numbering format live
-  const getPreview = (prefix: string, nextNo: number, padding: number, suffix: string) => {
-    const padded = String(nextNo).padStart(padding || 0, "0");
-    return `${prefix}${padded}${suffix}`;
   };
 
   return (
@@ -199,51 +144,6 @@ export default function PrintConfigPage() {
             />
           </Grid>
 
-          {/* Voucher Numbering */}
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Voucher Prefix"
-              value={config.voucherPrefix}
-              onChange={(e) => setConfig({ ...config, voucherPrefix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Next Number"
-              type="number"
-              value={config.voucherNextNo}
-              onChange={(e) => setConfig({ ...config, voucherNextNo: parseInt(e.target.value) || 1 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Padding Digits"
-              type="number"
-              value={config.voucherPadding}
-              onChange={(e) => setConfig({ ...config, voucherPadding: parseInt(e.target.value) || 0 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Voucher Suffix"
-              value={config.voucherSuffix}
-              onChange={(e) => setConfig({ ...config, voucherSuffix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }} sx={{ display: "flex", alignItems: "center" }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
-              Preview: <span style={{ color: "#023020", fontFamily: "monospace" }}>{getPreview(config.voucherPrefix, config.voucherNextNo, config.voucherPadding, config.voucherSuffix)}</span>
-            </Typography>
-          </Grid>
-
           {/* INWARD FORMAT */}
           <Grid size={{ xs: 12 }} sx={{ mt: 3 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#023020" }}>Inward Voucher configuration</Typography>
@@ -281,51 +181,6 @@ export default function PrintConfigPage() {
               rows={2}
               size="small"
             />
-          </Grid>
-
-          {/* Inward Numbering */}
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Inward Prefix"
-              value={config.inwardPrefix}
-              onChange={(e) => setConfig({ ...config, inwardPrefix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Next Number"
-              type="number"
-              value={config.inwardNextNo}
-              onChange={(e) => setConfig({ ...config, inwardNextNo: parseInt(e.target.value) || 1 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Padding Digits"
-              type="number"
-              value={config.inwardPadding}
-              onChange={(e) => setConfig({ ...config, inwardPadding: parseInt(e.target.value) || 0 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Inward Suffix"
-              value={config.inwardSuffix}
-              onChange={(e) => setConfig({ ...config, inwardSuffix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }} sx={{ display: "flex", alignItems: "center" }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
-              Preview: <span style={{ color: "#023020", fontFamily: "monospace" }}>{getPreview(config.inwardPrefix, config.inwardNextNo, config.inwardPadding, config.inwardSuffix)}</span>
-            </Typography>
           </Grid>
 
           {/* OUTWARD FORMAT */}
@@ -367,51 +222,6 @@ export default function PrintConfigPage() {
             />
           </Grid>
 
-          {/* Outward Numbering */}
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Outward Prefix"
-              value={config.outwardPrefix}
-              onChange={(e) => setConfig({ ...config, outwardPrefix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Next Number"
-              type="number"
-              value={config.outwardNextNo}
-              onChange={(e) => setConfig({ ...config, outwardNextNo: parseInt(e.target.value) || 1 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Padding Digits"
-              type="number"
-              value={config.outwardPadding}
-              onChange={(e) => setConfig({ ...config, outwardPadding: parseInt(e.target.value) || 0 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Outward Suffix"
-              value={config.outwardSuffix}
-              onChange={(e) => setConfig({ ...config, outwardSuffix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }} sx={{ display: "flex", alignItems: "center" }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
-              Preview: <span style={{ color: "#023020", fontFamily: "monospace" }}>{getPreview(config.outwardPrefix, config.outwardNextNo, config.outwardPadding, config.outwardSuffix)}</span>
-            </Typography>
-          </Grid>
-
           {/* LABOUR BILL FORMAT */}
           <Grid size={{ xs: 12 }} sx={{ mt: 3 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#023020" }}>Labour Bill configuration</Typography>
@@ -451,71 +261,6 @@ export default function PrintConfigPage() {
             />
           </Grid>
 
-          {/* Labour Bill Numbering */}
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Bill Prefix"
-              value={config.billPrefix}
-              onChange={(e) => setConfig({ ...config, billPrefix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField
-              label="Next Number"
-              type="number"
-              value={config.billNextNo}
-              onChange={(e) => setConfig({ ...config, billNextNo: parseInt(e.target.value) || 1 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Padding Digits"
-              type="number"
-              value={config.billPadding}
-              onChange={(e) => setConfig({ ...config, billPadding: parseInt(e.target.value) || 0 })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField
-              label="Bill Suffix"
-              value={config.billSuffix}
-              onChange={(e) => setConfig({ ...config, billSuffix: e.target.value })}
-              fullWidth
-              size="small"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }} sx={{ display: "flex", alignItems: "center" }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
-              Preview: <span style={{ color: "#023020", fontFamily: "monospace" }}>{getPreview(config.billPrefix, config.billNextNo, config.billPadding, config.billSuffix)}</span>
-            </Typography>
-          </Grid>
-          <Grid size={{ xs: 12 }} sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#023020" }}>Stock Adjustment Numbering</Typography>
-            <Divider sx={{ mb: 2 }} />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField label="Adj. Prefix" value={config.adjustmentPrefix} onChange={(e) => setConfig({ ...config, adjustmentPrefix: e.target.value })} fullWidth size="small" />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
-            <TextField label="Next Number" type="number" value={config.adjustmentNextNo} onChange={(e) => setConfig({ ...config, adjustmentNextNo: parseInt(e.target.value) || 1 })} fullWidth size="small" />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField label="Padding Digits" type="number" value={config.adjustmentPadding} onChange={(e) => setConfig({ ...config, adjustmentPadding: parseInt(e.target.value) || 0 })} fullWidth size="small" />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }}>
-            <TextField label="Adj. Suffix" value={config.adjustmentSuffix} onChange={(e) => setConfig({ ...config, adjustmentSuffix: e.target.value })} fullWidth size="small" />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 2 }} sx={{ display: "flex", alignItems: "center" }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
-              Preview: <span style={{ color: "#023020", fontFamily: "monospace" }}>{getPreview(config.adjustmentPrefix, config.adjustmentNextNo, config.adjustmentPadding, config.adjustmentSuffix)}</span>
-            </Typography>
-          </Grid>
           <Grid size={{ xs: 12 }} sx={{ mt: 3 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#023020" }}>Report & Grid Print Settings</Typography>
             <Divider sx={{ mb: 2 }} />

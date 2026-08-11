@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -38,34 +38,6 @@ export default function StockAdjustmentPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-adjustments"] }),
   });
 
-  const generateNextNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        const prefix = config.adjustmentPrefix || "ADJ/";
-        const suffix = config.adjustmentSuffix || "";
-        const nextNo = config.adjustmentNextNo || 1;
-        const padding = config.adjustmentPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
-      } catch (e) {}
-    }
-    return `ADJ/${String(1).padStart(4, "0")}`;
-  };
-
-  const incrementNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        if (config.adjustmentNextNo !== undefined) {
-          config.adjustmentNextNo = Number(config.adjustmentNextNo) + 1;
-          localStorage.setItem("orbx_print_config", JSON.stringify(config));
-        }
-      } catch (e) {}
-    }
-  };
-
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
       const payload = {
@@ -78,7 +50,6 @@ export default function StockAdjustmentPage() {
         : api.post(`/stock/adjustments?fy=${activeFY}`, payload);
     },
     onSuccess: () => {
-      if (!editing) incrementNo();
       qc.invalidateQueries({ queryKey: ["stock-adjustments"] });
       qc.invalidateQueries({ queryKey: ["report-stock-hand"] });
       handleClose();
@@ -134,15 +105,15 @@ export default function StockAdjustmentPage() {
         onAdd={() => handleOpen()}
         addLabel="New Adjustment"
       />
-      <AdjustmentDialog open={open} onClose={handleClose} editing={editing} products={products} saveMutation={saveMutation} generateNextNo={generateNextNo} />
+      <AdjustmentDialog open={open} onClose={handleClose} editing={editing} products={products} saveMutation={saveMutation} />
     </Box>
   );
 }
 
-function AdjustmentDialog({ open, onClose, editing, products, saveMutation, generateNextNo }: any) {
+function AdjustmentDialog({ open, onClose, editing, products, saveMutation }: any) {
   const today = new Date().toISOString().split("T")[0];
 
-  const { register, handleSubmit, reset, control } = useForm({
+  const { register, handleSubmit, reset, control, setValue } = useForm({
     defaultValues: {
       adjustment_no: "",
       adjustment_date: today,
@@ -151,6 +122,14 @@ function AdjustmentDialog({ open, onClose, editing, products, saveMutation, gene
       reason: "",
     },
   });
+
+  useEffect(() => {
+    if (open && !editing) {
+      api.get("/sequences/preview/stock_adjustment")
+        .then((res) => setValue("adjustment_no", res.data.next_no))
+        .catch((e) => console.error(e));
+    }
+  }, [open, editing, setValue]);
 
   const onSubmit = (data: any) => {
     if (!data.product_id) { alert("Please select a product."); return; }
@@ -162,7 +141,7 @@ function AdjustmentDialog({ open, onClose, editing, products, saveMutation, gene
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
       {...({ TransitionProps: { onEnter: () => {
           reset({
-            adjustment_no: editing?.adjustment_no || generateNextNo(),
+            adjustment_no: editing?.adjustment_no || "",
             adjustment_date: editing?.adjustment_date || today,
             product_id: editing?.product_id || "",
             quantity: editing?.quantity || "",

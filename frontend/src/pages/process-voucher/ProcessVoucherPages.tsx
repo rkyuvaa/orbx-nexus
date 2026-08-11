@@ -338,34 +338,6 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
   }, [ledgers]);
 
 
-  const generateNextInwardNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        const prefix = config.inwardPrefix || "INW/";
-        const suffix = config.inwardSuffix || "";
-        const nextNo = config.inwardNextNo || 1;
-        const padding = config.inwardPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
-      } catch (e) {}
-    }
-    return `INW/${String(1).padStart(4, "0")}`;
-  };
-
-  const incrementInwardNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        if (config.inwardNextNo !== undefined) {
-          config.inwardNextNo = Number(config.inwardNextNo) + 1;
-          localStorage.setItem("orbx_print_config", JSON.stringify(config));
-        }
-      } catch (e) {}
-    }
-  };
-
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
       inward_no: "",
@@ -467,7 +439,6 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
         : api.post(`/stock/inward?fy=${activeFY}`, payload);
     },
     onSuccess: () => {
-      if (!editing) incrementInwardNo();
       qc.invalidateQueries({ queryKey: ["stock-inward"] });
       qc.invalidateQueries({ queryKey: ["suggested-processes"] });
       onClose();
@@ -760,34 +731,6 @@ export function OutwardVoucherPage() {
     return map;
   }, [ledgers]);
 
-  const generateNextOutwardNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        const prefix = config.outwardPrefix || "OUT/";
-        const suffix = config.outwardSuffix || "";
-        const nextNo = config.outwardNextNo || 1;
-        const padding = config.outwardPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
-      } catch (e) {}
-    }
-    return `OUT/${String(1).padStart(4, "0")}`;
-  };
-
-  const incrementOutwardNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        if (config.outwardNextNo !== undefined) {
-          config.outwardNextNo = Number(config.outwardNextNo) + 1;
-          localStorage.setItem("orbx_print_config", JSON.stringify(config));
-        }
-      } catch (e) {}
-    }
-  };
-
   const { register, handleSubmit, reset, watch, setValue } = useForm({ defaultValues: { outward_no: "", outward_date: new Date().toISOString().split("T")[0], product_id: "", ledger_id: "", quantity: 0, rate: 0, amount: 0, narration: "" } });
 
   const saveMutation = useMutation({
@@ -805,7 +748,6 @@ export function OutwardVoucherPage() {
         : api.post(`/stock/outward?fy=${activeFY}`, payload);
     },
     onSuccess: () => {
-      if (!editing) incrementOutwardNo();
       qc.invalidateQueries({ queryKey: ["stock-outward"] });
       setOpen(false);
     },
@@ -1477,34 +1419,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       });
   }, [products, productBalanceMap, selectedInwards, lineItemBalanceMap]);
 
-  const generateNextOutwardNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        const prefix = config.outwardPrefix || "OUT/";
-        const suffix = config.outwardSuffix || "";
-        const nextNo = config.outwardNextNo || 1;
-        const padding = config.outwardPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}${suffix}`;
-      } catch (e) {}
-    }
-    return `OUT/${String(1).padStart(4, "0")}`;
-  };
-
-  const incrementOutwardNo = () => {
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        if (config.outwardNextNo !== undefined) {
-          config.outwardNextNo = Number(config.outwardNextNo) + 1;
-          localStorage.setItem("orbx_print_config", JSON.stringify(config));
-        }
-      } catch (e) {}
-    }
-  };
-
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
       outward_no: "",
@@ -1646,7 +1560,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         : api.post(`/stock/outward?fy=${activeFY}`, payload);
     },
     onSuccess: () => {
-      if (!editing) incrementOutwardNo();
       qc.invalidateQueries({ queryKey: ["stock-outward"] });
       onClose();
     },
