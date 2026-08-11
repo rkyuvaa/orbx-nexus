@@ -74,7 +74,7 @@ async def list_job_work(
 @router.get("/pending-registers")
 async def list_pending_registers(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
-    ledger_id: Optional[int] = None
+    ledger_id: Optional[int] = None, include_ids: Optional[str] = None
 ):
     schema = s(fy)
     conds = ["j.entry_type = 'Register'", "COALESCE(j.is_paid, FALSE) = FALSE"]
@@ -82,6 +82,11 @@ async def list_pending_registers(
     if ledger_id:
         conds.append("j.ledger_id = :lid")
         params["lid"] = ledger_id
+    if include_ids:
+        ids = [int(x) for x in include_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            conds.append("(COALESCE(j.is_paid, FALSE) = FALSE OR j.id = ANY(:iids::int[]))")
+            params["iids"] = ids
 
     query = f"""
     SELECT 

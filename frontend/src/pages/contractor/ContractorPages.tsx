@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Autocomplete, Typography, Table, TableHead, TableRow, TableCell, TableBody, Paper, Select } from "@mui/material";
+import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Autocomplete, Typography, Table, TableHead, TableRow, TableCell, TableBody, Paper, Select, Checkbox } from "@mui/material";
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import { useForm, Controller } from "react-hook-form";
@@ -87,9 +87,43 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
 
   const watchedOutwardIds = watch("outward_ids");
   const selectedOutwardIds = useMemo(() => watchedOutwardIds || [], [watchedOutwardIds]);
-  const selectedProcessId = watch("process_id");
-  const qty = watch("quantity");
-  const rate = watch("rate");
+  const selectedLedgerId = watch("ledger_id");
+  const [pendingRegisters, setPendingRegisters] = useState<any[]>([]);
+  const [selectedRegisterIds, setSelectedRegisterIds] = useState<number[]>([]);
+  const [registersLoading, setRegistersLoading] = useState(false);
+
+  const selectedRegisters = pendingRegisters.filter((r) => selectedRegisterIds.includes(r.id));
+  const payTotalQty = selectedRegisters.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  const payTotalWeight = selectedRegisters.reduce((s, r) => s + (Number(r.total_weight) || 0), 0);
+  const payTotalAmount = selectedRegisters.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+  const toggleRegister = (id: number) => {
+    setSelectedRegisterIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  useEffect(() => {
+    if (type !== "payment") return;
+    if (!selectedLedgerId) {
+      setPendingRegisters([]);
+      setSelectedRegisterIds([]);
+      return;
+    }
+    let cancelled = false;
+    const inc = editing && Array.isArray(editing.register_ids) && editing.register_ids.length > 0
+      ? `&include_ids=${editing.register_ids.join(",")}`
+      : "";
+    setRegistersLoading(true);
+    api.get(`/contractor/pending-registers?fy=${activeFY}&ledger_id=${selectedLedgerId}${inc}`)
+      .then((res) => {
+        if (!cancelled) {
+          setPendingRegisters(res.data);
+          if (!editing) setSelectedRegisterIds([]);
+        }
+      })
+      .catch((e) => console.error(e))
+      .finally(() => { if (!cancelled) setRegistersLoading(false); });
+    return () => { cancelled = true; };
+  }, [type, selectedLedgerId, activeFY, editing]);
 
   // Sum of previously registered quantities for these outward vouchers and process in other register entries
   const getBalanceQtyForProcess = (processId: number | string) => {
@@ -204,28 +238,6 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     setLineItems(lineItems.filter((_, i) => i !== index));
   };
 
-  // Auto fill rate with Contractor Rate when Process is selected (for payments only)
-  useEffect(() => {
-    if (type === "payment" && selectedProcessId && processes.length > 0) {
-      const match = processes.find((p: any) => p.id === Number(selectedProcessId));
-      if (match) {
-        setValue("rate", (match.contractor_rate ?? 0) as any);
-      }
-    }
-  }, [selectedProcessId, processes, setValue, type]);
-
-  // Auto calculate amount when quantity or rate changes (for payments only)
-  useEffect(() => {
-    if (type === "payment") {
-      const q = Number(qty || 0);
-      const r = Number(rate || 0);
-      const amt = q * r;
-      if (amt > 0) {
-        setValue("amount", amt as any);
-      }
-    }
-  }, [qty, rate, setValue, type]);
-
   const totalQuantity = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const totalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
@@ -233,13 +245,13 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     mutationFn: (formData: any) => {
       const payload = {
         ...formData,
-        outward_id: formData.outward_id ? Number(formData.outward_id) : null,
-        product_id: formData.product_id ? Number(formData.product_id) : null,
+        outward_id: type === "payment" ? null : (formData.outward_id ? Number(formData.outward_id) : null),
+        product_id: type === "payment" ? null : (formData.product_id ? Number(formData.product_id) : null),
         rate_id: formData.rate_id ? Number(formData.rate_id) : null,
-        outward_ids: Array.isArray(formData.outward_ids) ? formData.outward_ids.map((x: any) => Number(x)) : [],
-        quantity: type === "job-work" ? totalQuantity : Number(formData.quantity) || 0,
-        amount: type === "job-work" ? totalAmount : Number(formData.amount) || 0,
-        process_id: type === "job-work" ? (lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null) : Number(formData.process_id) || null,
+        outward_ids: type === "payment" ? [] : (Array.isArray(formData.outward_ids) ? formData.outward_ids.map((x: any) => Number(x)) : []),
+        quantity: type === "job-work" ? totalQuantity : type === "payment" ? payTotalQty : Number(formData.quantity) || 0,
+        amount: type === "job-work" ? totalAmount : type === "payment" ? payTotalAmount : Number(formData.amount) || 0,
+        process_id: type === "job-work" ? (lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null) : type === "payment" ? null : Number(formData.process_id) || null,
         items: type === "job-work" ? lineItems
           .filter((item: any) => item.process_id && Number(item.process_id) > 0)
           .map(item => ({
@@ -247,7 +259,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
             quantity: Number(item.quantity) || 0,
             rate: Number(item.rate) || 0,
             amount: Number(item.amount) || 0
-          })) : []
+          })) : [],
+        register_ids: type === "payment" ? selectedRegisterIds : []
       };
       return editing ? api.put(`/contractor/${editing.id}?fy=${activeFY}`, payload) : api.post(`/contractor/?fy=${activeFY}`, payload);
     },
@@ -255,6 +268,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   });
 
   const handleSave = (d: any) => {
+    if (type === "payment") {
+      if (selectedRegisterIds.length === 0) {
+        setSubmitError("Select at least one Job Work Register entry to pay.");
+        return;
+      }
+    }
     if (type === "job-work") {
       const validLines = lineItems.filter((it: any) => it.process_id && Number(it.process_id) > 0);
       if (validLines.length === 0) {
@@ -283,6 +302,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     if (row) {
       setEditing(row);
       setSubmitError("");
+      const rowRids = Array.isArray(row.register_ids) ? row.register_ids.map((x: any) => Number(x)) : [];
+      setSelectedRegisterIds(rowRids);
       reset({
         ...row,
         outward_ids: row.outward_ids || (row.outward_id ? [row.outward_id] : []),
@@ -330,6 +351,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         narration: "",
       });
       setLineItems([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+      setSelectedRegisterIds([]);
     }
     setOpen(true);
   };
@@ -341,7 +363,19 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     { field: "entry_no", headerName: "Entry No.", width: 130 },
     { field: "entry_date", headerName: "Date", width: 100 },
     { field: "contractor_name", headerName: "Contractor", width: 180, valueFormatter: (p) => p.value || "General" },
-    { field: "process_name", headerName: "Process", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
+    ...(type === "payment" ? [
+      {
+        field: "register_ids",
+        headerName: "Registers",
+        width: 120,
+        cellRenderer: (p: any) => {
+          const ids = Array.isArray(p.data.register_ids) ? p.data.register_ids : [];
+          return ids.length > 0 ? `${ids.length} register(s)` : "-";
+        }
+      },
+    ] : [
+      { field: "process_name", headerName: "Process", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
+    ]),
     ...(type === "job-work" ? [
       {
         field: "outward_ids",
@@ -356,7 +390,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       { field: "product_name", headerName: "Product", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
     ] : []),
     { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
-    { field: "rate", headerName: "Rate", width: 80, type: "numericColumn" },
+    ...(type === "payment" ? [] : [{ field: "rate", headerName: "Rate", width: 80, type: "numericColumn" }]),
     { field: "amount", headerName: "Amount", width: 110, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
     { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
@@ -539,6 +573,105 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       </TableBody>
                     </Table>
                   </Paper>
+                </Grid>
+              ) : type === "payment" ? (
+                <Grid size={{ xs: 12 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020" }}>
+                      Pending Job Work Registers
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                      {selectedRegisterIds.length > 0 ? `${selectedRegisterIds.length} selected` : "Select registers to pay"}
+                    </Typography>
+                  </Box>
+                  {submitError && (
+                    <Typography color="error" variant="body2" sx={{ mt: 1, mb: 1 }}>
+                      {submitError}
+                    </Typography>
+                  )}
+                  {!selectedLedgerId ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                      Select a Contractor first to load their pending Job Work Registers.
+                    </Typography>
+                  ) : registersLoading ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                      Loading registers...
+                    </Typography>
+                  ) : pendingRegisters.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
+                      No pending Job Work Registers found for this contractor.
+                    </Typography>
+                  ) : (
+                    <>
+                      <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
+                        <Table size="small">
+                          <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                            <TableRow>
+                              <TableCell sx={{ width: 40 }} align="center">
+                                <Checkbox
+                                  size="small"
+                                  checked={selectedRegisterIds.length === pendingRegisters.length && pendingRegisters.length > 0}
+                                  indeterminate={selectedRegisterIds.length > 0 && selectedRegisterIds.length < pendingRegisters.length}
+                                  onChange={(e) => setSelectedRegisterIds(e.target.checked ? pendingRegisters.map((r) => r.id) : [])}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ width: 130, fontWeight: 700 }}>Entry No.</TableCell>
+                              <TableCell sx={{ width: 90, fontWeight: 700 }}>Date</TableCell>
+                              <TableCell sx={{ width: 90, fontWeight: 700 }} align="right">Qty</TableCell>
+                              <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Weight</TableCell>
+                              <TableCell sx={{ minWidth: 140, fontWeight: 700 }}>Inward No(s)</TableCell>
+                              <TableCell sx={{ minWidth: 140, fontWeight: 700 }}>Outward No(s)</TableCell>
+                              <TableCell sx={{ width: 110, fontWeight: 700 }} align="right">Amount</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {pendingRegisters.map((r) => (
+                              <TableRow
+                                key={r.id}
+                                hover
+                                onClick={() => toggleRegister(r.id)}
+                                sx={{
+                                  cursor: "pointer",
+                                  backgroundColor: selectedRegisterIds.includes(r.id) ? "rgba(22, 196, 127, 0.08)" : "inherit",
+                                }}
+                              >
+                                <TableCell align="center">
+                                  <Checkbox size="small" checked={selectedRegisterIds.includes(r.id)} />
+                                </TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>{r.entry_no}</TableCell>
+                                <TableCell>{r.entry_date}</TableCell>
+                                <TableCell align="right">{r.quantity ?? 0}</TableCell>
+                                <TableCell align="right">{r.total_weight ?? 0}</TableCell>
+                                <TableCell>{r.inward_nos || "-"}</TableCell>
+                                <TableCell>{r.outward_nos || "-"}</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 600 }}>₹{formatAmount(r.amount)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </Paper>
+                      <Paper variant="outlined" sx={{ borderRadius: "8px", mt: 1.5, px: 2, py: 1.5, bgcolor: "#f4f9f6" }}>
+                        <Grid container spacing={2}>
+                          <Grid size={{ xs: 3 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Total Qty</Typography>
+                            <Typography sx={{ fontWeight: 700 }}>{payTotalQty}</Typography>
+                          </Grid>
+                          <Grid size={{ xs: 3 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Total Weight</Typography>
+                            <Typography sx={{ fontWeight: 700 }}>{payTotalWeight}</Typography>
+                          </Grid>
+                          <Grid size={{ xs: 3 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Total Amount</Typography>
+                            <Typography sx={{ fontWeight: 700 }}>₹{formatAmount(payTotalAmount)}</Typography>
+                          </Grid>
+                          <Grid size={{ xs: 3 }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Registers</Typography>
+                            <Typography sx={{ fontWeight: 700 }}>{selectedRegisterIds.length}</Typography>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    </>
+                  )}
                 </Grid>
               ) : (
                 <>
