@@ -761,43 +761,31 @@ export default function LabourBillPage() {
 
     if (inwardRows.length === 0) {
 
-      inwardRowsHtml = `<tr><td colspan="7" style="text-align: center; padding: 12px;">No linked inward vouchers</td></tr>`;
+      inwardRowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 12px;">No linked inward vouchers</td></tr>`;
 
     } else {
 
-      inwardRows.forEach((r, idx) => {
+      const inwardNos = [...new Set(inwardRows.map((r: any) => r.inward_no).filter(Boolean))].join(", ") || "-";
 
-        inwardRowsHtml += `
+      const inwardRefs = [...new Set(inwardRows.map((r: any) => r.ref).filter((r: string) => r !== "-"))].join(", ") || "-";
+
+      const inwardDates = [...new Set(inwardRows.map((r: any) => toDateStr(r.inward_date)).filter((d: string) => d !== "-"))].join(", ") || "-";
+
+      inwardRowsHtml = `
 
           <tr>
 
-            <td style="text-align: center;">${idx + 1}</td>
+            <td style="text-align: center;">1</td>
 
-            <td style="font-weight: 600; white-space: nowrap;">${r.inward_no || "-"}</td>
+            <td style="font-weight: 600;">${inwardNos}</td>
 
-            <td style="white-space: nowrap;">${r.ref}</td>
+            <td style="white-space: nowrap;">${inwardRefs}</td>
 
-            <td style="white-space: nowrap;">${toDateStr(r.inward_date)}</td>
+            <td style="white-space: nowrap;">${inwardDates}</td>
 
-            <td style="font-weight: 600;">${r.productName}</td>
+            <td style="text-align: right; white-space: nowrap;">${formatQty(inwardTotalQty)}</td>
 
-            <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
-
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.weight)} kg</td>
-
-          </tr>`;
-
-      });
-
-      inwardRowsHtml += `
-
-          <tr class="total-row">
-
-            <td colspan="5" style="text-align: right;">Total</td>
-
-            <td style="text-align: right;">${formatQty(inwardTotalQty)}</td>
-
-            <td style="text-align: right; font-weight: 700;">${formatWeight(inwardTotalWeight)} kg</td>
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(inwardTotalWeight)} kg</td>
 
           </tr>`;
 
@@ -809,43 +797,27 @@ export default function LabourBillPage() {
 
     if (outwardRows.length === 0) {
 
-      outwardRowsHtml = `<tr><td colspan="7" style="text-align: center; padding: 12px;">No linked outward vouchers</td></tr>`;
+      outwardRowsHtml = `<tr><td colspan="5" style="text-align: center; padding: 12px;">No linked outward vouchers</td></tr>`;
 
     } else {
 
-      outwardRows.forEach((r, idx) => {
+      const outwardNos = [...new Set(outwardRows.map((r: any) => r.outward_no).filter(Boolean))].join(", ") || "-";
 
-        outwardRowsHtml += `
+      const outwardDetails = [...new Set(outwardRows.map((r: any) => `${r.productName}${r.processName && r.processName !== "-" ? ` (${r.processName})` : ""}`))].join(", ") || "-";
+
+      outwardRowsHtml = `
 
           <tr>
 
-            <td style="text-align: center;">${idx + 1}</td>
+            <td style="text-align: center;">1</td>
 
-            <td style="font-weight: 600; white-space: nowrap;">${r.outward_no || "-"}</td>
+            <td style="font-weight: 600;">${outwardNos}</td>
 
-            <td style="white-space: nowrap;">${toDateStr(r.outward_date)}</td>
+            <td>${outwardDetails}</td>
 
-            <td style="font-weight: 600;">${r.productName}</td>
+            <td style="text-align: right; white-space: nowrap;">${formatQty(outwardTotalQty)}</td>
 
-            <td style="white-space: nowrap;">${r.processName}</td>
-
-            <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
-
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.weight)} kg</td>
-
-          </tr>`;
-
-      });
-
-      outwardRowsHtml += `
-
-          <tr class="total-row">
-
-            <td colspan="5" style="text-align: right;">Total</td>
-
-            <td style="text-align: right;">${formatQty(outwardTotalQty)}</td>
-
-            <td style="text-align: right; font-weight: 700;">${formatWeight(outwardTotalWeight)} kg</td>
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(outwardTotalWeight)} kg</td>
 
           </tr>`;
 
@@ -953,9 +925,7 @@ export default function LabourBillPage() {
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">REF NO</th>
 
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD DATE</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">DATE</th>
 
                 <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
 
@@ -989,11 +959,7 @@ export default function LabourBillPage() {
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD NO</th>
 
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">DATE</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT / PROCESS</th>
 
                 <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
 
