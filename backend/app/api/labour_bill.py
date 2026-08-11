@@ -25,7 +25,6 @@ class LabourBillIn(BaseModel):
     sgst_percent: float = 0
     sgst_amount: float = 0
     round_off: float = 0
-    transport_amount: float = 0
     net_amount: float = 0
     total_amount: float = 0
     narration: str | None = None
@@ -80,8 +79,8 @@ async def create_labour_bill(
         text(
             f"INSERT INTO {schema}.labour_bills "
             f"(bill_no, bill_date, ledger_id, inward_id, product_id, process_id, quantity, rate, "
-            f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, transport_amount, net_amount, total_amount, narration, items, outward_ids, dispatch_through, created_by) "
-            f"VALUES (:bno, :bdate, :lid, :iid, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :ta, :namt, :tamt, :narr, :items, :oids, :dt, :cby) "
+            f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, net_amount, total_amount, narration, items, outward_ids, dispatch_through, created_by) "
+            f"VALUES (:bno, :bdate, :lid, :iid, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :cby) "
             f"RETURNING id"
         ),
         {
@@ -91,9 +90,8 @@ async def create_labour_bill(
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
-            "ro": body.round_off, "ta": body.transport_amount,
-            "namt": body.net_amount or body.total_amount,
-            "tamt": body.total_amount,
+            "ro": body.round_off, "namt": body.net_amount or body.total_amount,
+            "ta": body.total_amount,
             "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "cby": current_user.id
         }
     )
@@ -115,7 +113,7 @@ async def update_labour_bill(
             f"inward_id=:iid, product_id=:pid, process_id=:prid, quantity=:qty, rate=:rate, "
             f"amount=:amt, gst_percent=:gp, gst_amount=:ga, "
             f"cgst_percent=:cgp, cgst_amount=:cga, sgst_percent=:sgp, sgst_amount=:sga, "
-            f"round_off=:ro, transport_amount=:ta, net_amount=:namt, total_amount=:tamt, narration=:narr, "
+            f"round_off=:ro, net_amount=:namt, total_amount=:ta, narration=:narr, "
             f"items=:items, outward_ids=:oids, dispatch_through=:dt, updated_at=NOW() WHERE id=:id"
         ),
         {
@@ -125,9 +123,8 @@ async def update_labour_bill(
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
-            "ro": body.round_off, "ta": body.transport_amount,
-            "namt": body.net_amount or body.total_amount,
-            "tamt": body.total_amount,
+            "ro": body.round_off, "namt": body.net_amount or body.total_amount,
+            "ta": body.total_amount,
             "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "id": bill_id
         }
     )
