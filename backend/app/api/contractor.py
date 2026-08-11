@@ -27,6 +27,7 @@ class JobWorkIn(BaseModel):
     entry_type: str = "Register"  # Register, Payment, Advance Payment, Advance Receipt
     narration: str | None = None
     items: list | None = None
+    register_ids: list[int] | None = None
 
 
 @router.get("/")
@@ -70,6 +71,60 @@ async def list_job_work(
     return [dict(r) for r in result.mappings().all()]
 
 
+@router.get("/pending-registers")
+async def list_pending_registers(
+    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
+    ledger_id: Optional[int] = None
+):
+    schema = s(fy)
+    conds = ["j.entry_type = 'Register'", "COALESCE(j.is_paid, FALSE) = FALSE"]
+    params: dict = {}
+    if ledger_id:
+        conds.append("j.ledger_id = :lid")
+        params["lid"] = ledger_id
+
+    query = f"""
+    SELECT 
+        j.id,
+        j.entry_no,
+        j.entry_date::text,
+        j.ledger_id,
+        l.name AS contractor_name,
+        j.product_id,
+        p.name AS product_name,
+        j.process_id,
+        pr.name AS process_name,
+        j.quantity,
+        j.rate,
+        j.amount,
+        COALESCE(j.outward_ids, '[]'::jsonb) AS outward_ids,
+        COALESCE((
+            SELECT string_agg(DISTINCT so.outward_no, ', ' ORDER BY so.outward_no)
+            FROM jsonb_array_elements_text(COALESCE(j.outward_ids, '[]'::jsonb)) AS eid
+            JOIN {schema}.stock_outward so ON so.id = eid::bigint
+        ), '') AS outward_nos,
+        COALESCE((
+            SELECT string_agg(DISTINCT si.inward_no, ', ' ORDER BY si.inward_no)
+            FROM jsonb_array_elements_text(COALESCE(j.outward_ids, '[]'::jsonb)) AS eid
+            JOIN {schema}.stock_outward so ON so.id = eid::bigint
+            LEFT JOIN {schema}.stock_inward si ON si.id = so.inward_id
+        ), '') AS inward_nos,
+        COALESCE((
+            SELECT SUM(COALESCE(so.total_weight, 0))
+            FROM jsonb_array_elements_text(COALESCE(j.outward_ids, '[]'::jsonb)) AS eid
+            JOIN {schema}.stock_outward so ON so.id = eid::bigint
+        ), 0) AS total_weight
+    FROM {schema}.job_work_entries j
+    LEFT JOIN master.ledgers l ON l.id = j.ledger_id
+    LEFT JOIN master.products p ON p.id = j.product_id
+    LEFT JOIN master.processes pr ON pr.id = j.process_id
+    WHERE {' AND '.join(conds)}
+    ORDER BY j.entry_date DESC, j.id DESC
+    """
+    result = await db.execute(text(query), params)
+    return [dict(r) for r in result.mappings().all()]
+
+
 @router.post("/", status_code=201)
 async def create_job_work(
     body: JobWorkIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
@@ -91,20 +146,31 @@ async def create_job_work(
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
     items_json = json.dumps(body.items) if body.items else "[]"
+    rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
 
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.job_work_entries "
-            f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, created_by) "
-            f"VALUES (:eno, :edate, :lid, :oid, :oids, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items, :cby) RETURNING id"
+            f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, register_ids, created_by) "
+            f"VALUES (:eno, :edate, :lid, :oid, :oids, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items, :rids, :cby) RETURNING id"
         ),
         {
             "eno": entry_no, "edate": body.entry_date, "lid": body.ledger_id,
             "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "et": body.entry_type, "narr": body.narration, "items": items_json, "cby": current_user.id
+            "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "cby": current_user.id
         }
     )
+
+    if body.entry_type == "Payment" and body.register_ids:
+        await db.execute(
+            text(
+                f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
+                f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+            ),
+            {"rids": body.register_ids}
+        )
+
     return {"id": result.scalar_one(), "message": "Job work entry created"}
 
 
@@ -118,20 +184,47 @@ async def update_job_work(
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
     items_json = json.dumps(body.items) if body.items else "[]"
+    rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
+
+    if body.entry_type == "Payment":
+        prev = await db.execute(
+            text(f"SELECT register_ids FROM {schema}.job_work_entries WHERE id = :id"),
+            {"id": entry_id}
+        )
+        prev_row = prev.first()
+        prev_rids = (prev_row.register_ids if prev_row and prev_row.register_ids else []) or []
+        if prev_rids:
+            await db.execute(
+                text(
+                    f"UPDATE {schema}.job_work_entries SET is_paid = FALSE "
+                    f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                ),
+                {"rids": prev_rids}
+            )
 
     await db.execute(
         text(
             f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
             f"outward_id=:oid, outward_ids=:oids, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
-            f"entry_type=:et, narration=:narr, items=:items, updated_at=NOW() WHERE id=:id"
+            f"entry_type=:et, narration=:narr, items=:items, register_ids=:rids, updated_at=NOW() WHERE id=:id"
         ),
         {
             "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
             "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "et": body.entry_type, "narr": body.narration, "items": items_json, "id": entry_id
+            "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "id": entry_id
         }
     )
+
+    if body.entry_type == "Payment" and body.register_ids:
+        await db.execute(
+            text(
+                f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
+                f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+            ),
+            {"rids": body.register_ids}
+        )
+
     return {"message": "Updated"}
 
 
@@ -139,6 +232,19 @@ async def update_job_work(
 async def delete_job_work(
     entry_id: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
+    schema = s(fy)
+    row = (await db.execute(
+        text(f"SELECT entry_type, register_ids FROM {schema}.job_work_entries WHERE id = :id"),
+        {"id": entry_id}
+    )).first()
+    if row and row.entry_type == "Payment" and row.register_ids:
+        await db.execute(
+            text(
+                f"UPDATE {schema}.job_work_entries SET is_paid = FALSE "
+                f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+            ),
+            {"rids": list(row.register_ids)}
+        )
     await db.execute(
-        text(f"DELETE FROM {s(fy)}.job_work_entries WHERE id = :id"), {"id": entry_id}
+        text(f"DELETE FROM {schema}.job_work_entries WHERE id = :id"), {"id": entry_id}
     )

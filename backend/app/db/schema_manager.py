@@ -201,6 +201,8 @@ CREATE TABLE IF NOT EXISTS {schema}.job_work_entries (
     amount NUMERIC(15,2) DEFAULT 0,
     entry_type VARCHAR(20) NOT NULL,  -- Register, Payment
     narration TEXT,
+    is_paid BOOLEAN DEFAULT FALSE,
+    register_ids JSONB DEFAULT '[]'::jsonb,
     created_by INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()

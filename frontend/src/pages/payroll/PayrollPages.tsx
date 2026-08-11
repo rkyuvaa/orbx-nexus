@@ -24,7 +24,6 @@ function VoucherModule({
   queryKey,
   ledgerType,
   paymentType,
-  clearAllLabel,
 }: any) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
@@ -56,23 +55,6 @@ function VoucherModule({
     onError: (err: any) => alert(`Failed to delete. ${err?.response?.data?.detail || err.message || ""}`),
   });
 
-  const clearAllMutation = useMutation({
-    mutationFn: () => api.delete(`${endpoint}?fy=${activeFY}&ledger_type=${ledgerType}&payment_type=${paymentType}`),
-    onSuccess: (res: any) => {
-      qc.invalidateQueries({ queryKey: [queryKey] });
-      alert(`${res.data?.deleted ?? 0} record(s) cleared successfully.`);
-    },
-    onError: (err: any) => alert(`Failed to clear records. ${err?.response?.data?.detail || err.message || ""}`),
-  });
-
-  const handleClearAll = () => {
-    const count = items.length;
-    if (count === 0) { alert("No records to clear."); return; }
-    if (window.confirm(`Delete all ${count} "${title}" records? This cannot be undone.`)) {
-      clearAllMutation.mutate();
-    }
-  };
-
   const handleDeleteRow = (id: number) => {
     if (window.confirm("Delete this record? This cannot be undone.")) {
       deleteMutation.mutate(id);
@@ -92,11 +74,7 @@ function VoucherModule({
 
   return (
     <Box>
-      <PageHeader title={title} breadcrumbs={breadcrumbs} actions={clearAllLabel ? (
-        <Button variant="outlined" color="error" size="small" startIcon={<Delete fontSize="small" />} onClick={handleClearAll} disabled={clearAllMutation.isPending || items.length === 0}>
-          {clearAllMutation.isPending ? "Clearing..." : clearAllLabel}
-        </Button>
-      ) : undefined} />
+      <PageHeader title={title} breadcrumbs={breadcrumbs} />
       <OrbxGrid
         rowData={items}
         columnDefs={colDefs}
@@ -160,7 +138,7 @@ export function ContractorAdvancePaymentPage() {
   return <VoucherModule title="Advance Payment (Contractor)" queryKey="cont-advance-pay" endpoint="/payroll/advances" ledgerType="Contractor" paymentType="Payment" breadcrumbs={[{ label: "Contractor Voucher" }, { label: "Advance Payment" }]} />;
 }
 export function ContractorAdvanceReceiptPage() {
-  return <VoucherModule title="Advance Receipt (Contractor)" queryKey="cont-advance-rec" endpoint="/payroll/advances" ledgerType="Contractor" paymentType="Receipt" clearAllLabel="Clear All" breadcrumbs={[{ label: "Contractor Voucher" }, { label: "Advance Receipt" }]} />;
+  return <VoucherModule title="Advance Receipt (Contractor)" queryKey="cont-advance-rec" endpoint="/payroll/advances" ledgerType="Contractor" paymentType="Receipt" breadcrumbs={[{ label: "Contractor Voucher" }, { label: "Advance Receipt" }]} />;
 }
 
 export function SalaryVoucherPage() {
