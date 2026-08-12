@@ -642,7 +642,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
-                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} disabled={lineItems.length === 1}>
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} disabled={lineItems.length === 1} tabIndex={-1}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
                         </TableCell>
@@ -1881,7 +1881,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
-                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} disabled={lineItems.length === 1}>
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} disabled={lineItems.length === 1} tabIndex={-1}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
                         </TableCell>

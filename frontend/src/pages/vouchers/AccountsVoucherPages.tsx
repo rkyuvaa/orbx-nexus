@@ -428,7 +428,7 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
                   <TextField size="small" label="Dr" type="number" value={line.dr_amount} onChange={(e) => updateLine(i, "dr_amount", e.target.value)} sx={{ width: 110 }} slotProps={{ htmlInput: { "data-field": "line_dr", "data-row-index": i } }} />
                   <TextField size="small" label="Cr" type="number" value={line.cr_amount} onChange={(e) => updateLine(i, "cr_amount", e.target.value)} sx={{ width: 110 }} slotProps={{ htmlInput: { "data-field": "line_cr", "data-row-index": i } }} />
                   <TextField size="small" label="Narr." value={line.narration} onChange={(e) => updateLine(i, "narration", e.target.value)} sx={{ flex: 1 }} slotProps={{ htmlInput: { "data-field": "line_narration", "data-row-index": i } }} />
-                  {lines.length > 1 && <IconButton size="small" color="error" onClick={() => removeLine(i)}><Delete fontSize="small" /></IconButton>}
+                  {lines.length > 1 && <IconButton size="small" color="error" onClick={() => removeLine(i)} tabIndex={-1}><Delete fontSize="small" /></IconButton>}
                 </Paper>
               ))}
             </Grid>

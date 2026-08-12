@@ -1801,7 +1801,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                             </Typography>
                           </TableCell>
                           <TableCell align="center">
-                            <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)}>
+                            <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)} tabIndex={-1}>
                               <RemoveCircle fontSize="small" />
                             </IconButton>
                           </TableCell>
@@ -1878,7 +1878,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                             </Typography>
                           </TableCell>
                           <TableCell align="center">
-                            <IconButton size="small" color="error" onClick={handleToggleFreight}>
+                            <IconButton size="small" color="error" onClick={handleToggleFreight} tabIndex={-1}>
                               <RemoveCircle fontSize="small" />
                             </IconButton>
                           </TableCell>
