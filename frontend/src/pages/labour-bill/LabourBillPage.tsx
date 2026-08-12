@@ -855,7 +855,7 @@ export default function LabourBillPage() {
 
           <style>
 
-            @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 15mm; }
+            @page { size: A4 landscape; margin: 10mm; }
 
             ${COMMON_PRINT_CSS}
 
