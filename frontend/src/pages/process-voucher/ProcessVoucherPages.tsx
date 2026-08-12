@@ -1290,7 +1290,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   const selectedInwardsRef = useRef<any[]>([]);
   selectedInwardsRef.current = selectedInwards;
   // Product Entry Section states
-  const [entryInward, setEntryInward] = useState<any | null>(null);
+  const [activeInward, setActiveInward] = useState<any | null>(null);
   const [entryProduct, setEntryProduct] = useState<any | null>(null);
   const [entryProcess, setEntryProcess] = useState<any | null>(null);
   const [entryQty, setEntryQty] = useState<string>("");
@@ -1593,7 +1593,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
   useEffect(() => {
     if (open) {
-      setEntryInward(null);
+      setActiveInward(null);
       setEntryProduct(null);
       setEntryProcess(null);
       setEntryQty("");
@@ -1623,6 +1623,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           });
         })();
         setSelectedInwards(inwardIdList);
+        setActiveInward(inwardIdList[0] || null);
         let parsedItems: InwardLineItem[] = [];
         if (typeof editing.items === "string") {
           try { parsedItems = JSON.parse(editing.items); } catch (e) {}
@@ -1667,22 +1668,26 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     setValue("ledger_id", id);
     setPickerLedgerId(id ? Number(id) : null);
     setSelectedInwards([]); // Clear previously selected inwards
-    setEntryInward(null);
+    setActiveInward(null);
     setEntryProduct(null);
     setEntryProcess(null);
     setEntryQty("");
     setEntryWeight("");
   }, [setValue]);
-  // Link the selected inward to the voucher (only one active inward at a time)
+
+  // Link the selected inward to the voucher
   const handleInwardSelect = useCallback((inward: any) => {
-    setSelectedInwards([inward]);
+    setActiveInward(inward);
+    setSelectedInwards((prev) => {
+      if (prev.find((s) => s.id === inward.id)) return prev;
+      return [...prev, inward];
+    });
   }, []);
 
   const handleRemoveSelectedInward = useCallback((id: number) => {
-    setSelectedInwards([]);
+    setActiveInward(null);
+    setSelectedInwards((prev) => prev.filter((s) => s.id !== id));
   }, []);
-
-  const activeInward = selectedInwards[0] || null;
 
   // Memoized lists & values for the Product Entry Section
   const entryProductOptions = useMemo(() => {
@@ -1919,37 +1924,9 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, mr: 0.5 }}>
                     Linked Inwards:
                   </Typography>
-                  {enrichedSelectedInwards.map((inv) => {
-                    let balanceQty = inv.balance_qty !== undefined && inv.balance_qty !== null ? Number(inv.balance_qty) : (() => {
-                      let fallbackQty = 0;
-                      try {
-                        const parsed = typeof inv.items === "string" ? JSON.parse(inv.items) : (Array.isArray(inv.items) ? inv.items : []);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                          fallbackQty = parsed.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
-                        }
-                      } catch {}
-                      return fallbackQty || Number(inv.quantity || 0);
-                    })();
-
-                    // If we are editing, add back the total quantity of the editing voucher to the primary linked inward's balanceQty display
-                    if (editing && inv.id === editing.inward_id) {
-                      const totalEditingQty = (() => {
-                        let items: any[] = [];
-                        if (typeof editing.items === "string") {
-                          try { items = JSON.parse(editing.items); } catch {}
-                        } else if (Array.isArray(editing.items)) {
-                          items = editing.items;
-                        }
-                        if (items.length > 0) {
-                          return items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
-                        }
-                        return Number(editing.quantity || 0);
-                      })();
-                      if (inv.balance_qty !== undefined && inv.balance_qty !== null) {
-                        balanceQty += totalEditingQty;
-                      }
-                    }
-
+                  {(() => {
+                    if (!activeInward) return null;
+                    const inv = enrichedSelectedInwards.find((s) => s.id === activeInward.id) || activeInward;
                     return (
                       <Box key={inv.id} sx={{
                         display: "inline-flex", alignItems: "center", gap: 0.5,
@@ -1970,7 +1947,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         </IconButton>
                       </Box>
                     );
-                  })}
+                  })()}
                   
                   {/* Inline Autocomplete selector instead of Dialog Popup */}
                   <Box sx={{ width: 260, display: "inline-block" }}>
