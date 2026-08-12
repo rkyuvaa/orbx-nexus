@@ -37,6 +37,7 @@ export const resolveProcessName = (procId: any, processesList: any[]): string =>
 interface InwardLineItem {
   product_id: number | string;
   process_id?: number | string;
+  inward_id?: number | string;
   quantity: number | string;
   weight: number | string;       // Unit weight
   total_weight: number | string; // qty * weight
@@ -1280,7 +1281,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   const qc = useQueryClient();
 
   const [lineItems, setLineItems] = useState<any[]>([
-    { product_id: "", process_id: "", quantity: "", weight: "", total_weight: "" }
+    { product_id: "", process_id: "", inward_id: "", quantity: "", weight: "", total_weight: "" }
   ]);
   const [pickerLedgerId, setPickerLedgerId] = useState<number | null>(null);
   // Array of selected inward objects (supports multiple)
@@ -1384,7 +1385,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
   // Build a map of "productId_processId" -> balance qty from the selected inward(s)
   const lineItemBalanceMap = useMemo(() => {
-    const map: Record<string, { productId: number; processId: number | null; quantity: number; balance: number; productName: string }> = {};
+    const map: Record<string, { key: string; inwardId: number; inwardNo: string; productId: number; processId: number | null; quantity: number; balance: number; productName: string }> = {};
     enrichedSelectedInwards.forEach((inv) => {
       let lineItems: any[] = [];
       try {
@@ -1416,10 +1417,13 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       lineItems.forEach((li: any) => {
         const pid = Number(li.product_id);
         if (!pid) return;
-        const key = `${pid}_${li.process_id ?? ""}`;
+        const key = `${inv.id}_${pid}_${li.process_id ?? ""}`;
         if (!map[key]) {
           const prod = productMapObj[pid];
           map[key] = {
+            key,
+            inwardId: inv.id,
+            inwardNo: inv.inward_no,
             productId: pid,
             processId: li.process_id ?? null,
             quantity: Number(li.quantity) || 0,
@@ -1445,35 +1449,49 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         editingItems.forEach((it: any) => {
           const pid = Number(it.product_id);
           if (pid) {
-            const key = `${pid}_${it.process_id ?? ""}`;
-            if (!map[key]) {
-              const prod = productMapObj[pid];
-              map[key] = {
-                productId: pid,
-                processId: it.process_id ?? null,
-                quantity: Number(it.quantity) || 0,
-                balance: Number(it.quantity) || 0,
-                productName: prod?.name || `Product #${pid}`,
-              };
-            } else {
-              map[key].balance += Number(it.quantity) || 0;
+            const targetInwardId = it.inward_id || editing.inward_id || "";
+            if (targetInwardId) {
+              const key = `${targetInwardId}_${pid}_${it.process_id ?? ""}`;
+              if (!map[key]) {
+                const prod = productMapObj[pid];
+                const inv = enrichedSelectedInwards.find((s) => s.id === Number(targetInwardId));
+                map[key] = {
+                  key,
+                  inwardId: Number(targetInwardId),
+                  inwardNo: inv?.inward_no || `#${targetInwardId}`,
+                  productId: pid,
+                  processId: it.process_id ?? null,
+                  quantity: Number(it.quantity) || 0,
+                  balance: Number(it.quantity) || 0,
+                  productName: prod?.name || `Product #${pid}`,
+                };
+              } else {
+                map[key].balance += Number(it.quantity) || 0;
+              }
             }
           }
         });
       } else if (editing.product_id) {
         const pid = Number(editing.product_id);
-        const key = `${pid}_${editing.process_id ?? ""}`;
-        if (!map[key]) {
-          const prod = productMapObj[pid];
-          map[key] = {
-            productId: pid,
-            processId: editing.process_id ?? null,
-            quantity: Number(editing.quantity) || 0,
-            balance: Number(editing.quantity) || 0,
-            productName: prod?.name || `Product #${pid}`,
-          };
-        } else {
-          map[key].balance += Number(editing.quantity) || 0;
+        const targetInwardId = editing.inward_id || "";
+        if (targetInwardId) {
+          const key = `${targetInwardId}_${pid}_${editing.process_id ?? ""}`;
+          if (!map[key]) {
+            const prod = productMapObj[pid];
+            const inv = enrichedSelectedInwards.find((s) => s.id === Number(targetInwardId));
+            map[key] = {
+              key,
+              inwardId: Number(targetInwardId),
+              inwardNo: inv?.inward_no || `#${targetInwardId}`,
+              productId: pid,
+              processId: editing.process_id ?? null,
+              quantity: Number(editing.quantity) || 0,
+              balance: Number(editing.quantity) || 0,
+              productName: prod?.name || `Product #${pid}`,
+            };
+          } else {
+            map[key].balance += Number(editing.quantity) || 0;
+          }
         }
       }
     }
@@ -1500,44 +1518,25 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         };
       });
     }
-    // Inwards selected: filter to products appearing in selected inwards,
-    // and use the sum of their balances from lineItemBalanceMap.
-    const availableProductIds = new Set(
-      Object.values(lineItemBalanceMap).map((li: any) => li.productId)
-    );
-    // Editing: selected inwards may be minimal objects without product data —
-    // fall back to showing all products when lineItemBalanceMap is empty.
-    if (availableProductIds.size === 0) {
-      return products.map((p: any) => {
-        const dbBal = productBalanceMap[p.id] ?? null;
-        const editingQty = editingProductQtyMap[p.id] ?? 0;
-        return {
-          ...p,
-          balance: dbBal !== null ? dbBal + editingQty : null,
-        };
-      });
-    }
-    return products
-      .filter((p: any) => availableProductIds.has(p.id))
-      .map((p: any) => {
-        const mapEntry = Object.values(lineItemBalanceMap).find(
-          (li: any) => li.productId === p.id
-        );
-        const inwardBalance = Object.values(lineItemBalanceMap)
-          .filter((li: any) => li.productId === p.id)
-          .reduce((sum, li) => sum + li.balance, 0);
-        return {
-          ...p,
-          balance: inwardBalance,
-          processId: mapEntry?.processId ?? null,
-        };
-      });
+    // Inwards selected: return the separate entries from lineItemBalanceMap
+    return Object.values(lineItemBalanceMap).map((li: any) => {
+      return {
+        ...li,
+        id: `${li.inwardId}_${li.productId}_${li.processId ?? ""}`, // unique ID for autocomplete option
+        name: `${li.productName} (Inward: ${li.inwardNo})`,
+      };
+    });
   }, [products, productBalanceMap, enrichedSelectedInwards, lineItemBalanceMap, editingProductQtyMap]);
 
-  const getProductBalance = useCallback((productId: number) => {
+  const getProductBalance = useCallback((productId: number, processId: number | null, inwardId: number | null) => {
     if (enrichedSelectedInwards.length > 0) {
+      if (inwardId) {
+        const key = `${inwardId}_${productId}_${processId ?? ""}`;
+        return lineItemBalanceMap[key]?.balance ?? 0;
+      }
+      // Fallback: sum over all linked inwards if no inwardId is specified
       return Object.values(lineItemBalanceMap)
-        .filter((li) => li.productId === productId)
+        .filter((li) => li.productId === productId && (processId ? li.processId === processId : true))
         .reduce((sum, li) => sum + li.balance, 0);
     }
     const dbBal = productBalanceMap[productId] ?? 0;
@@ -1591,13 +1590,14 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         if (parsedItems && parsedItems.length > 0) {
           parsedItems = parsedItems.map(item => ({
             ...item,
+            inward_id: item.inward_id || editing.inward_id || "",
             total_weight: item.total_weight || Number((Number(item.quantity || 0) * Number(item.weight || 0)).toFixed(2))
           }));
           setLineItems(parsedItems);
         } else {
           const qty = editing.quantity || 0;
           const wt = editing.weight || 0;
-          setLineItems([{ product_id: editing.product_id || "", quantity: qty, weight: wt, total_weight: Number((qty * wt).toFixed(2)) }]);
+          setLineItems([{ product_id: editing.product_id || "", process_id: editing.process_id || "", inward_id: editing.inward_id || "", quantity: qty, weight: wt, total_weight: Number((qty * wt).toFixed(2)) }]);
         }
       } else {
         reset({
@@ -1927,9 +1927,13 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           <LazyAutocomplete
                             size="small"
                             value={(() => {
-                              if (selectedInwards.length > 0) {
-                                return availableLineItems.find((li: any) => li.productId === Number(item.product_id))
-                                  || productMapObj[item.product_id] || null;
+                              if (enrichedSelectedInwards.length > 0) {
+                                const targetInwardId = item.inward_id || (enrichedSelectedInwards.length === 1 ? enrichedSelectedInwards[0].id : null);
+                                return productOptions.find((opt: any) => 
+                                  opt.productId === Number(item.product_id) && 
+                                  (targetInwardId ? opt.inwardId === Number(targetInwardId) : true) &&
+                                  (item.process_id ? opt.processId === Number(item.process_id) : true)
+                                ) || productMapObj[item.product_id] || null;
                               }
                               return productMapObj[item.product_id] || null;
                             })()}
@@ -1937,6 +1941,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                               if (val) {
                                 const prodId = val.productId ?? val.id ?? "";
                                 const processId = val.processId ?? "";
+                                const inwardId = val.inwardId ?? "";
                                 const prodObj = productMapObj[prodId];
                                 const unitWt = val.weight ?? prodObj?.weight ?? 0;
                                 setLineItems((prev) =>
@@ -1948,6 +1953,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                                         ...it,
                                         product_id: prodId,
                                         process_id: processId,
+                                        inward_id: inwardId,
                                         weight: wt,
                                         total_weight: Number((qty * wt).toFixed(2)),
                                       };
@@ -1958,18 +1964,19 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                               } else {
                                 handleLineItemChange(idx, "product_id", "");
                                 handleLineItemChange(idx, "process_id", "");
+                                handleLineItemChange(idx, "inward_id", "");
                                 handleLineItemChange(idx, "weight", "");
                               }
                             }}
                             options={productOptions}
                             getOptionLabel={(option: any) => option.productName || option.name || ""}
-                            noOptionsText={selectedInwards.length > 0 ? "No products from selected inward(s)" : "No matching products"}
+                            noOptionsText={enrichedSelectedInwards.length > 0 ? "No products from selected inward(s)" : "No matching products"}
                             renderOption={({ key, ...otherProps }: any, option: any) => {
                               const bal = option.balance;
                               return (
                                 <li key={key} {...otherProps}>
                                   <Box sx={{ width: "100%", py: 0.25 }}>
-                                    <Typography variant="body2">{option.productName || option.name}</Typography>
+                                    <Typography variant="body2">{option.name || option.productName}</Typography>
                                     {bal !== undefined && bal !== null && (
                                       <Typography variant="caption" sx={{ color: bal > 0 ? "success.main" : "error.main", fontWeight: 600 }}>
                                         Available Stock: {formatWeight(bal)}
@@ -1983,7 +1990,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                               <TextField
                                 {...params}
                                 required={!item.product_id}
-                                placeholder={selectedInwards.length > 0 ? "Select from inwarded items..." : "Search Product..."}
+                                placeholder={enrichedSelectedInwards.length > 0 ? "Select from inwarded items..." : "Search Product..."}
                                 slotProps={{
                                   ...params.slotProps,
                                   htmlInput: {
@@ -2026,9 +2033,15 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           {(() => {
                             if (!item.product_id) return <Typography variant="body2" color="text.disabled">—</Typography>;
                             const prodId = Number(item.product_id);
-                            const initialBal = getProductBalance(prodId);
+                            const processId = item.process_id ? Number(item.process_id) : null;
+                            const inwardId = item.inward_id ? Number(item.inward_id) : null;
+                            const initialBal = getProductBalance(prodId, processId, inwardId);
                             const totalQtyEntered = lineItems
-                              .filter((it) => Number(it.product_id) === prodId)
+                              .filter((it) => 
+                                Number(it.product_id) === prodId && 
+                                (processId ? Number(it.process_id) === processId : true) &&
+                                (inwardId ? Number(it.inward_id) === inwardId : true)
+                              )
                               .reduce((sum, it) => sum + Number(it.quantity || 0), 0);
                             const remainingBal = initialBal - totalQtyEntered;
                             return (
