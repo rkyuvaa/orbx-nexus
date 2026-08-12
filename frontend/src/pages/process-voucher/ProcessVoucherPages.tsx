@@ -1642,49 +1642,43 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     setEntryQty("");
     setEntryWeight("");
   }, [setValue]);
-
-  // Link the selected inward to the voucher
+  // Link the selected inward to the voucher (only one active inward at a time)
   const handleInwardSelect = useCallback((inward: any) => {
-    // Duplicate guard using ref (no closure over state)
-    if (selectedInwardsRef.current.find((s) => s.id === inward.id)) return;
-    setSelectedInwards((prev) => {
-      if (prev.find((s) => s.id === inward.id)) return prev;
-      return [...prev, inward];
-    });
+    setSelectedInwards([inward]);
   }, []);
 
   const handleRemoveSelectedInward = useCallback((id: number) => {
-    setSelectedInwards((prev) => prev.filter((s) => s.id !== id));
-    setEntryInward((prev: any) => (prev && prev.id === id ? null : prev));
+    setSelectedInwards([]);
   }, []);
 
+  const activeInward = selectedInwards[0] || null;
 
   // Memoized lists & values for the Product Entry Section
   const entryProductOptions = useMemo(() => {
-    if (!entryInward) return [];
+    if (!activeInward) return [];
     const productIds = new Set<number>();
     Object.values(lineItemBalanceMap).forEach((li) => {
-      if (li.inwardId === entryInward.id) {
+      if (li.inwardId === activeInward.id) {
         productIds.add(li.productId);
       }
     });
     return products.filter((p: any) => productIds.has(p.id));
-  }, [entryInward, lineItemBalanceMap, products]);
+  }, [activeInward, lineItemBalanceMap, products]);
 
   const entryProcessOptions = useMemo(() => {
-    if (!entryInward || !entryProduct) return [];
+    if (!activeInward || !entryProduct) return [];
     const procIds = new Set<number | string | null>();
     Object.values(lineItemBalanceMap).forEach((li) => {
-      if (li.inwardId === entryInward.id && li.productId === entryProduct.id) {
+      if (li.inwardId === activeInward.id && li.productId === entryProduct.id) {
         procIds.add(li.processId);
       }
     });
     return processes.filter((p: any) => procIds.has(p.id));
-  }, [entryInward, entryProduct, lineItemBalanceMap, processes]);
+  }, [activeInward, entryProduct, lineItemBalanceMap, processes]);
 
   const entryLiveStockBal = useMemo(() => {
-    if (!entryInward || !entryProduct) return 0;
-    const inwardId = entryInward.id;
+    if (!activeInward || !entryProduct) return 0;
+    const inwardId = activeInward.id;
     const productId = entryProduct.id;
     const processId = entryProcess ? entryProcess.id : null;
     const initialBal = getProductBalance(productId, processId, inwardId);
@@ -1698,7 +1692,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
 
     return initialBal - usedQty;
-  }, [entryInward, entryProduct, entryProcess, getProductBalance, lineItems]);
+  }, [activeInward, entryProduct, entryProcess, getProductBalance, lineItems]);
 
   const entryTotalWeight = useMemo(() => {
     const qty = Number(entryQty) || 0;
@@ -1717,10 +1711,10 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   }, [entryQty, entryLiveStockBal]);
 
   useEffect(() => {
-    if (entryProduct && entryInward) {
+    if (entryProduct && activeInward) {
       setEntryWeight(entryProduct.weight ? String(entryProduct.weight) : "0");
       const match = Object.values(lineItemBalanceMap).find(
-        (li) => li.inwardId === entryInward.id && li.productId === entryProduct.id
+        (li) => li.inwardId === activeInward.id && li.productId === entryProduct.id
       );
       if (match && match.processId) {
         const procObj = processes.find((p: any) => p.id === match.processId);
@@ -1732,17 +1726,17 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       setEntryWeight("");
       setEntryProcess(null);
     }
-  }, [entryProduct, entryInward, lineItemBalanceMap, processes]);
+  }, [entryProduct, activeInward, lineItemBalanceMap, processes]);
 
   const handleAddProductEntry = useCallback(() => {
-    if (!entryInward || !entryProduct || !entryProcess || !entryQty || entryQtyError) return;
+    if (!activeInward || !entryProduct || !entryProcess || !entryQty || entryQtyError) return;
     const qty = Number(entryQty);
     const wt = Number(entryWeight) || 0;
 
     const newRow = {
       product_id: entryProduct.id,
       process_id: entryProcess.id,
-      inward_id: entryInward.id,
+      inward_id: activeInward.id,
       quantity: qty,
       weight: wt,
       total_weight: entryTotalWeight,
@@ -1758,7 +1752,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     setEntryProcess(null);
     setEntryQty("");
     setEntryWeight("");
-  }, [entryInward, entryProduct, entryProcess, entryQty, entryWeight, entryTotalWeight, entryQtyError]);
+  }, [activeInward, entryProduct, entryProcess, entryQty, entryWeight, entryTotalWeight, entryQtyError]);
 
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const netWeight = lineItems.reduce((sum, item) => sum + (Number(item.total_weight) || 0), 0);
@@ -2010,36 +2004,28 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
             )}
 
             {/* Product Entry Section */}
-            {watch("ledger_id") && selectedInwards.length > 0 && (
+            {watch("ledger_id") && activeInward && (
               <Grid size={{ xs: 12 }}>
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f9fcfb", borderColor: "#023020", borderRadius: "8px" }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020", mb: 1.5 }}>
                     Quick Product Entry
                   </Typography>
                   <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
-                    <Grid size={{ xs: 12, sm: 2.5 }}>
-                      <Autocomplete
-                        size="small"
-                        value={entryInward}
-                        onChange={(_, val) => {
-                          setEntryInward(val);
-                          setEntryProduct(null);
-                          setEntryProcess(null);
-                        }}
-                        options={selectedInwards}
-                        getOptionLabel={(option: any) => option.inward_no || ""}
-                        renderInput={(params) => <TextField {...params} label="Inward Number *" required />}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 12, sm: 3 }}>
+                    <Grid size={{ xs: 12, sm: 3.5 }}>
                       <Autocomplete
                         size="small"
                         value={entryProduct}
                         onChange={(_, val) => setEntryProduct(val)}
                         options={entryProductOptions}
                         getOptionLabel={(option: any) => option.name || ""}
-                        disabled={!entryInward}
-                        renderInput={(params) => <TextField {...params} label="Product Name *" required placeholder={entryInward ? "Select product..." : "Select inward first"} />}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Product Name *"
+                            required
+                            placeholder="Select product..."
+                          />
+                        )}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 2.5 }}>
@@ -2056,11 +2042,11 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         renderInput={(params) => <TextField {...params} label="Process *" required />}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 1 }}>
+                    <Grid size={{ xs: 6, sm: 1.2 }}>
                       <TextField
                         size="small"
                         label="Stock Bal"
-                        value={entryInward && entryProduct ? formatWeight(entryLiveStockBal) : "—"}
+                        value={entryProduct ? formatWeight(entryLiveStockBal) : "—"}
                         disabled
                         slotProps={{ htmlInput: { style: { textAlign: "right", fontWeight: 700, color: entryLiveStockBal > 0 ? "#0f5132" : "#dc3545" } } }}
                         fullWidth
@@ -2102,11 +2088,11 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         fullWidth
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 1.4 }} sx={{ display: "flex", justifyContent: "flex-end", pt: 0.5 }}>
+                    <Grid size={{ xs: 12, sm: 1.2 }} sx={{ display: "flex", justifyContent: "flex-end", pt: 0.5 }}>
                       <Button
                         variant="contained"
                         onClick={handleAddProductEntry}
-                        disabled={!entryInward || !entryProduct || !entryProcess || !entryQty || !!entryQtyError}
+                        disabled={!activeInward || !entryProduct || !entryProcess || !entryQty || !!entryQtyError}
                         sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none", fontWeight: 700, height: 38, width: "100%" }}
                       >
                         Add Product
