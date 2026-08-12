@@ -1538,7 +1538,14 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     if (enrichedSelectedInwards.length > 0) {
       if (inwardId) {
         const key = `${inwardId}_${productId}_${processId ?? ""}`;
-        return lineItemBalanceMap[key]?.balance ?? 0;
+        if (lineItemBalanceMap[key]) {
+          return lineItemBalanceMap[key].balance;
+        }
+        if (processId !== null) {
+          const fallbackKey = `${inwardId}_${productId}_`;
+          return lineItemBalanceMap[fallbackKey]?.balance ?? 0;
+        }
+        return 0;
       }
       // Fallback: sum over all linked inwards if no inwardId is specified
       return Object.values(lineItemBalanceMap)
@@ -1549,6 +1556,30 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     const editingQty = editingProductQtyMap[productId] ?? 0;
     return dbBal + editingQty;
   }, [enrichedSelectedInwards, lineItemBalanceMap, productBalanceMap, editingProductQtyMap]);
+
+  const getLiveStockForProductProcessInward = useCallback((productId: number, processId: number | null, inwardId: number | null) => {
+    if (!inwardId) return 0;
+    const initialBal = getProductBalance(productId, processId, inwardId);
+    
+    // Check if the inward has a process-specific stock for this product
+    const exactKey = `${inwardId}_${productId}_${processId ?? ""}`;
+    const hasExactInwardStock = !!lineItemBalanceMap[exactKey];
+    
+    const usedQty = lineItems
+      .filter((it) => {
+        const matchesProductAndInward = Number(it.product_id) === productId && Number(it.inward_id) === inwardId;
+        if (!matchesProductAndInward) return false;
+        
+        if (hasExactInwardStock) {
+          return Number(it.process_id) === processId;
+        } else {
+          return true; // consumes from the process-less pool
+        }
+      })
+      .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+      
+    return Math.max(0, initialBal - usedQty);
+  }, [lineItemBalanceMap, getProductBalance, lineItems]);
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
@@ -1681,18 +1712,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     const inwardId = activeInward.id;
     const productId = entryProduct.id;
     const processId = entryProcess ? entryProcess.id : null;
-    const initialBal = getProductBalance(productId, processId, inwardId);
-
-    const usedQty = lineItems
-      .filter((it) =>
-        Number(it.inward_id) === inwardId &&
-        Number(it.product_id) === productId &&
-        (processId !== null ? Number(it.process_id) === Number(processId) : !it.process_id)
-      )
-      .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
-
-    return initialBal - usedQty;
-  }, [activeInward, entryProduct, entryProcess, getProductBalance, lineItems]);
+    return getLiveStockForProductProcessInward(productId, processId, inwardId);
+  }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward]);
 
   const entryTotalWeight = useMemo(() => {
     const qty = Number(entryQty) || 0;
@@ -2011,7 +2032,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     Quick Product Entry
                   </Typography>
                   <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
-                    <Grid size={{ xs: 12, sm: 3.5 }}>
+                    <Grid size={{ xs: 12, sm: 4.5 }}>
                       <Autocomplete
                         size="small"
                         value={entryProduct}
@@ -2028,7 +2049,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         )}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 2.5 }}>
+                    <Grid size={{ xs: 12, sm: 3.0 }}>
                       <Autocomplete
                         size="small"
                         value={entryProcess}
@@ -2042,7 +2063,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         renderInput={(params) => <TextField {...params} label="Process *" required />}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 1.2 }}>
+                    <Grid size={{ xs: 6, sm: 1.1 }}>
                       <TextField
                         size="small"
                         label="Stock Bal"
@@ -2052,7 +2073,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         fullWidth
                       />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 1.2 }}>
+                    <Grid size={{ xs: 6, sm: 1.1 }}>
                       <TextField
                         size="small"
                         label="Qty *"
@@ -2066,7 +2087,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         fullWidth
                       />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 1.2 }}>
+                    <Grid size={{ xs: 6, sm: 1.1 }}>
                       <TextField
                         size="small"
                         label="Unit Wt *"
@@ -2088,12 +2109,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         fullWidth
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 1.2 }} sx={{ display: "flex", justifyContent: "flex-end", pt: 0.5 }}>
+                    <Grid size={{ xs: 12 }} sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
                       <Button
                         variant="contained"
                         onClick={handleAddProductEntry}
                         disabled={!activeInward || !entryProduct || !entryProcess || !entryQty || !!entryQtyError}
-                        sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none", fontWeight: 700, height: 38, width: "100%" }}
+                        sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none", fontWeight: 700, height: 38, px: 4 }}
                       >
                         Add Product
                       </Button>
@@ -2260,23 +2281,31 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                             const processId = item.process_id ? Number(item.process_id) : null;
                             const inwardId = item.inward_id ? Number(item.inward_id) : null;
                             const initialBal = getProductBalance(prodId, processId, inwardId);
+                            const remainingBal = getLiveStockForProductProcessInward(prodId, processId, inwardId);
+                            
+                            const exactKey = `${inwardId}_${prodId}_${processId ?? ""}`;
+                            const hasExactInwardStock = !!lineItemBalanceMap[exactKey];
                             const totalQtyEntered = lineItems
-                              .filter((it) => 
-                                Number(it.product_id) === prodId && 
-                                (processId ? Number(it.process_id) === processId : true) &&
-                                (inwardId ? Number(it.inward_id) === inwardId : true)
-                              )
-                              .reduce((sum, it) => sum + Number(it.quantity || 0), 0);
-                            const remainingBal = initialBal - totalQtyEntered;
+                              .filter((it) => {
+                                const matchesProductAndInward = Number(it.product_id) === prodId && Number(it.inward_id) === inwardId;
+                                if (!matchesProductAndInward) return false;
+                                if (hasExactInwardStock) {
+                                  return Number(it.process_id) === processId;
+                                } else {
+                                  return true;
+                                }
+                              })
+                              .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+                            const isOver = totalQtyEntered > initialBal;
                             return (
                               <Box sx={{ textAlign: "right" }}>
                                 <Typography variant="body2" sx={{
                                   fontWeight: 700,
-                                  color: remainingBal >= 0 ? "success.main" : "error.main"
+                                  color: isOver ? "error.main" : "success.main"
                                 }}>
                                   {formatWeight(remainingBal)}
                                 </Typography>
-                                {totalQtyEntered > initialBal && (
+                                {isOver && (
                                   <Typography variant="caption" sx={{ color: "error.main", fontSize: "0.6rem" }}>⚠ Over</Typography>
                                 )}
                               </Box>

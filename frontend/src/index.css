@@ -31,3 +31,14 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(22, 196, 127, 0.4);
 }
+
+/* Force all disabled inputs, labels, and text elements to render with full opacity */
+.Mui-disabled,
+.MuiInputBase-input.Mui-disabled,
+.MuiInputLabel-root.Mui-disabled,
+.MuiFormLabel-root.Mui-disabled,
+.MuiTypography-root.Mui-disabled,
+.MuiButtonBase-root.Mui-disabled {
+  opacity: 1 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
