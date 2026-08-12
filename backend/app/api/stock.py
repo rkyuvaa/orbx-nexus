@@ -387,7 +387,7 @@ async def delete_outward(
         jw_dep = await db.execute(
             text(
                 f"SELECT COUNT(*) AS cnt FROM {schema}.job_work_entries "
-                f"WHERE outward_id = :id OR (outward_ids IS NOT NULL AND outward_ids @> :id_json::jsonb)"
+                f"WHERE outward_id = :id OR (outward_ids IS NOT NULL AND outward_ids @> CAST(:id_json AS jsonb))"
             ),
             {"id": outward_id, "id_json": json.dumps([outward_id])},
         )
@@ -402,7 +402,7 @@ async def delete_outward(
         lb_dep = await db.execute(
             text(
                 f"SELECT COUNT(*) AS cnt FROM {schema}.labour_bills "
-                f"WHERE outward_ids IS NOT NULL AND outward_ids @> :id_json::jsonb"
+                f"WHERE outward_ids IS NOT NULL AND outward_ids @> CAST(:id_json AS jsonb)"
             ),
             {"id_json": json.dumps([outward_id])},
         )
