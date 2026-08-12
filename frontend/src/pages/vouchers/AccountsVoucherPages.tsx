@@ -64,7 +64,11 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     };
     if (savedConfig) {
       try {
-        printConfig = { ...printConfig, ...JSON.parse(savedConfig) };
+        const parsed = JSON.parse(savedConfig);
+        if (parsed.voucherPaperSize) {
+          parsed.paperSize = parsed.voucherPaperSize;
+        }
+        printConfig = { ...printConfig, ...parsed };
       } catch (e) {}
     }
 
