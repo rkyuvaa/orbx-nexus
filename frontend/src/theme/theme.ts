@@ -15,8 +15,8 @@ export const getOrbxTheme = (mode?: "dark" | "light") => {
   const SURFACE_2 = isDark ? "#142A21" : "#E6EBE8";
   const BORDER = isDark ? "rgba(255, 255, 255, 0.09)" : "rgba(0, 0, 0, 0.08)";
   const TEXT_PRIMARY = isDark ? "#E6F0EC" : "#0E1F18";
-  const TEXT_SECONDARY = isDark ? "#9EB3AA" : "#5C6E6B";
-  const TEXT_DISABLED = isDark ? "#596D65" : "#99adab";
+  const TEXT_SECONDARY = TEXT_PRIMARY;
+  const TEXT_DISABLED = TEXT_PRIMARY;
 
   return createTheme({
     palette: {

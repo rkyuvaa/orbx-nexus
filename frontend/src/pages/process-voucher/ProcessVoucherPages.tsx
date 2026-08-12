@@ -1803,14 +1803,16 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         // Read serial_no and ref_no from the first selected inward (not from manual input)
         serial_no: selectedInwards.length > 0 ? (selectedInwards[0].serial_no || null) : null,
         ref_no: selectedInwards.length > 0 ? (selectedInwards[0].ref_no || null) : null,
-        items: lineItems.map((item) => ({
-          ...item,
-          product_id: item.product_id ? Number(item.product_id) : null,
-          process_id: item.process_id ? Number(item.process_id) : null,
-          quantity: Number(item.quantity) || 0,
-          weight: Number(item.weight) || 0,
-          total_weight: Number(item.total_weight) || 0,
-        })),
+        items: lineItems
+          .filter((item) => item.product_id)
+          .map((item) => ({
+            ...item,
+            product_id: Number(item.product_id),
+            process_id: item.process_id ? Number(item.process_id) : null,
+            quantity: Number(item.quantity) || 0,
+            weight: Number(item.weight) || 0,
+            total_weight: Number(item.total_weight) || 0,
+          })),
       };
       return editing
         ? api.put(`/stock/outward/${editing.id}?fy=${activeFY}`, payload)
@@ -1920,36 +1922,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
             {/* Linked Inwards selection */}
             {watch("ledger_id") && (
               <Grid size={{ xs: 12 }}>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, alignItems: "center" }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, mr: 0.5 }}>
                     Linked Inwards:
                   </Typography>
-                  {(() => {
-                    if (!activeInward) return null;
-                    const inv = enrichedSelectedInwards.find((s) => s.id === activeInward.id) || activeInward;
-                    return (
-                      <Box key={inv.id} sx={{
-                        display: "inline-flex", alignItems: "center", gap: 0.5,
-                        bgcolor: "#e8f5e9", border: "1.5px solid #023020",
-                        borderRadius: "999px", px: 1.5, py: 0.4,
-                        boxShadow: "0 1px 3px rgba(2,48,32,0.10)",
-                      }}>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", lineHeight: 1.4 }}>
-                          {inv.inward_no || `#${inv.id}`}
-                        </Typography>
-                        {(inv.serial_no || inv.ref_no) && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.4 }}>
-                            · {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
-                          </Typography>
-                        )}
-                        <IconButton size="small" sx={{ p: 0, ml: 0.25, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
-                          <Typography sx={{ fontSize: 11, lineHeight: 1 }}>✕</Typography>
-                        </IconButton>
-                      </Box>
-                    );
-                  })()}
                   
-                  {/* Inline Autocomplete selector instead of Dialog Popup */}
+                  {/* Inline Autocomplete selector in static place */}
                   <Box sx={{ width: 260, display: "inline-block" }}>
                     <LazyAutocomplete
                       size="small"
@@ -1958,9 +1936,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         if (val) handleInwardSelect(val);
                       }}
                       options={sortedPendingInwards.filter(
-                        (inv: any) => 
-                          !selectedInwards.some((s) => s.id === inv.id) &&
-                          Number(inv.balance_qty || 0) > 0
+                        (inv: any) => Number(inv.balance_qty || 0) > 0
                       )}
                       getOptionLabel={(option: any) => {
                         const refStr = [option.serial_no && `S: ${option.serial_no}`, option.ref_no && `Ref: ${option.ref_no}`].filter(Boolean).join(" · ");
@@ -1997,6 +1973,31 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                       }}
                     />
                   </Box>
+
+                  {(() => {
+                    if (!activeInward) return null;
+                    const inv = enrichedSelectedInwards.find((s) => s.id === activeInward.id) || activeInward;
+                    return (
+                      <Box key={inv.id} sx={{
+                        display: "inline-flex", alignItems: "center", gap: 0.5,
+                        bgcolor: "#e8f5e9", border: "1.5px solid #023020",
+                        borderRadius: "999px", px: 1.5, py: 0.4,
+                        boxShadow: "0 1px 3px rgba(2,48,32,0.10)",
+                      }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", lineHeight: 1.4 }}>
+                          {inv.inward_no || `#${inv.id}`}
+                        </Typography>
+                        {(inv.serial_no || inv.ref_no) && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.4 }}>
+                            · {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
+                          </Typography>
+                        )}
+                        <IconButton size="small" sx={{ p: 0, ml: 0.25, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
+                          <Typography sx={{ fontSize: 11, lineHeight: 1 }}>✕</Typography>
+                        </IconButton>
+                      </Box>
+                    );
+                  })()}
                 </Box>
               </Grid>
             )}
@@ -2020,7 +2021,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           <TextField
                             {...params}
                             label="Product Name *"
-                            required
                             placeholder="Select product..."
                           />
                         )}
@@ -2037,7 +2037,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         )}
                         getOptionLabel={(option: any) => option.name || ""}
                         disabled={!entryProduct}
-                        renderInput={(params) => <TextField {...params} label="Process *" required />}
+                        renderInput={(params) => <TextField {...params} label="Process *" />}
                       />
                     </Grid>
                     <Grid size={{ xs: 6, sm: 1.1 }}>
