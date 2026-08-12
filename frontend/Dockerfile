@@ -1,9 +1,9 @@
 # Stage 1: Build React static assets
-FROM node:20-alpine AS build
+FROM node:20-slim AS build
 WORKDIR /app
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 COPY . .
 RUN npx vite build
 
