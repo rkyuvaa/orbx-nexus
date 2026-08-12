@@ -7,7 +7,7 @@ export function formatQty(val: number | string | null | undefined): string {
 
 export function formatWeight(val: number | string | null | undefined): string {
   const n = Number(val || 0);
-  return n.toLocaleString(IN, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString(IN, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 }
 
 export function formatAmount(val: number | string | null | undefined): string {
