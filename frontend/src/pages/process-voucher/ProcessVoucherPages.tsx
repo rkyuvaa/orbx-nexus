@@ -1629,39 +1629,34 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     setSelectedInwards([]); // Clear previously selected inwards
   }, [setValue]);
 
-  // Show confirmation popup when an inward is selected
+  // Show item picker popup when an inward is selected
   const handleInwardSelect = useCallback((inward: any) => {
     // Duplicate guard using ref (no closure over state)
     if (selectedInwardsRef.current.find((s) => s.id === inward.id)) return;
-    // Open confirmation dialog for this inward
-    setConfirmInward(inward);
-  }, []);
-
-  // Called when user confirms item selection from the inward confirmation popup
-  const handleConfirmInwardItems = useCallback((inward: any, selectedItems: any[]) => {
-    // 1. Add inward to selected list
+    // Link the inward chip immediately, then open the item picker
     setSelectedInwards((prev) => {
       if (prev.find((s) => s.id === inward.id)) return prev;
       return [...prev, inward];
     });
-    // 2. Add each chosen item as a line item
-    if (selectedItems.length > 0) {
-      setLineItems((prev) => {
-        // Remove the blank placeholder row if it's the only row
-        const hasOnlyBlank = prev.length === 1 && !prev[0].product_id;
-        const base = hasOnlyBlank ? [] : prev;
-        const newRows = selectedItems.map((si: any) => ({
-          product_id: si.product_id,
-          process_id: si.process_id ?? "",
-          inward_id: inward.id,
-          quantity: "",
-          weight: si.weight ?? "",
-          total_weight: "",
-        }));
-        return [...base, ...newRows];
-      });
-    }
-    setConfirmInward(null);
+    setConfirmInward(inward);
+  }, []);
+
+  // Called when user clicks "+ Add" for a single item in the picker popup
+  const handleAddSingleInwardItem = useCallback((inward: any, item: any, qty: number) => {
+    setLineItems((prev) => {
+      const hasOnlyBlank = prev.length === 1 && !prev[0].product_id;
+      const base = hasOnlyBlank ? [] : prev;
+      const wt = Number(item.weight || 0);
+      const newRow = {
+        product_id: item.product_id,
+        process_id: item.process_id ?? "",
+        inward_id: inward.id,
+        quantity: qty,
+        weight: wt,
+        total_weight: Number((qty * wt).toFixed(2)),
+      };
+      return [...base, newRow];
+    });
   }, []);
 
   const handleRemoveSelectedInward = useCallback((id: number) => {
@@ -2173,13 +2168,13 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         </DialogActions>
       </form>
 
-      {/* Inward Item Confirmation Popup */}
+      {/* Inward Item Picker Popup */}
       {confirmInward && (
         <InwardItemConfirmDialog
           inward={confirmInward}
           productMapObj={productMapObj}
           processMapObj={processMapObj}
-          onConfirm={(selectedItems) => handleConfirmInwardItems(confirmInward, selectedItems)}
+          onAddItem={(item, qty) => handleAddSingleInwardItem(confirmInward, item, qty)}
           onClose={() => setConfirmInward(null)}
         />
       )}
@@ -2188,21 +2183,21 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 }
 
 // ─────────────────────────────────────────────────────────────────
-// InwardItemConfirmDialog — secondary popup shown when user picks an
-// inward from the autocomplete. Lists that inward's items and lets
-// the user choose which to bring into the outward form.
+// InwardItemConfirmDialog — one-by-one item picker.
+// Shows the inward’s items. User picks qty and clicks "+ Add" per row.
+// The inward chip is already linked before this dialog opens.
 // ─────────────────────────────────────────────────────────────────
 const InwardItemConfirmDialog = memo(function InwardItemConfirmDialog({
   inward,
   productMapObj,
   processMapObj,
-  onConfirm,
+  onAddItem,
   onClose,
 }: {
   inward: any;
   productMapObj: Record<number | string, any>;
   processMapObj: Record<number | string, any>;
-  onConfirm: (selectedItems: any[]) => void;
+  onAddItem: (item: any, qty: number) => void;
   onClose: () => void;
 }) {
   const items: any[] = useMemo(() => {
@@ -2214,104 +2209,151 @@ const InwardItemConfirmDialog = memo(function InwardItemConfirmDialog({
     } catch { return []; }
   }, [inward.items]);
 
-  // Track which items are checked (default: all)
-  const [checkedIds, setCheckedIds] = useState<Set<number>>(() => new Set(items.map((_: any, i: number) => i)));
-
-  const toggleItem = (idx: number) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx); else next.add(idx);
-      return next;
+  // Per-row qty input state (keyed by index)
+  const [qtys, setQtys] = useState<Record<number, string>>(() => {
+    const init: Record<number, string> = {};
+    items.forEach((it: any, i: number) => {
+      init[i] = String(it.quantity || "");
     });
-  };
+    return init;
+  });
 
-  const handleConfirm = () => {
-    if (items.length > 0) {
-      const selected = items.filter((_: any, i: number) => checkedIds.has(i));
-      onConfirm(selected);
-    } else {
-      // No items on inward — still add the inward with an empty line
-      onConfirm([]);
-    }
+  // Track which rows have been added (to show "Added" badge)
+  const [addedRows, setAddedRows] = useState<Set<number>>(new Set());
+
+  const handleAdd = (it: any, i: number) => {
+    const qty = Number(qtys[i] || 0);
+    if (!qty || qty <= 0) return;
+    onAddItem(it, qty);
+    setAddedRows((prev) => new Set(prev).add(i));
+    
+    // Reset added visual indicator after a short delay so they can add again if needed
+    setTimeout(() => {
+      setAddedRows((prev) => {
+        const next = new Set(prev);
+        next.delete(i);
+        return next;
+      });
+    }, 1500);
   };
 
   const dateStr = inward.inward_date
     ? new Date(inward.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     : "";
 
+  const refParts = [
+    inward.serial_no && `S: ${inward.serial_no}`,
+    inward.ref_no && `Ref: ${inward.ref_no}`,
+  ].filter(Boolean).join(" · ");
+
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#023020", pb: 0 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <DialogTitle sx={{ fontWeight: 700, color: "#023020", pb: 0.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Box sx={{ bgcolor: "#e8f5e9", border: "1.5px solid #023020", borderRadius: "999px", px: 1.5, py: 0.3 }}>
             <Typography variant="caption" sx={{ fontWeight: 800, color: "#023020" }}>{inward.inward_no}</Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
-            {dateStr}{[inward.serial_no && `S: ${inward.serial_no}`, inward.ref_no && `Ref: ${inward.ref_no}`].filter(Boolean).length > 0 ? " · " + [inward.serial_no && `S: ${inward.serial_no}`, inward.ref_no && `Ref: ${inward.ref_no}`].filter(Boolean).join(" · ") : ""}
-          </Typography>
+          {(dateStr || refParts) && (
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
+              {[dateStr, refParts].filter(Boolean).join(" · ")}
+            </Typography>
+          )}
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5, fontSize: "0.8rem" }}>
-          Select the items to add to the Outward Voucher
+          Enter qty and click <strong>+ Add</strong> for each item you want in the Outward Voucher
         </Typography>
       </DialogTitle>
       <DialogContent dividers sx={{ p: 0 }}>
         {items.length === 0 ? (
-          <Box sx={{ py: 4, textAlign: "center" }}>
-            <Typography color="text.secondary">No items found on this inward voucher.</Typography>
-            <Typography variant="caption" color="text.secondary">The inward will still be linked — you can add products manually.</Typography>
+          <Box sx={{ py: 5, textAlign: "center" }}>
+            <Typography color="text.secondary" sx={{ mb: 1 }}>No items found on this inward voucher.</Typography>
+            <Typography variant="caption" color="text.secondary">
+              The inward is already linked — add products manually in the line items table.
+            </Typography>
           </Box>
         ) : (
           <Table size="small">
             <TableHead sx={{ bgcolor: "#f4f9f6" }}>
               <TableRow>
-                <TableCell sx={{ width: 42 }} />
                 <TableCell sx={{ fontWeight: 700 }}>Product</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="right">Wt (kg)</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 70 }} align="right">Inward Qty</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 110 }} align="right">Qty to Add</TableCell>
+                <TableCell sx={{ width: 80 }} align="center" />
               </TableRow>
             </TableHead>
             <TableBody>
               {items.map((it: any, i: number) => {
                 const prod = productMapObj[it.product_id];
                 const proc = processMapObj[it.process_id ?? ""];
-                const checked = checkedIds.has(i);
+                const isAdded = addedRows.has(i);
                 return (
                   <TableRow
                     key={i}
-                    hover
-                    onClick={() => toggleItem(i)}
-                    sx={{ cursor: "pointer", bgcolor: checked ? "#f0faf4" : "inherit", transition: "background 0.15s" }}
+                    sx={{
+                      bgcolor: isAdded ? "#e8f5e9" : "inherit",
+                      transition: "background 0.2s",
+                    }}
                   >
                     <TableCell>
-                      <Box
-                        sx={{
-                          width: 20, height: 20, border: "2px solid",
-                          borderColor: checked ? "#023020" : "#bdbdbd",
-                          borderRadius: "4px",
-                          bgcolor: checked ? "#023020" : "transparent",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          transition: "all 0.15s",
-                        }}
-                      >
-                        {checked && <Typography sx={{ color: "#fff", fontSize: 12, lineHeight: 1, fontWeight: 800 }}>✓</Typography>}
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
                         {prod?.name || `Product #${it.product_id}`}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem" }}>
                         {proc?.name || (it.process_id ? `#${it.process_id}` : "—")}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{it.quantity ?? "—"}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                        {it.quantity ?? "—"}
+                      </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" color="text.secondary">{it.weight ? `${it.weight} kg` : "—"}</Typography>
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={qtys[i] ?? ""}
+                        onChange={(e) => setQtys((prev) => ({ ...prev, [i]: e.target.value }))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAdd(it, i);
+                          }
+                        }}
+                        placeholder="0"
+                        disabled={isAdded}
+                        slotProps={{ htmlInput: { min: 0, style: { textAlign: "right", padding: "4px 8px" } } }}
+                        sx={{ width: 90 }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      {isAdded ? (
+                        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, color: "#023020" }}>
+                          <Typography sx={{ fontSize: 14 }}>✓</Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020" }}>Added</Typography>
+                        </Box>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => handleAdd(it, i)}
+                          disabled={!Number(qtys[i] || 0)}
+                          sx={{
+                            bgcolor: "#023020",
+                            "&:hover": { bgcolor: "#034d30" },
+                            textTransform: "none",
+                            fontWeight: 700,
+                            minWidth: 64,
+                            px: 1.5,
+                            py: 0.4,
+                            fontSize: "0.78rem",
+                          }}
+                        >
+                          + Add
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -2320,14 +2362,13 @@ const InwardItemConfirmDialog = memo(function InwardItemConfirmDialog({
           </Table>
         )}
       </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
-        <Button onClick={onClose} variant="outlined">Cancel</Button>
+      <DialogActions sx={{ px: 3, py: 2 }}>
         <Button
           variant="contained"
-          onClick={handleConfirm}
-          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, fontWeight: 700 }}
+          onClick={onClose}
+          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, fontWeight: 700, textTransform: "none" }}
         >
-          {items.length === 0 ? "Link Inward" : `Add ${checkedIds.size} item${checkedIds.size !== 1 ? "s" : ""} to Outward`}
+          Done
         </Button>
       </DialogActions>
     </Dialog>
