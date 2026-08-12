@@ -1289,8 +1289,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   // Ref mirror so handleInwardSelect can read latest value without being a dependency
   const selectedInwardsRef = useRef<any[]>([]);
   selectedInwardsRef.current = selectedInwards;
-  // Confirmation popup for inward item selection
-  const [confirmInward, setConfirmInward] = useState<any | null>(null);
+  // Product Entry Section states
+  const [entryInward, setEntryInward] = useState<any | null>(null);
+  const [entryProduct, setEntryProduct] = useState<any | null>(null);
+  const [entryProcess, setEntryProcess] = useState<any | null>(null);
+  const [entryQty, setEntryQty] = useState<string>("");
+  const [entryWeight, setEntryWeight] = useState<string>("");
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: productBalances = [] } = useQuery({
@@ -1558,6 +1562,11 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
   useEffect(() => {
     if (open) {
+      setEntryInward(null);
+      setEntryProduct(null);
+      setEntryProcess(null);
+      setEntryQty("");
+      setEntryWeight("");
       if (editing) {
         reset({
           outward_no: editing.outward_no || "",
@@ -1627,42 +1636,129 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     setValue("ledger_id", id);
     setPickerLedgerId(id ? Number(id) : null);
     setSelectedInwards([]); // Clear previously selected inwards
+    setEntryInward(null);
+    setEntryProduct(null);
+    setEntryProcess(null);
+    setEntryQty("");
+    setEntryWeight("");
   }, [setValue]);
 
-  // Show item picker popup when an inward is selected
+  // Link the selected inward to the voucher
   const handleInwardSelect = useCallback((inward: any) => {
     // Duplicate guard using ref (no closure over state)
     if (selectedInwardsRef.current.find((s) => s.id === inward.id)) return;
-    // Link the inward chip immediately, then open the item picker
     setSelectedInwards((prev) => {
       if (prev.find((s) => s.id === inward.id)) return prev;
       return [...prev, inward];
-    });
-    setConfirmInward(inward);
-  }, []);
-
-  // Called when user clicks "+ Add" for a single item in the picker popup
-  const handleAddSingleInwardItem = useCallback((inward: any, item: any, qty: number) => {
-    setLineItems((prev) => {
-      const hasOnlyBlank = prev.length === 1 && !prev[0].product_id;
-      const base = hasOnlyBlank ? [] : prev;
-      const wt = Number(item.weight || 0);
-      const newRow = {
-        product_id: item.product_id,
-        process_id: item.process_id ?? "",
-        inward_id: inward.id,
-        quantity: qty,
-        weight: wt,
-        total_weight: Number((qty * wt).toFixed(2)),
-      };
-      return [...base, newRow];
     });
   }, []);
 
   const handleRemoveSelectedInward = useCallback((id: number) => {
     setSelectedInwards((prev) => prev.filter((s) => s.id !== id));
+    setEntryInward((prev: any) => (prev && prev.id === id ? null : prev));
   }, []);
 
+
+  // Memoized lists & values for the Product Entry Section
+  const entryProductOptions = useMemo(() => {
+    if (!entryInward) return [];
+    const productIds = new Set<number>();
+    Object.values(lineItemBalanceMap).forEach((li) => {
+      if (li.inwardId === entryInward.id) {
+        productIds.add(li.productId);
+      }
+    });
+    return products.filter((p: any) => productIds.has(p.id));
+  }, [entryInward, lineItemBalanceMap, products]);
+
+  const entryProcessOptions = useMemo(() => {
+    if (!entryInward || !entryProduct) return [];
+    const procIds = new Set<number | string | null>();
+    Object.values(lineItemBalanceMap).forEach((li) => {
+      if (li.inwardId === entryInward.id && li.productId === entryProduct.id) {
+        procIds.add(li.processId);
+      }
+    });
+    return processes.filter((p: any) => procIds.has(p.id));
+  }, [entryInward, entryProduct, lineItemBalanceMap, processes]);
+
+  const entryLiveStockBal = useMemo(() => {
+    if (!entryInward || !entryProduct) return 0;
+    const inwardId = entryInward.id;
+    const productId = entryProduct.id;
+    const processId = entryProcess ? entryProcess.id : null;
+    const initialBal = getProductBalance(productId, processId, inwardId);
+
+    const usedQty = lineItems
+      .filter((it) =>
+        Number(it.inward_id) === inwardId &&
+        Number(it.product_id) === productId &&
+        (processId !== null ? Number(it.process_id) === Number(processId) : !it.process_id)
+      )
+      .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+
+    return initialBal - usedQty;
+  }, [entryInward, entryProduct, entryProcess, getProductBalance, lineItems]);
+
+  const entryTotalWeight = useMemo(() => {
+    const qty = Number(entryQty) || 0;
+    const wt = Number(entryWeight) || 0;
+    return Number((qty * wt).toFixed(2));
+  }, [entryQty, entryWeight]);
+
+  const entryQtyError = useMemo(() => {
+    if (!entryQty) return "";
+    const qty = Number(entryQty);
+    if (qty <= 0) return "Quantity must be greater than 0";
+    if (qty > entryLiveStockBal) {
+      return `Qty exceeds available stock (${formatQty(entryLiveStockBal)})`;
+    }
+    return "";
+  }, [entryQty, entryLiveStockBal]);
+
+  useEffect(() => {
+    if (entryProduct && entryInward) {
+      setEntryWeight(entryProduct.weight ? String(entryProduct.weight) : "0");
+      const match = Object.values(lineItemBalanceMap).find(
+        (li) => li.inwardId === entryInward.id && li.productId === entryProduct.id
+      );
+      if (match && match.processId) {
+        const procObj = processes.find((p: any) => p.id === match.processId);
+        if (procObj) setEntryProcess(procObj);
+      } else {
+        setEntryProcess(null);
+      }
+    } else {
+      setEntryWeight("");
+      setEntryProcess(null);
+    }
+  }, [entryProduct, entryInward, lineItemBalanceMap, processes]);
+
+  const handleAddProductEntry = useCallback(() => {
+    if (!entryInward || !entryProduct || !entryProcess || !entryQty || entryQtyError) return;
+    const qty = Number(entryQty);
+    const wt = Number(entryWeight) || 0;
+
+    const newRow = {
+      product_id: entryProduct.id,
+      process_id: entryProcess.id,
+      inward_id: entryInward.id,
+      quantity: qty,
+      weight: wt,
+      total_weight: entryTotalWeight,
+    };
+
+    setLineItems((prev) => {
+      const hasOnlyBlank = prev.length === 1 && !prev[0].product_id;
+      const base = hasOnlyBlank ? [] : prev;
+      return [...base, newRow];
+    });
+
+    setEntryProduct(null);
+    setEntryProcess(null);
+    setEntryQty("");
+    setEntryWeight("");
+  }, [entryInward, entryProduct, entryProcess, entryQty, entryWeight, entryTotalWeight, entryQtyError]);
 
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const netWeight = lineItems.reduce((sum, item) => sum + (Number(item.total_weight) || 0), 0);
@@ -1910,6 +2006,114 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     />
                   </Box>
                 </Box>
+              </Grid>
+            )}
+
+            {/* Product Entry Section */}
+            {watch("ledger_id") && selectedInwards.length > 0 && (
+              <Grid size={{ xs: 12 }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f9fcfb", borderColor: "#023020", borderRadius: "8px" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020", mb: 1.5 }}>
+                    Quick Product Entry
+                  </Typography>
+                  <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
+                    <Grid size={{ xs: 12, sm: 2.5 }}>
+                      <Autocomplete
+                        size="small"
+                        value={entryInward}
+                        onChange={(_, val) => {
+                          setEntryInward(val);
+                          setEntryProduct(null);
+                          setEntryProcess(null);
+                        }}
+                        options={selectedInwards}
+                        getOptionLabel={(option: any) => option.inward_no || ""}
+                        renderInput={(params) => <TextField {...params} label="Inward Number *" required />}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 3 }}>
+                      <Autocomplete
+                        size="small"
+                        value={entryProduct}
+                        onChange={(_, val) => setEntryProduct(val)}
+                        options={entryProductOptions}
+                        getOptionLabel={(option: any) => option.name || ""}
+                        disabled={!entryInward}
+                        renderInput={(params) => <TextField {...params} label="Product Name *" required placeholder={entryInward ? "Select product..." : "Select inward first"} />}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 2.5 }}>
+                      <Autocomplete
+                        size="small"
+                        value={entryProcess}
+                        onChange={(_, val) => setEntryProcess(val)}
+                        options={processes.filter((p: any) => 
+                          (p.is_active || (entryProcess && p.id === entryProcess.id)) && 
+                          (p.process_ids || (p.process_code && p.process_code.includes(" / ")))
+                        )}
+                        getOptionLabel={(option: any) => option.name || ""}
+                        disabled={!entryProduct}
+                        renderInput={(params) => <TextField {...params} label="Process *" required />}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 1 }}>
+                      <TextField
+                        size="small"
+                        label="Stock Bal"
+                        value={entryInward && entryProduct ? formatWeight(entryLiveStockBal) : "—"}
+                        disabled
+                        slotProps={{ htmlInput: { style: { textAlign: "right", fontWeight: 700, color: entryLiveStockBal > 0 ? "#0f5132" : "#dc3545" } } }}
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 1.2 }}>
+                      <TextField
+                        size="small"
+                        label="Qty *"
+                        type="number"
+                        value={entryQty}
+                        onChange={(e) => setEntryQty(e.target.value)}
+                        disabled={!entryProduct || !entryProcess}
+                        error={!!entryQtyError}
+                        helperText={entryQtyError}
+                        slotProps={{ htmlInput: { min: 1, style: { textAlign: "right" } } }}
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 1.2 }}>
+                      <TextField
+                        size="small"
+                        label="Unit Wt *"
+                        type="number"
+                        value={entryWeight}
+                        onChange={(e) => setEntryWeight(e.target.value)}
+                        disabled={!entryProduct}
+                        slotProps={{ htmlInput: { min: 0, style: { textAlign: "right" } } }}
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 1.2 }}>
+                      <TextField
+                        size="small"
+                        label="Total Wt"
+                        value={entryTotalWeight ? `${formatWeight(entryTotalWeight)} kg` : "—"}
+                        disabled
+                        slotProps={{ htmlInput: { style: { textAlign: "right", fontWeight: 600 } } }}
+                        fullWidth
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 1.4 }} sx={{ display: "flex", justifyContent: "flex-end", pt: 0.5 }}>
+                      <Button
+                        variant="contained"
+                        onClick={handleAddProductEntry}
+                        disabled={!entryInward || !entryProduct || !entryProcess || !entryQty || !!entryQtyError}
+                        sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none", fontWeight: 700, height: 38, width: "100%" }}
+                      >
+                        Add Product
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Paper>
               </Grid>
             )}
 
@@ -2168,209 +2372,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         </DialogActions>
       </form>
 
-      {/* Inward Item Picker Popup */}
-      {confirmInward && (
-        <InwardItemConfirmDialog
-          inward={confirmInward}
-          productMapObj={productMapObj}
-          processMapObj={processMapObj}
-          onAddItem={(item, qty) => handleAddSingleInwardItem(confirmInward, item, qty)}
-          onClose={() => setConfirmInward(null)}
-        />
-      )}
     </Dialog>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────
-// InwardItemConfirmDialog — one-by-one item picker.
-// Shows the inward’s items. User picks qty and clicks "+ Add" per row.
-// The inward chip is already linked before this dialog opens.
-// ─────────────────────────────────────────────────────────────────
-const InwardItemConfirmDialog = memo(function InwardItemConfirmDialog({
-  inward,
-  productMapObj,
-  processMapObj,
-  onAddItem,
-  onClose,
-}: {
-  inward: any;
-  productMapObj: Record<number | string, any>;
-  processMapObj: Record<number | string, any>;
-  onAddItem: (item: any, qty: number) => void;
-  onClose: () => void;
-}) {
-  const items: any[] = useMemo(() => {
-    try {
-      const raw = inward.items;
-      if (!raw) return [];
-      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  }, [inward.items]);
-
-  // Per-row qty input state (keyed by index)
-  const [qtys, setQtys] = useState<Record<number, string>>(() => {
-    const init: Record<number, string> = {};
-    items.forEach((it: any, i: number) => {
-      init[i] = String(it.quantity || "");
-    });
-    return init;
-  });
-
-  // Track which rows have been added (to show "Added" badge)
-  const [addedRows, setAddedRows] = useState<Set<number>>(new Set());
-
-  const handleAdd = (it: any, i: number) => {
-    const qty = Number(qtys[i] || 0);
-    if (!qty || qty <= 0) return;
-    onAddItem(it, qty);
-    setAddedRows((prev) => new Set(prev).add(i));
-    
-    // Reset added visual indicator after a short delay so they can add again if needed
-    setTimeout(() => {
-      setAddedRows((prev) => {
-        const next = new Set(prev);
-        next.delete(i);
-        return next;
-      });
-    }, 1500);
-  };
-
-  const dateStr = inward.inward_date
-    ? new Date(inward.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-    : "";
-
-  const refParts = [
-    inward.serial_no && `S: ${inward.serial_no}`,
-    inward.ref_no && `Ref: ${inward.ref_no}`,
-  ].filter(Boolean).join(" · ");
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#023020", pb: 0.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Box sx={{ bgcolor: "#e8f5e9", border: "1.5px solid #023020", borderRadius: "999px", px: 1.5, py: 0.3 }}>
-            <Typography variant="caption" sx={{ fontWeight: 800, color: "#023020" }}>{inward.inward_no}</Typography>
-          </Box>
-          {(dateStr || refParts) && (
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
-              {[dateStr, refParts].filter(Boolean).join(" · ")}
-            </Typography>
-          )}
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5, fontSize: "0.8rem" }}>
-          Enter qty and click <strong>+ Add</strong> for each item you want in the Outward Voucher
-        </Typography>
-      </DialogTitle>
-      <DialogContent dividers sx={{ p: 0 }}>
-        {items.length === 0 ? (
-          <Box sx={{ py: 5, textAlign: "center" }}>
-            <Typography color="text.secondary" sx={{ mb: 1 }}>No items found on this inward voucher.</Typography>
-            <Typography variant="caption" color="text.secondary">
-              The inward is already linked — add products manually in the line items table.
-            </Typography>
-          </Box>
-        ) : (
-          <Table size="small">
-            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Product</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 70 }} align="right">Inward Qty</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 110 }} align="right">Qty to Add</TableCell>
-                <TableCell sx={{ width: 80 }} align="center" />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {items.map((it: any, i: number) => {
-                const prod = productMapObj[it.product_id];
-                const proc = processMapObj[it.process_id ?? ""];
-                const isAdded = addedRows.has(i);
-                return (
-                  <TableRow
-                    key={i}
-                    sx={{
-                      bgcolor: isAdded ? "#e8f5e9" : "inherit",
-                      transition: "background 0.2s",
-                    }}
-                  >
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
-                        {prod?.name || `Product #${it.product_id}`}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.8rem" }}>
-                        {proc?.name || (it.process_id ? `#${it.process_id}` : "—")}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
-                        {it.quantity ?? "—"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={qtys[i] ?? ""}
-                        onChange={(e) => setQtys((prev) => ({ ...prev, [i]: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAdd(it, i);
-                          }
-                        }}
-                        placeholder="0"
-                        disabled={isAdded}
-                        slotProps={{ htmlInput: { min: 0, style: { textAlign: "right", padding: "4px 8px" } } }}
-                        sx={{ width: 90 }}
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      {isAdded ? (
-                        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, color: "#023020" }}>
-                          <Typography sx={{ fontSize: 14 }}>✓</Typography>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020" }}>Added</Typography>
-                        </Box>
-                      ) : (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          onClick={() => handleAdd(it, i)}
-                          disabled={!Number(qtys[i] || 0)}
-                          sx={{
-                            bgcolor: "#023020",
-                            "&:hover": { bgcolor: "#034d30" },
-                            textTransform: "none",
-                            fontWeight: 700,
-                            minWidth: 64,
-                            px: 1.5,
-                            py: 0.4,
-                            fontSize: "0.78rem",
-                          }}
-                        >
-                          + Add
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button
-          variant="contained"
-          onClick={onClose}
-          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, fontWeight: 700, textTransform: "none" }}
-        >
-          Done
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-});
