@@ -637,107 +637,73 @@ export default function LabourBillPage() {
 
 
 
-    // Build INWARD rows (one row per items line, header fallback when items is empty)
+    // Build combined rows: one line per outward item with linked inward columns on the same row
 
-    const inwardRows: any[] = [];
-
-    linkedInwards.forEach((inv: any) => {
-
-      const invItems = parseJsonArray(inv.items);
-
-      const invRef = inv.ref_no || inv.serial_no || "-";
-
-      if (invItems.length === 0) {
-
-        inwardRows.push({
-
-          inward_no: inv.inward_no,
-
-          ref: invRef,
-
-          inward_date: inv.inward_date,
-
-          productName: products.find((p: any) => p.id === Number(inv.product_id))?.name || `Product #${inv.product_id}`,
-
-          quantity: inv.quantity || 0,
-
-          weight: inv.total_weight || inv.weight || 0,
-
-        });
-
-      } else {
-
-        invItems.forEach((item: any) => {
-
-          inwardRows.push({
-
-            inward_no: inv.inward_no,
-
-            ref: invRef,
-
-            inward_date: inv.inward_date,
-
-            productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
-
-            quantity: item.quantity || 0,
-
-            weight: item.total_weight || item.weight || 0,
-
-          });
-
-        });
-
-      }
-
-    });
-
-
-
-    // Build OUTWARD rows (one row per items line, header fallback when items is empty)
-
-    const outwardRows: any[] = [];
+    const reportRows: any[] = [];
 
     linkedOutwards.forEach((out: any) => {
 
+      const linkedInvForOut = (() => {
+
+        const ids = out.inward_ids
+
+          ? parseJsonArray(out.inward_ids)
+
+          : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
+
+        return ids.map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id))).filter(Boolean);
+
+      })();
+
       const outItems = parseJsonArray(out.items);
 
-      if (outItems.length === 0) {
+      const pushReportRow = (item: any, outInv: any[]) => {
 
-        outwardRows.push({
+        reportRows.push({
+
+          inward_no: outInv.map((v: any) => v.inward_no).filter(Boolean).join(", ") || "-",
+
+          ref: outInv.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
+
+          inward_date: outInv.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
 
           outward_no: out.outward_no,
 
           outward_date: out.outward_date,
 
-          productName: products.find((p: any) => p.id === Number(out.product_id))?.name || `Product #${out.product_id}`,
+          productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
 
-          processName: resolveProcessName(out.process_id, processes) || "-",
+          processName: resolveProcessName(item.process_id || out.process_id, processes) || "-",
 
-          quantity: out.quantity || 0,
+          quantity: item.quantity || 0,
 
-          weight: out.total_weight || out.weight || 0,
+          weight: item.total_weight || item.weight || 0,
 
         });
+
+      };
+
+      if (outItems.length === 0) {
+
+        pushReportRow(out, linkedInvForOut);
 
       } else {
 
         outItems.forEach((item: any) => {
 
-          outwardRows.push({
+          const prodId = Number(item.product_id);
 
-            outward_no: out.outward_no,
+          const productMatched = linkedInvForOut.filter((inv: any) => {
 
-            outward_date: out.outward_date,
+            if (inv.product_id && Number(inv.product_id) === prodId) return true;
 
-            productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+            const invItems = parseJsonArray(inv.items);
 
-            processName: resolveProcessName(item.process_id || out.process_id, processes) || "-",
-
-            quantity: item.quantity || 0,
-
-            weight: item.total_weight || item.weight || 0,
+            return invItems.some((i: any) => Number(i.product_id) === prodId);
 
           });
+
+          pushReportRow(item, productMatched.length > 0 ? productMatched : linkedInvForOut);
 
         });
 
@@ -747,83 +713,107 @@ export default function LabourBillPage() {
 
 
 
-    const inwardTotalQty = inwardRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+    // Fallback: bill with inwards but no linked outwards
 
-    const inwardTotalWeight = inwardRows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+    if (reportRows.length === 0 && linkedInwards.length > 0) {
 
-    const outwardTotalQty = outwardRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+      linkedInwards.forEach((inv: any) => {
 
-    const outwardTotalWeight = outwardRows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+        const invItems = parseJsonArray(inv.items);
 
+        const invRef = inv.ref_no || inv.serial_no || "-";
 
+        if (invItems.length === 0) {
 
-    let inwardRowsHtml = "";
+          reportRows.push({
 
-    if (inwardRows.length === 0) {
+            inward_no: inv.inward_no,
 
-      inwardRowsHtml = `<tr><td colspan="7" style="text-align: center; padding: 12px;">No linked inward vouchers</td></tr>`;
+            ref: invRef,
 
-    } else {
+            inward_date: toDateStr(inv.inward_date),
 
-      inwardRows.forEach((r, idx) => {
+            outward_no: "-",
 
-        inwardRowsHtml += `
+            outward_date: "-",
 
-          <tr>
+            productName: products.find((p: any) => p.id === Number(inv.product_id))?.name || `Product #${inv.product_id}`,
 
-            <td style="text-align: center;">${idx + 1}</td>
+            processName: "-",
 
-            <td style="font-weight: 600; white-space: nowrap;">${r.inward_no || "-"}</td>
+            quantity: inv.quantity || 0,
 
-            <td style="white-space: nowrap;">${r.ref}</td>
+            weight: inv.total_weight || inv.weight || 0,
 
-            <td style="white-space: nowrap;">${toDateStr(r.inward_date)}</td>
+          });
 
-            <td style="font-weight: 600;">${r.productName}</td>
+        } else {
 
-            <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
+          invItems.forEach((item: any) => {
 
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.weight)} kg</td>
+            reportRows.push({
 
-          </tr>`;
+              inward_no: inv.inward_no,
+
+              ref: invRef,
+
+              inward_date: toDateStr(inv.inward_date),
+
+              outward_no: "-",
+
+              outward_date: "-",
+
+              productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+
+              processName: "-",
+
+              quantity: item.quantity || 0,
+
+              weight: item.total_weight || item.weight || 0,
+
+            });
+
+          });
+
+        }
 
       });
-
-      inwardRowsHtml += `
-
-          <tr class="total-row">
-
-            <td colspan="5" style="text-align: right;">Total</td>
-
-            <td style="text-align: right;">${formatQty(inwardTotalQty)}</td>
-
-            <td style="text-align: right; font-weight: 700;">${formatWeight(inwardTotalWeight)} kg</td>
-
-          </tr>`;
 
     }
 
 
 
-    let outwardRowsHtml = "";
+    const totalQty = reportRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
 
-    if (outwardRows.length === 0) {
+    const totalWeight = reportRows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
 
-      outwardRowsHtml = `<tr><td colspan="7" style="text-align: center; padding: 12px;">No linked outward vouchers</td></tr>`;
+
+
+    let reportRowsHtml = "";
+
+    if (reportRows.length === 0) {
+
+      reportRowsHtml = `<tr><td colspan="10" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
 
     } else {
 
-      outwardRows.forEach((r, idx) => {
+      reportRows.forEach((r, idx) => {
 
-        outwardRowsHtml += `
+        reportRowsHtml += `
 
           <tr>
 
             <td style="text-align: center;">${idx + 1}</td>
 
-            <td style="font-weight: 600; white-space: nowrap;">${r.outward_no || "-"}</td>
+            <td style="font-weight: 600; white-space: nowrap;">${r.inward_no}</td>
 
-            <td style="white-space: nowrap;">${toDateStr(r.outward_date)}</td>
+            <td style="white-space: nowrap;">${r.ref}</td>
+
+            <td style="white-space: nowrap;">${r.inward_date}</td>
+
+            <td style="font-weight: 600; white-space: nowrap;">${r.outward_no}</td>
+
+            <td style="white-space: nowrap;">${r.outward_date}</td>
 
             <td style="font-weight: 600;">${r.productName}</td>
 
@@ -837,27 +827,19 @@ export default function LabourBillPage() {
 
       });
 
-      outwardRowsHtml += `
+      reportRowsHtml += `
 
           <tr class="total-row">
 
-            <td colspan="5" style="text-align: right;">Total</td>
+            <td colspan="8" style="text-align: right;">Total</td>
 
-            <td style="text-align: right;">${formatQty(outwardTotalQty)}</td>
+            <td style="text-align: right;">${formatQty(totalQty)}</td>
 
-            <td style="text-align: right; font-weight: 700;">${formatWeight(outwardTotalWeight)} kg</td>
+            <td style="text-align: right; font-weight: 700;">${formatWeight(totalWeight)} kg</td>
 
           </tr>`;
 
     }
-
-
-
-    const hasBothSections = inwardRows.length > 0 && outwardRows.length > 0;
-
-    const pageBreakHint = (printConfig.billPaperSize === "A5" && hasBothSections)
-      ? " page-break-before: always;"
-      : "";
 
 
 
@@ -935,12 +917,6 @@ export default function LabourBillPage() {
 
           </div>
 
-          <div class="title-section" style="align-items: flex-start;">
-
-            <h2 style="font-size: 14px;">INWARD DETAILS</h2>
-
-          </div>
-
           <table class="items-table">
 
             <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
@@ -955,41 +931,9 @@ export default function LabourBillPage() {
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD DATE</th>
 
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
-
-                <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
-
-                <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
-
-              </tr>
-
-            </thead>
-
-            <tbody>
-
-              ${inwardRowsHtml}
-
-            </tbody>
-
-          </table>
-
-          <div class="title-section" style="align-items: flex-start;${pageBreakHint}">
-
-            <h2 style="font-size: 14px;">OUTWARD DETAILS</h2>
-
-          </div>
-
-          <table class="items-table">
-
-            <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-
-              <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-
-                <th style="width: 40px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
-
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD NO</th>
 
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">DATE</th>
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD DATE</th>
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
 
@@ -1005,7 +949,7 @@ export default function LabourBillPage() {
 
             <tbody>
 
-              ${outwardRowsHtml}
+              ${reportRowsHtml}
 
             </tbody>
 
