@@ -380,9 +380,48 @@ async def update_outward(
 async def delete_outward(
     outward_id: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
-    await db.execute(
-        text(f"DELETE FROM {_schema(fy)}.stock_outward WHERE id = :id"), {"id": outward_id}
+    schema = _schema(fy)
+    
+    # Check if any job work entries reference this outward voucher
+    jw_dep = await db.execute(
+        text(
+            f"SELECT COUNT(*) AS cnt FROM {schema}.job_work_entries "
+            f"WHERE outward_id = :id OR (outward_ids IS NOT NULL AND outward_ids @> :id_json::jsonb)"
+        ),
+        {"id": outward_id, "id_json": json.dumps([outward_id])},
     )
+    jw_row = jw_dep.mappings().one()
+    if int(jw_row["cnt"]) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {jw_row['cnt']} job work entry/entries reference this outward entry. Remove or unlink them first.",
+        )
+
+    # Check if any labour bills reference this outward voucher
+    lb_dep = await db.execute(
+        text(
+            f"SELECT COUNT(*) AS cnt FROM {schema}.labour_bills "
+            f"WHERE outward_ids IS NOT NULL AND outward_ids @> :id_json::jsonb"
+        ),
+        {"id_json": json.dumps([outward_id])},
+    )
+    lb_row = lb_dep.mappings().one()
+    if int(lb_row["cnt"]) > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {lb_row['cnt']} labour bill(s) reference this outward entry. Remove or unlink them first.",
+        )
+
+    try:
+        await db.execute(
+            text(f"DELETE FROM {schema}.stock_outward WHERE id = :id"), {"id": outward_id}
+        )
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete: database constraint error. The outward entry might be referenced by other records.",
+        )
 
 
 @router.get("/transfer")
