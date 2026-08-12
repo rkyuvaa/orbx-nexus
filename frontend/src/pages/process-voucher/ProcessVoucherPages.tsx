@@ -1376,6 +1376,9 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
             balance: Number(li.balance_qty ?? li.quantity) || 0,
             productName: prod?.name || `Product #${pid}`,
           };
+        } else {
+          map[key].quantity += Number(li.quantity) || 0;
+          map[key].balance += Number(li.balance_qty ?? li.quantity) || 0;
         }
       });
     });
@@ -1389,14 +1392,13 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   }, [selectedInwards, lineItemBalanceMap, products]);
 
   // Enrich products with stock balance for the dropdown.
-  // When inwards are linked, still use productBalanceMap (real stock balance)
-  // instead of lineItemBalanceMap (which only subtracts inward-linked outward).
+  // When inwards are linked, use the accumulated balance from selected inwards.
   const productOptions = useMemo(() => {
     if (selectedInwards.length === 0) {
       return products.map((p: any) => ({ ...p, balance: productBalanceMap[p.id] ?? null }));
     }
     // Inwards selected: filter to products appearing in selected inwards,
-    // but use the actual stock balance from productBalanceMap.
+    // and use the sum of their balances from lineItemBalanceMap.
     const availableProductIds = new Set(
       Object.values(lineItemBalanceMap).map((li: any) => li.productId)
     );
@@ -1411,13 +1413,25 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         const mapEntry = Object.values(lineItemBalanceMap).find(
           (li: any) => li.productId === p.id
         );
+        const inwardBalance = Object.values(lineItemBalanceMap)
+          .filter((li: any) => li.productId === p.id)
+          .reduce((sum, li) => sum + li.balance, 0);
         return {
           ...p,
-          balance: productBalanceMap[p.id] ?? null,
+          balance: inwardBalance,
           processId: mapEntry?.processId ?? null,
         };
       });
   }, [products, productBalanceMap, selectedInwards, lineItemBalanceMap]);
+
+  const getProductBalance = useCallback((productId: number) => {
+    if (selectedInwards.length > 0) {
+      return Object.values(lineItemBalanceMap)
+        .filter((li) => li.productId === productId)
+        .reduce((sum, li) => sum + li.balance, 0);
+    }
+    return productBalanceMap[productId] ?? 0;
+  }, [selectedInwards, lineItemBalanceMap, productBalanceMap]);
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
@@ -1829,7 +1843,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           {/* Balance Stock qty for this line item (from productBalanceMap) */}
                         <TableCell align="right">
                           {(() => {
-                            const bal = item.product_id ? productBalanceMap[Number(item.product_id)] : undefined;
+                            const bal = item.product_id ? getProductBalance(Number(item.product_id)) : undefined;
                             return bal !== undefined ? (
                               <Box sx={{ textAlign: "right" }}>
                                 <Typography variant="body2" sx={{
