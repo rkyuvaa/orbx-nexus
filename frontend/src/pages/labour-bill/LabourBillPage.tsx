@@ -639,7 +639,73 @@ export default function LabourBillPage() {
 
     // Build combined rows: one line per outward item with linked inward columns on the same row
 
+    const resolveSeparateProcesses = (procId: any): string => {
+
+      if (!procId) return "-";
+
+      const proc = processes.find((p: any) => p.id === Number(procId));
+
+      if (proc && proc.process_ids) {
+
+        const pids = String(proc.process_ids).split(",").map((x: string) => x.trim()).filter(Boolean);
+
+        const names = pids
+
+          .map((pid: string) => processes.find((p: any) => p.id === Number(pid))?.name || pid)
+
+          .filter(Boolean);
+
+        return names.join(" / ") || "-";
+
+      }
+
+      return resolveProcessName(procId, processes) || "-";
+
+    };
+
+
+
+    const collectInwardLines = (invList: any[], prodId: number): any[] => {
+
+      const lines: any[] = [];
+
+      invList.forEach((inv: any) => {
+
+        const invItems = parseJsonArray(inv.items);
+
+        if (invItems.length === 0) {
+
+          if (inv.product_id && Number(inv.product_id) === prodId) {
+
+            lines.push({ quantity: inv.quantity || 0, weight: inv.total_weight || inv.weight || 0 });
+
+          }
+
+        } else {
+
+          invItems.forEach((i: any) => {
+
+            if (Number(i.product_id) === prodId) {
+
+              lines.push({ quantity: i.quantity || 0, weight: i.total_weight || i.weight || 0 });
+
+            }
+
+          });
+
+        }
+
+      });
+
+      return lines;
+
+    };
+
+
+
     const reportRows: any[] = [];
+
+
 
     linkedOutwards.forEach((out: any) => {
 
@@ -659,25 +725,35 @@ export default function LabourBillPage() {
 
       const pushReportRow = (item: any, outInv: any[]) => {
 
-        reportRows.push({
+        const prodId = Number(item.product_id);
 
-          inward_no: outInv.map((v: any) => v.inward_no).filter(Boolean).join(", ") || "-",
+        const invLines = collectInwardLines(outInv, prodId);
+
+        const invQty = invLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
+
+        const invWeight = invLines.reduce((sum, l) => sum + (Number(l.weight) || 0), 0);
+
+        reportRows.push({
 
           ref: outInv.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
 
           inward_date: outInv.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
 
+          productName: products.find((p: any) => p.id === prodId)?.name || `Product #${item.product_id}`,
+
+          inward_qty: invLines.length > 0 ? invQty : null,
+
+          inward_weight: invLines.length > 0 ? invWeight : null,
+
           outward_no: out.outward_no,
 
           outward_date: out.outward_date,
 
-          productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+          outward_qty: item.quantity || 0,
 
-          processName: resolveProcessName(item.process_id || out.process_id, processes) || "-",
+          outward_weight: item.total_weight || item.weight || 0,
 
-          quantity: item.quantity || 0,
-
-          weight: item.total_weight || item.weight || 0,
+          processName: resolveSeparateProcesses(item.process_id || out.process_id),
 
         });
 
@@ -723,57 +799,41 @@ export default function LabourBillPage() {
 
         const invRef = inv.ref_no || inv.serial_no || "-";
 
-        if (invItems.length === 0) {
+        const pushInvRow = (item: any) => {
 
           reportRows.push({
-
-            inward_no: inv.inward_no,
 
             ref: invRef,
 
             inward_date: toDateStr(inv.inward_date),
 
+            productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+
+            inward_qty: item.quantity || 0,
+
+            inward_weight: item.total_weight || item.weight || 0,
+
             outward_no: "-",
 
             outward_date: "-",
 
-            productName: products.find((p: any) => p.id === Number(inv.product_id))?.name || `Product #${inv.product_id}`,
+            outward_qty: null,
+
+            outward_weight: null,
 
             processName: "-",
 
-            quantity: inv.quantity || 0,
-
-            weight: inv.total_weight || inv.weight || 0,
-
           });
+
+        };
+
+        if (invItems.length === 0) {
+
+          pushInvRow(inv);
 
         } else {
 
-          invItems.forEach((item: any) => {
-
-            reportRows.push({
-
-              inward_no: inv.inward_no,
-
-              ref: invRef,
-
-              inward_date: toDateStr(inv.inward_date),
-
-              outward_no: "-",
-
-              outward_date: "-",
-
-              productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
-
-              processName: "-",
-
-              quantity: item.quantity || 0,
-
-              weight: item.total_weight || item.weight || 0,
-
-            });
-
-          });
+          invItems.forEach((item: any) => pushInvRow(item));
 
         }
 
@@ -783,9 +843,27 @@ export default function LabourBillPage() {
 
 
 
-    const totalQty = reportRows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+    const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
 
-    const totalWeight = reportRows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
+    const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+
+    const totalOutwardQty = reportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
+
+    const totalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
+
+
+
+    const fmtCell = (v: any, fmt: (x: any) => string): string =>
+
+      v === null || v === undefined || v === "" || v === "-" ? "-" : fmt(v);
+
+    const fmtWeightCell = (v: any): string => {
+
+      const s = fmtCell(v, formatWeight);
+
+      return s === "-" ? "-" : `${s} kg`;
+
+    };
 
 
 
@@ -793,7 +871,7 @@ export default function LabourBillPage() {
 
     if (reportRows.length === 0) {
 
-      reportRowsHtml = `<tr><td colspan="10" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
+      reportRowsHtml = `<tr><td colspan="11" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
 
     } else {
 
@@ -805,23 +883,25 @@ export default function LabourBillPage() {
 
             <td style="text-align: center;">${idx + 1}</td>
 
-            <td style="font-weight: 600; white-space: nowrap;">${r.inward_no}</td>
-
-            <td style="white-space: nowrap;">${r.ref}</td>
+            <td style="font-weight: 600; white-space: nowrap;">${r.ref}</td>
 
             <td style="white-space: nowrap;">${r.inward_date}</td>
+
+            <td style="font-weight: 600;">${r.productName}</td>
+
+            <td style="text-align: right; white-space: nowrap;">${fmtCell(r.inward_qty, formatQty)}</td>
+
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${fmtWeightCell(r.inward_weight)}</td>
 
             <td style="font-weight: 600; white-space: nowrap;">${r.outward_no}</td>
 
             <td style="white-space: nowrap;">${r.outward_date}</td>
 
-            <td style="font-weight: 600;">${r.productName}</td>
+            <td style="text-align: right; white-space: nowrap;">${fmtCell(r.outward_qty, formatQty)}</td>
+
+            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${fmtWeightCell(r.outward_weight)}</td>
 
             <td style="white-space: nowrap;">${r.processName}</td>
-
-            <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
-
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.weight)} kg</td>
 
           </tr>`;
 
@@ -831,11 +911,21 @@ export default function LabourBillPage() {
 
           <tr class="total-row">
 
-            <td colspan="8" style="text-align: right;">Total</td>
+            <td colspan="4" style="text-align: right;">Total</td>
 
-            <td style="text-align: right;">${formatQty(totalQty)}</td>
+            <td style="text-align: right;">${formatQty(totalInwardQty)}</td>
 
-            <td style="text-align: right; font-weight: 700;">${formatWeight(totalWeight)} kg</td>
+            <td style="text-align: right; font-weight: 700;">${formatWeight(totalInwardWeight)} kg</td>
+
+            <td></td>
+
+            <td></td>
+
+            <td style="text-align: right;">${formatQty(totalOutwardQty)}</td>
+
+            <td style="text-align: right; font-weight: 700;">${formatWeight(totalOutwardWeight)} kg</td>
+
+            <td></td>
 
           </tr>`;
 
@@ -925,23 +1015,25 @@ export default function LabourBillPage() {
 
                 <th style="width: 40px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
 
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD NO</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">REF NO</th>
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD REF</th>
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD DATE</th>
+
+                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
+
+                <th style="text-align: right; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">INWARD QTY</th>
+
+                <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">INWARD WEIGHT</th>
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD NO</th>
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD DATE</th>
 
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
+                <th style="text-align: right; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD QTY</th>
+
+                <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD WEIGHT</th>
 
                 <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
-
-                <th style="text-align: right; width: 90px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
-
-                <th style="text-align: right; width: 110px; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT (KG)</th>
 
               </tr>
 
