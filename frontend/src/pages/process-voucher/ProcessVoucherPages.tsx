@@ -749,12 +749,18 @@ export function OutwardVoucherPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-outward"] });
+      qc.invalidateQueries({ queryKey: ["product-stock-balance"] });
+      qc.invalidateQueries({ queryKey: ["pending-inward"] });
       setOpen(false);
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/stock/outward/${id}?fy=${activeFY}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["stock-outward"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["stock-outward"] });
+      qc.invalidateQueries({ queryKey: ["product-stock-balance"] });
+      qc.invalidateQueries({ queryKey: ["pending-inward"] });
+    },
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || err?.message || "Failed to delete outward voucher";
       alert(msg);
@@ -1386,8 +1392,9 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           ? JSON.parse(inv.line_items_balance)
           : (Array.isArray(inv.line_items_balance) ? inv.line_items_balance : []);
       } catch {}
-      // Fallback to inward items JSONB if no line_items_balance
-      if (lineItems.length === 0) {
+      // Fallback to inward items JSONB if no line_items_balance property is present
+      const hasLineItemsBalance = inv.line_items_balance !== undefined && inv.line_items_balance !== null;
+      if (!hasLineItemsBalance) {
         try {
           const rawItems = typeof inv.items === "string" ? JSON.parse(inv.items) : (Array.isArray(inv.items) ? inv.items : []);
           if (rawItems.length > 0) {
@@ -1678,6 +1685,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock-outward"] });
+      qc.invalidateQueries({ queryKey: ["product-stock-balance"] });
+      qc.invalidateQueries({ queryKey: ["pending-inward"] });
       onClose();
     },
     onError: (error: any) => {
@@ -1755,7 +1764,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           <Grid container spacing={2}>
             {/* Header Details */}
             <Grid size={{ xs: 6, sm: 3 }}>
-              <TextField {...register("outward_no")} label="Voucher Number *" fullWidth required size="small" disabled />
+              <TextField {...register("outward_no")} label="Voucher Number *" fullWidth required size="small" disabled slotProps={{ inputLabel: { shrink: true } }} />
             </Grid>
             <Grid size={{ xs: 6, sm: 3 }}>
               <TextField {...register("outward_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
@@ -1848,7 +1857,9 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         if (val) handleInwardSelect(val);
                       }}
                       options={sortedPendingInwards.filter(
-                        (inv: any) => !selectedInwards.some((s) => s.id === inv.id)
+                        (inv: any) => 
+                          !selectedInwards.some((s) => s.id === inv.id) &&
+                          Number(inv.balance_qty || 0) > 0
                       )}
                       getOptionLabel={(option: any) => {
                         const refStr = [option.serial_no && `S: ${option.serial_no}`, option.ref_no && `Ref: ${option.ref_no}`].filter(Boolean).join(" · ");
