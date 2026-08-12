@@ -1276,7 +1276,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   const [lineItems, setLineItems] = useState<any[]>([
     { product_id: "", process_id: "", quantity: "", weight: "", total_weight: "" }
   ]);
-  const [inwardPickerOpen, setInwardPickerOpen] = useState(false);
   const [pickerLedgerId, setPickerLedgerId] = useState<number | null>(null);
   // Array of selected inward objects (supports multiple)
   const [selectedInwards, setSelectedInwards] = useState<any[]>([]);
@@ -1603,7 +1602,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         });
         setLineItems([{ product_id: "", quantity: "", weight: "", total_weight: "" }]);
         setSelectedInwards([]);
-        setInwardPickerOpen(false);
         setPickerLedgerId(null);
 
         api.get("/sequences/preview/stock_outward")
@@ -1618,11 +1616,9 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   const handleSupplierChange = useCallback((val: any) => {
     const id = val ? val.id : "";
     setValue("ledger_id", id);
-    if (!editing && id) {
-      setPickerLedgerId(id);
-      setInwardPickerOpen(true);
-    }
-  }, [editing, setValue]);
+    setPickerLedgerId(id ? Number(id) : null);
+    setSelectedInwards([]); // Clear previously selected inwards
+  }, [setValue]);
 
   // Add the selected inward to the list — does NOT auto-populate line items.
   // User must manually choose product & quantity so they can acknowledge the balance qty.
@@ -1779,11 +1775,13 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
               <TextField {...register("dispatch_through")} label="Dispatch through" fullWidth size="small" placeholder="Transport / Vehicle details" />
             </Grid>
 
-            {/* Linked Inwards chips */}
-            {enrichedSelectedInwards.length > 0 && (
+            {/* Linked Inwards selection */}
+            {watch("ledger_id") && (
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Linked Inwards:</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, mr: 0.5 }}>
+                    Linked Inwards:
+                  </Typography>
                   {enrichedSelectedInwards.map((inv) => {
                     let balanceQty = inv.balance_qty !== undefined && inv.balance_qty !== null ? Number(inv.balance_qty) : (() => {
                       let fallbackQty = 0;
@@ -1816,34 +1814,77 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     }
 
                     return (
-                    <Box key={inv.id} sx={{
-                      display: "inline-flex", alignItems: "center", gap: 0.5,
-                      bgcolor: "#e8f5e9", border: "1px solid #023020",
-                      borderRadius: "8px", px: 1.5, py: 0.5
-                    }}>
-                      <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
-                          {inv.inward_no || `#${inv.id}`}
-                        </Typography>
-                        {(inv.serial_no || inv.ref_no) && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
-                            {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
+                      <Box key={inv.id} sx={{
+                        display: "inline-flex", alignItems: "center", gap: 0.5,
+                        bgcolor: "#e8f5e9", border: "1px solid #023020",
+                        borderRadius: "8px", px: 1.5, py: 0.5
+                      }}>
+                        <Box>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
+                            {inv.inward_no || `#${inv.id}`}
                           </Typography>
-                        )}
-                        <Typography variant="caption" sx={{ fontSize: "0.7rem", lineHeight: 1.4, display: "block", color: "warning.dark", fontWeight: 700 }}>
-                          ⚠ Balance Qty: {balanceQty > 0 ? balanceQty.toLocaleString() : "—"} — please enter qty below
-                        </Typography>
+                          {(inv.serial_no || inv.ref_no) && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
+                              {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" sx={{ fontSize: "0.7rem", lineHeight: 1.4, display: "block", color: "warning.dark", fontWeight: 700 }}>
+                            ⚠ Balance Qty: {balanceQty > 0 ? balanceQty.toLocaleString() : "—"} — please enter qty below
+                          </Typography>
+                        </Box>
+                        <IconButton size="small" sx={{ p: 0, ml: 0.5, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
+                          <Typography sx={{ fontSize: 12, lineHeight: 1 }}>✕</Typography>
+                        </IconButton>
                       </Box>
-                      <IconButton size="small" sx={{ p: 0, ml: 0.5, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
-                        <Typography sx={{ fontSize: 12, lineHeight: 1 }}>✕</Typography>
-                      </IconButton>
-                    </Box>
                     );
                   })}
-                  <Button size="small" variant="text" sx={{ textTransform: "none", fontWeight: 600, color: "#023020" }}
-                    onClick={() => { setPickerLedgerId(Number(watch("ledger_id")) || null); setInwardPickerOpen(true); }}>
-                    + Add more
-                  </Button>
+                  
+                  {/* Inline Autocomplete selector instead of Dialog Popup */}
+                  <Box sx={{ width: 260, display: "inline-block" }}>
+                    <LazyAutocomplete
+                      size="small"
+                      value={null}
+                      onChange={(_, val: any) => {
+                        if (val) handleInwardSelect(val);
+                      }}
+                      options={sortedPendingInwards.filter(
+                        (inv: any) => !selectedInwards.some((s) => s.id === inv.id)
+                      )}
+                      getOptionLabel={(option: any) => {
+                        const refStr = [option.serial_no && `S: ${option.serial_no}`, option.ref_no && `Ref: ${option.ref_no}`].filter(Boolean).join(" · ");
+                        return `${option.inward_no} ${refStr ? `(${refStr})` : ""}`;
+                      }}
+                      noOptionsText="No pending inwards"
+                      renderInput={(params) => <TextField {...params} placeholder="Search / link inward..." size="small" />}
+                      renderOption={(props, option: any) => {
+                        const { key, ...otherProps } = props;
+                        const balanceQty = Number(option.balance_qty || 0);
+                        const dateStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "";
+                        const refStr = [option.serial_no && `S: ${option.serial_no}`, option.ref_no && `Ref: ${option.ref_no}`].filter(Boolean).join(" · ");
+                        return (
+                          <li key={key} {...otherProps}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", py: 0.25 }}>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
+                                  {option.inward_no} {dateStr && `(${dateStr})`}
+                                </Typography>
+                                {refStr && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: "0.75rem" }}>
+                                    {refStr}
+                                  </Typography>
+                                )}
+                              </Box>
+                              <Box sx={{ textAlign: "right", ml: 2 }}>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: balanceQty > 0 ? "success.main" : "text.secondary" }}>
+                                  Bal: {balanceQty.toLocaleString()}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </li>
+                        );
+                      }}
+                    />
+                  </Box>
                 </Box>
               </Grid>
             )}
@@ -2068,15 +2109,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         </DialogActions>
       </form>
 
-      {/* Picker rendered as a separate memo component – no re-render coupling with the outer dialog */}
-      <InwardPickerDialog
-        open={inwardPickerOpen}
-        onClose={() => setInwardPickerOpen(false)}
-        pendingInwards={sortedPendingInwards}
-        selectedInwards={selectedInwards}
-        onSelect={handleInwardSelect}
-        processes={processes}
-      />
+
     </Dialog>
   );
 }
