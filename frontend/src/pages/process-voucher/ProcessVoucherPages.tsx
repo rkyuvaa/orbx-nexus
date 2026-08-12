@@ -1339,10 +1339,48 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     return map;
   }, [allLedgers]);
 
+  // Enrich selectedInwards with line_items_balance and balance_qty from pendingInwards
+  const enrichedSelectedInwards = useMemo(() => {
+    return selectedInwards.map((sel) => {
+      const match = pendingInwards.find((p: any) => p.id === sel.id);
+      if (match) {
+        return {
+          ...sel,
+          line_items_balance: match.line_items_balance,
+          balance_qty: match.balance_qty,
+        };
+      }
+      return sel;
+    });
+  }, [selectedInwards, pendingInwards]);
+
+  // Map of product quantities in the voucher currently being edited (to add back to stock balance to prevent double-deduction)
+  const editingProductQtyMap = useMemo(() => {
+    if (!editing) return {};
+    const map: Record<number, number> = {};
+    let items: any[] = [];
+    if (typeof editing.items === "string") {
+      try { items = JSON.parse(editing.items); } catch {}
+    } else if (Array.isArray(editing.items)) {
+      items = editing.items;
+    }
+    if (items.length > 0) {
+      items.forEach((it: any) => {
+        const pid = Number(it.product_id);
+        if (pid) {
+          map[pid] = (map[pid] || 0) + (Number(it.quantity) || 0);
+        }
+      });
+    } else if (editing.product_id) {
+      map[Number(editing.product_id)] = (map[Number(editing.product_id)] || 0) + (Number(editing.quantity) || 0);
+    }
+    return map;
+  }, [editing]);
+
   // Build a map of "productId_processId" -> balance qty from the selected inward(s)
   const lineItemBalanceMap = useMemo(() => {
     const map: Record<string, { productId: number; processId: number | null; quantity: number; balance: number; productName: string }> = {};
-    selectedInwards.forEach((inv) => {
+    enrichedSelectedInwards.forEach((inv) => {
       let lineItems: any[] = [];
       try {
         lineItems = typeof inv.line_items_balance === "string"
@@ -1388,20 +1426,73 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         }
       });
     });
+
+    // Add back quantities of the voucher currently being edited, so we display the correct pre-outward balance
+    if (editing) {
+      let editingItems: any[] = [];
+      if (typeof editing.items === "string") {
+        try { editingItems = JSON.parse(editing.items); } catch {}
+      } else if (Array.isArray(editing.items)) {
+        editingItems = editing.items;
+      }
+      if (editingItems.length > 0) {
+        editingItems.forEach((it: any) => {
+          const pid = Number(it.product_id);
+          if (pid) {
+            const key = `${pid}_${it.process_id ?? ""}`;
+            if (!map[key]) {
+              const prod = productMapObj[pid];
+              map[key] = {
+                productId: pid,
+                processId: it.process_id ?? null,
+                quantity: Number(it.quantity) || 0,
+                balance: Number(it.quantity) || 0,
+                productName: prod?.name || `Product #${pid}`,
+              };
+            } else {
+              map[key].balance += Number(it.quantity) || 0;
+            }
+          }
+        });
+      } else if (editing.product_id) {
+        const pid = Number(editing.product_id);
+        const key = `${pid}_${editing.process_id ?? ""}`;
+        if (!map[key]) {
+          const prod = productMapObj[pid];
+          map[key] = {
+            productId: pid,
+            processId: editing.process_id ?? null,
+            quantity: Number(editing.quantity) || 0,
+            balance: Number(editing.quantity) || 0,
+            productName: prod?.name || `Product #${pid}`,
+          };
+        } else {
+          map[key].balance += Number(editing.quantity) || 0;
+        }
+      }
+    }
+
     return map;
-  }, [selectedInwards, productMapObj]);
+  }, [enrichedSelectedInwards, productMapObj, editing]);
 
   // Line items available for outward = from the selected inward(s)
   const availableLineItems = useMemo(() => {
-    if (selectedInwards.length === 0) return products;
+    if (enrichedSelectedInwards.length === 0) return products;
     return Object.values(lineItemBalanceMap).filter((li) => li.balance > 0);
-  }, [selectedInwards, lineItemBalanceMap, products]);
+  }, [enrichedSelectedInwards, lineItemBalanceMap, products]);
 
   // Enrich products with stock balance for the dropdown.
   // When inwards are linked, use the accumulated balance from selected inwards.
   const productOptions = useMemo(() => {
-    if (selectedInwards.length === 0) {
-      return products.map((p: any) => ({ ...p, balance: productBalanceMap[p.id] ?? null }));
+    if (enrichedSelectedInwards.length === 0) {
+      return products.map((p: any) => {
+        const dbBal = productBalanceMap[p.id] ?? null;
+        const editingQty = editingProductQtyMap[p.id] ?? 0;
+        return {
+          ...p,
+          balance: dbBal !== null ? dbBal + editingQty : null,
+        };
+      });
     }
     // Inwards selected: filter to products appearing in selected inwards,
     // and use the sum of their balances from lineItemBalanceMap.
@@ -1411,7 +1502,14 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     // Editing: selected inwards may be minimal objects without product data —
     // fall back to showing all products when lineItemBalanceMap is empty.
     if (availableProductIds.size === 0) {
-      return products.map((p: any) => ({ ...p, balance: productBalanceMap[p.id] ?? null }));
+      return products.map((p: any) => {
+        const dbBal = productBalanceMap[p.id] ?? null;
+        const editingQty = editingProductQtyMap[p.id] ?? 0;
+        return {
+          ...p,
+          balance: dbBal !== null ? dbBal + editingQty : null,
+        };
+      });
     }
     return products
       .filter((p: any) => availableProductIds.has(p.id))
@@ -1428,16 +1526,18 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           processId: mapEntry?.processId ?? null,
         };
       });
-  }, [products, productBalanceMap, selectedInwards, lineItemBalanceMap]);
+  }, [products, productBalanceMap, enrichedSelectedInwards, lineItemBalanceMap, editingProductQtyMap]);
 
   const getProductBalance = useCallback((productId: number) => {
-    if (selectedInwards.length > 0) {
+    if (enrichedSelectedInwards.length > 0) {
       return Object.values(lineItemBalanceMap)
         .filter((li) => li.productId === productId)
         .reduce((sum, li) => sum + li.balance, 0);
     }
-    return productBalanceMap[productId] ?? 0;
-  }, [selectedInwards, lineItemBalanceMap, productBalanceMap]);
+    const dbBal = productBalanceMap[productId] ?? 0;
+    const editingQty = editingProductQtyMap[productId] ?? 0;
+    return dbBal + editingQty;
+  }, [enrichedSelectedInwards, lineItemBalanceMap, productBalanceMap, editingProductQtyMap]);
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
@@ -1459,6 +1559,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           narration: editing.narration || "",
           dispatch_through: editing.dispatch_through || "",
         });
+        setPickerLedgerId(Number(editing.ledger_id) || null);
         // Restore selected inwards from editing record
         const inwardIdList = (() => {
           const ids = editing.inward_ids || (editing.inward_id ? [editing.inward_id] : []);
@@ -1679,19 +1780,41 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
             </Grid>
 
             {/* Linked Inwards chips */}
-            {selectedInwards.length > 0 && (
+            {enrichedSelectedInwards.length > 0 && (
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Linked Inwards:</Typography>
-                  {selectedInwards.map((inv) => {
-                    let balanceQty = 0;
-                    try {
-                      const parsed = typeof inv.items === "string" ? JSON.parse(inv.items) : (Array.isArray(inv.items) ? inv.items : []);
-                      if (Array.isArray(parsed) && parsed.length > 0) {
-                        balanceQty = parsed.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+                  {enrichedSelectedInwards.map((inv) => {
+                    let balanceQty = inv.balance_qty !== undefined && inv.balance_qty !== null ? Number(inv.balance_qty) : (() => {
+                      let fallbackQty = 0;
+                      try {
+                        const parsed = typeof inv.items === "string" ? JSON.parse(inv.items) : (Array.isArray(inv.items) ? inv.items : []);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                          fallbackQty = parsed.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+                        }
+                      } catch {}
+                      return fallbackQty || Number(inv.quantity || 0);
+                    })();
+
+                    // If we are editing, add back the total quantity of the editing voucher to the primary linked inward's balanceQty display
+                    if (editing && inv.id === editing.inward_id) {
+                      const totalEditingQty = (() => {
+                        let items: any[] = [];
+                        if (typeof editing.items === "string") {
+                          try { items = JSON.parse(editing.items); } catch {}
+                        } else if (Array.isArray(editing.items)) {
+                          items = editing.items;
+                        }
+                        if (items.length > 0) {
+                          return items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+                        }
+                        return Number(editing.quantity || 0);
+                      })();
+                      if (inv.balance_qty !== undefined && inv.balance_qty !== null) {
+                        balanceQty += totalEditingQty;
                       }
-                    } catch {}
-                    if (!balanceQty) balanceQty = Number(inv.quantity || 0);
+                    }
+
                     return (
                     <Box key={inv.id} sx={{
                       display: "inline-flex", alignItems: "center", gap: 0.5,
@@ -1736,10 +1859,10 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     <TableRow>
                       <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
                       <TableCell sx={{ width: "30%", fontWeight: 700 }}>Product Name *</TableCell>
-                      <TableCell sx={{ width: 220, fontWeight: 700 }}>Process</TableCell>
-                      <TableCell sx={{ width: 90, fontWeight: 700 }} align="right">Stock Bal</TableCell>
-                      <TableCell sx={{ width: 90, fontWeight: 700 }} align="right">Qty *</TableCell>
-                      <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Unit Wt (kg) *</TableCell>
+                      <TableCell sx={{ width: 190, fontWeight: 700 }}>Process</TableCell>
+                      <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Stock Bal</TableCell>
+                      <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Qty *</TableCell>
+                      <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Unit Wt (kg) *</TableCell>
                       <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Total Wt (kg)</TableCell>
                       <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
                     </TableRow>
