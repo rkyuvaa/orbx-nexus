@@ -582,8 +582,8 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                   </TableHead>
                   <TableBody>
                     {lineItems.map((item, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell align="center">{idx + 1}</TableCell>
+                       <TableRow key={idx}>
+                         <TableCell align="center">{idx + 1}</TableCell>
                         <TableCell>
                           <LazyAutocomplete
                             size="small"
@@ -648,7 +648,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                           </IconButton>
                         </TableCell>
                       </TableRow>
-                    ))}
+                     ))}
                   </TableBody>
                 </Table>
               </Paper>
@@ -1289,6 +1289,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   // Ref mirror so handleInwardSelect can read latest value without being a dependency
   const selectedInwardsRef = useRef<any[]>([]);
   selectedInwardsRef.current = selectedInwards;
+  // Confirmation popup for inward item selection
+  const [confirmInward, setConfirmInward] = useState<any | null>(null);
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: productBalances = [] } = useQuery({
@@ -1627,20 +1629,40 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     setSelectedInwards([]); // Clear previously selected inwards
   }, [setValue]);
 
-  // Add the selected inward to the list — does NOT auto-populate line items.
-  // User must manually choose product & quantity so they can acknowledge the balance qty.
+  // Show confirmation popup when an inward is selected
   const handleInwardSelect = useCallback((inward: any) => {
     // Duplicate guard using ref (no closure over state)
     if (selectedInwardsRef.current.find((s) => s.id === inward.id)) return;
+    // Open confirmation dialog for this inward
+    setConfirmInward(inward);
+  }, []);
 
-    // Update selected list immediately so the chip appears right away
+  // Called when user confirms item selection from the inward confirmation popup
+  const handleConfirmInwardItems = useCallback((inward: any, selectedItems: any[]) => {
+    // 1. Add inward to selected list
     setSelectedInwards((prev) => {
       if (prev.find((s) => s.id === inward.id)) return prev;
       return [...prev, inward];
     });
-    // Keep picker open for multi-select
-    // Line items are NOT auto-populated — user selects manually
-  }, []); // stable — reads selectedInwards via ref
+    // 2. Add each chosen item as a line item
+    if (selectedItems.length > 0) {
+      setLineItems((prev) => {
+        // Remove the blank placeholder row if it's the only row
+        const hasOnlyBlank = prev.length === 1 && !prev[0].product_id;
+        const base = hasOnlyBlank ? [] : prev;
+        const newRows = selectedItems.map((si: any) => ({
+          product_id: si.product_id,
+          process_id: si.process_id ?? "",
+          inward_id: inward.id,
+          quantity: "",
+          weight: si.weight ?? "",
+          total_weight: "",
+        }));
+        return [...base, ...newRows];
+      });
+    }
+    setConfirmInward(null);
+  }, []);
 
   const handleRemoveSelectedInward = useCallback((id: number) => {
     setSelectedInwards((prev) => prev.filter((s) => s.id !== id));
@@ -1825,24 +1847,20 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     return (
                       <Box key={inv.id} sx={{
                         display: "inline-flex", alignItems: "center", gap: 0.5,
-                        bgcolor: "#e8f5e9", border: "1px solid #023020",
-                        borderRadius: "8px", px: 1.5, py: 0.5
+                        bgcolor: "#e8f5e9", border: "1.5px solid #023020",
+                        borderRadius: "999px", px: 1.5, py: 0.4,
+                        boxShadow: "0 1px 3px rgba(2,48,32,0.10)",
                       }}>
-                        <Box>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
-                            {inv.inward_no || `#${inv.id}`}
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", lineHeight: 1.4 }}>
+                          {inv.inward_no || `#${inv.id}`}
+                        </Typography>
+                        {(inv.serial_no || inv.ref_no) && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.4 }}>
+                            · {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
                           </Typography>
-                          {(inv.serial_no || inv.ref_no) && (
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
-                              {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
-                            </Typography>
-                          )}
-                          <Typography variant="caption" sx={{ fontSize: "0.7rem", lineHeight: 1.4, display: "block", color: "warning.dark", fontWeight: 700 }}>
-                            ⚠ Balance Qty: {balanceQty > 0 ? balanceQty.toLocaleString() : "—"} — please enter qty below
-                          </Typography>
-                        </Box>
-                        <IconButton size="small" sx={{ p: 0, ml: 0.5, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
-                          <Typography sx={{ fontSize: 12, lineHeight: 1 }}>✕</Typography>
+                        )}
+                        <IconButton size="small" sx={{ p: 0, ml: 0.25, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
+                          <Typography sx={{ fontSize: 11, lineHeight: 1 }}>✕</Typography>
                         </IconButton>
                       </Box>
                     );
@@ -1909,7 +1927,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                 <Table size="small">
                   <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                     <TableRow>
-                      <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
+                      <TableCell sx={{ width: 100, fontWeight: 700 }} align="center">Inward No</TableCell>
                       <TableCell sx={{ width: "30%", fontWeight: 700 }}>Product Name *</TableCell>
                       <TableCell sx={{ width: 190, fontWeight: 700 }}>Process</TableCell>
                       <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Stock Bal</TableCell>
@@ -1920,9 +1938,30 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {lineItems.map((item, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell align="center">{idx + 1}</TableCell>
+                    {lineItems.map((item, idx) => {
+                      const lineInwardNo = (() => {
+                        if (item.inward_id) {
+                          return inwardMap[item.inward_id] ||
+                            selectedInwards.find((s: any) => s.id === Number(item.inward_id))?.inward_no ||
+                            `#${item.inward_id}`;
+                        }
+                        if (enrichedSelectedInwards.length === 1)
+                          return enrichedSelectedInwards[0].inward_no || `#${enrichedSelectedInwards[0].id}`;
+                        return `#${idx + 1}`;
+                      })();
+                      return (
+                       <TableRow key={idx}>
+                         <TableCell align="center">
+                           <Box sx={{
+                             display: "inline-flex", alignItems: "center",
+                             bgcolor: "#e8f5e9", border: "1.5px solid #023020",
+                             borderRadius: "999px", px: 1, py: 0.2,
+                           }}>
+                             <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                               {lineInwardNo}
+                             </Typography>
+                           </Box>
+                         </TableCell>
                         <TableCell>
                           <LazyAutocomplete
                             size="small"
@@ -2098,7 +2137,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           </IconButton>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Paper>
@@ -2133,7 +2173,163 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         </DialogActions>
       </form>
 
-
+      {/* Inward Item Confirmation Popup */}
+      {confirmInward && (
+        <InwardItemConfirmDialog
+          inward={confirmInward}
+          productMapObj={productMapObj}
+          processMapObj={processMapObj}
+          onConfirm={(selectedItems) => handleConfirmInwardItems(confirmInward, selectedItems)}
+          onClose={() => setConfirmInward(null)}
+        />
+      )}
     </Dialog>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// InwardItemConfirmDialog — secondary popup shown when user picks an
+// inward from the autocomplete. Lists that inward's items and lets
+// the user choose which to bring into the outward form.
+// ─────────────────────────────────────────────────────────────────
+const InwardItemConfirmDialog = memo(function InwardItemConfirmDialog({
+  inward,
+  productMapObj,
+  processMapObj,
+  onConfirm,
+  onClose,
+}: {
+  inward: any;
+  productMapObj: Record<number | string, any>;
+  processMapObj: Record<number | string, any>;
+  onConfirm: (selectedItems: any[]) => void;
+  onClose: () => void;
+}) {
+  const items: any[] = useMemo(() => {
+    try {
+      const raw = inward.items;
+      if (!raw) return [];
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  }, [inward.items]);
+
+  // Track which items are checked (default: all)
+  const [checkedIds, setCheckedIds] = useState<Set<number>>(() => new Set(items.map((_: any, i: number) => i)));
+
+  const toggleItem = (idx: number) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
+  const handleConfirm = () => {
+    if (items.length > 0) {
+      const selected = items.filter((_: any, i: number) => checkedIds.has(i));
+      onConfirm(selected);
+    } else {
+      // No items on inward — still add the inward with an empty line
+      onConfirm([]);
+    }
+  };
+
+  const dateStr = inward.inward_date
+    ? new Date(inward.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+    : "";
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700, color: "#023020", pb: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ bgcolor: "#e8f5e9", border: "1.5px solid #023020", borderRadius: "999px", px: 1.5, py: 0.3 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: "#023020" }}>{inward.inward_no}</Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400 }}>
+            {dateStr}{[inward.serial_no && `S: ${inward.serial_no}`, inward.ref_no && `Ref: ${inward.ref_no}`].filter(Boolean).length > 0 ? " · " + [inward.serial_no && `S: ${inward.serial_no}`, inward.ref_no && `Ref: ${inward.ref_no}`].filter(Boolean).join(" · ") : ""}
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5, fontSize: "0.8rem" }}>
+          Select the items to add to the Outward Voucher
+        </Typography>
+      </DialogTitle>
+      <DialogContent dividers sx={{ p: 0 }}>
+        {items.length === 0 ? (
+          <Box sx={{ py: 4, textAlign: "center" }}>
+            <Typography color="text.secondary">No items found on this inward voucher.</Typography>
+            <Typography variant="caption" color="text.secondary">The inward will still be linked — you can add products manually.</Typography>
+          </Box>
+        ) : (
+          <Table size="small">
+            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+              <TableRow>
+                <TableCell sx={{ width: 42 }} />
+                <TableCell sx={{ fontWeight: 700 }}>Product</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Wt (kg)</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {items.map((it: any, i: number) => {
+                const prod = productMapObj[it.product_id];
+                const proc = processMapObj[it.process_id ?? ""];
+                const checked = checkedIds.has(i);
+                return (
+                  <TableRow
+                    key={i}
+                    hover
+                    onClick={() => toggleItem(i)}
+                    sx={{ cursor: "pointer", bgcolor: checked ? "#f0faf4" : "inherit", transition: "background 0.15s" }}
+                  >
+                    <TableCell>
+                      <Box
+                        sx={{
+                          width: 20, height: 20, border: "2px solid",
+                          borderColor: checked ? "#023020" : "#bdbdbd",
+                          borderRadius: "4px",
+                          bgcolor: checked ? "#023020" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {checked && <Typography sx={{ color: "#fff", fontSize: 12, lineHeight: 1, fontWeight: 800 }}>✓</Typography>}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {prod?.name || `Product #${it.product_id}`}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {proc?.name || (it.process_id ? `#${it.process_id}` : "—")}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{it.quantity ?? "—"}</Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" color="text.secondary">{it.weight ? `${it.weight} kg` : "—"}</Typography>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+        <Button onClick={onClose} variant="outlined">Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={handleConfirm}
+          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, fontWeight: 700 }}
+        >
+          {items.length === 0 ? "Link Inward" : `Add ${checkedIds.size} item${checkedIds.size !== 1 ? "s" : ""} to Outward`}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
