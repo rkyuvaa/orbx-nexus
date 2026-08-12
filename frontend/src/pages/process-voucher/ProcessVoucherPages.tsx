@@ -1303,6 +1303,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     staleTime: 30_000,           // cache 30s so re-opening is instant
   });
 
+  const sortedPendingInwards = useMemo(() => {
+    return [...pendingInwards].sort((a: any, b: any) => {
+      return (a.inward_no || "").localeCompare(b.inward_no || "", undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [pendingInwards]);
+
   const productMapObj = useMemo(() => {
     const map: Record<number | string, any> = {};
     products.forEach((p: any) => { map[p.id] = p; });
@@ -1843,21 +1849,25 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           {/* Balance Stock qty for this line item (from productBalanceMap) */}
                         <TableCell align="right">
                           {(() => {
-                            const bal = item.product_id ? getProductBalance(Number(item.product_id)) : undefined;
-                            return bal !== undefined ? (
+                            if (!item.product_id) return <Typography variant="body2" color="text.disabled">—</Typography>;
+                            const prodId = Number(item.product_id);
+                            const initialBal = getProductBalance(prodId);
+                            const totalQtyEntered = lineItems
+                              .filter((it) => Number(it.product_id) === prodId)
+                              .reduce((sum, it) => sum + Number(it.quantity || 0), 0);
+                            const remainingBal = initialBal - totalQtyEntered;
+                            return (
                               <Box sx={{ textAlign: "right" }}>
                                 <Typography variant="body2" sx={{
                                   fontWeight: 700,
-                                  color: bal > 0 ? "success.main" : "error.main"
+                                  color: remainingBal >= 0 ? "success.main" : "error.main"
                                 }}>
-                                  {formatWeight(bal)}
+                                  {formatWeight(remainingBal)}
                                 </Typography>
-                                {Number(item.quantity) > bal && (
+                                {totalQtyEntered > initialBal && (
                                   <Typography variant="caption" sx={{ color: "error.main", fontSize: "0.6rem" }}>⚠ Over</Typography>
                                 )}
                               </Box>
-                            ) : (
-                              <Typography variant="body2" color="text.disabled">—</Typography>
                             );
                           })()}
                         </TableCell>
@@ -1939,7 +1949,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       <InwardPickerDialog
         open={inwardPickerOpen}
         onClose={() => setInwardPickerOpen(false)}
-        pendingInwards={pendingInwards}
+        pendingInwards={sortedPendingInwards}
         selectedInwards={selectedInwards}
         onSelect={handleInwardSelect}
         processes={processes}
