@@ -72,7 +72,28 @@ export const getOrbxTheme = (mode?: "dark" | "light") => {
           ::-webkit-scrollbar-thumb { background: ${BORDER}; border-radius: 3px; }
           ::-webkit-scrollbar-thumb:hover { background: ${PRIMARY_LIGHT}; }
           body { background: ${BACKGROUND}; color: ${TEXT_PRIMARY}; }
+          
+          /* Globally shrink input label when input has value or browser autofill */
+          .MuiFormControl-root:has(input:not(:placeholder-shown)) .MuiInputLabel-root,
+          .MuiFormControl-root:has(input:-webkit-autofill) .MuiInputLabel-root,
+          .MuiFormControl-root:has(input[type="date"]) .MuiInputLabel-root {
+            transform: translate(14px, -9px) scale(0.75) !important;
+            pointer-events: auto;
+            max-width: calc(133% - 24px);
+          }
+          
+          /* Globally open notched border when input has value or browser autofill */
+          .MuiFormControl-root:has(input:not(:placeholder-shown)) .MuiOutlinedInput-notchedOutline legend,
+          .MuiFormControl-root:has(input:-webkit-autofill) .MuiOutlinedInput-notchedOutline legend,
+          .MuiFormControl-root:has(input[type="date"]) .MuiOutlinedInput-notchedOutline legend {
+            max-width: 100% !important;
+          }
         `,
+      },
+      MuiInputBase: {
+        defaultProps: {
+          placeholder: " ",
+        },
       },
       MuiPaper: {
         styleOverrides: {
