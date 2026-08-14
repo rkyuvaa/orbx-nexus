@@ -157,7 +157,7 @@ async def get_pending_inward_for_outward(
         ),
         -- Outward items matched only by inward_id + product_id (ignoring process)
         out_dispatched AS (
-          SELECT so.inward_id,
+          SELECT COALESCE((o_item->>'inward_id')::int, so.inward_id) AS inward_id,
             COALESCE((o_item->>'product_id')::int, so.product_id) AS product_id,
             SUM(COALESCE((o_item->>'quantity')::numeric, so.quantity)) AS dispatched
           FROM {s}.stock_outward so
@@ -165,8 +165,8 @@ async def get_pending_inward_for_outward(
             CASE WHEN jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0
               THEN so.items ELSE NULL END
           ) AS o_item ON TRUE
-          WHERE so.inward_id IS NOT NULL
-          GROUP BY so.inward_id,
+          WHERE COALESCE((o_item->>'inward_id')::int, so.inward_id) IS NOT NULL
+          GROUP BY COALESCE((o_item->>'inward_id')::int, so.inward_id),
             COALESCE((o_item->>'product_id')::int, so.product_id)
         ),
         inward_balances AS (
