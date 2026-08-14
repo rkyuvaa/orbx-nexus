@@ -1053,6 +1053,10 @@ export function OutwardVoucherPage() {
               ${rowsHtml}
             </tbody>
             <tfoot>
+              <tr><td colspan="6" style="padding: 8px; border: none; background: transparent;"></td></tr>
+              <tr><td colspan="6" style="padding: 8px; border: none; background: transparent;"></td></tr>
+              <tr><td colspan="6" style="padding: 8px; border: none; background: transparent;"></td></tr>
+              <tr><td colspan="6" style="padding: 8px; border: none; background: transparent;"></td></tr>
               <tr style="border-top: 2px solid #0f5132; background-color: #f0f9f4;">
                 <td colspan="4" style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">Total Quantity:</td>
                 <td style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">${formatQty(totalOutwardQty)}</td>
@@ -1060,14 +1064,6 @@ export function OutwardVoucherPage() {
               </tr>
             </tfoot>
           </table>
-          <div class="totals-section">
-            <div class="calculation-box">
-              <div class="calculation-row grand-total">
-                <span>Net Weight (kg):</span>
-                <span>${formatWeight(totalOutwardWeight)} kg</span>
-              </div>
-            </div>
-          </div>
           <div class="bottom-section">
             ${row.narration ? `
               <div class="narration-box">
