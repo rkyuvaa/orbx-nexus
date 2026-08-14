@@ -1732,8 +1732,21 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     const inwardId = activeInward.id;
     const productId = entryProduct.id;
     const processId = entryProcess ? entryProcess.id : null;
-    return getLiveStockForProductProcessInward(productId, processId, inwardId);
-  }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward]);
+    if (entryProcess) {
+      // Process selected: live balance for this specific process
+      return getLiveStockForProductProcessInward(productId, processId, inwardId);
+    }
+    // No process selected yet: sum live balances across ALL processes for this product+inward
+    const matchingKeys = Object.values(lineItemBalanceMap).filter(
+      (li) => li.inwardId === inwardId && li.productId === productId
+    );
+    if (matchingKeys.length === 0) {
+      return getLiveStockForProductProcessInward(productId, null, inwardId);
+    }
+    return matchingKeys.reduce((sum, li) => {
+      return sum + getLiveStockForProductProcessInward(productId, li.processId as number | null, inwardId);
+    }, 0);
+  }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward, lineItemBalanceMap]);
 
   const entryTotalWeight = useMemo(() => {
     const qty = Number(entryQty) || 0;
@@ -1754,16 +1767,17 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   useEffect(() => {
     if (entryProduct && activeInward) {
       setEntryWeight(entryProduct.weight ? String(entryProduct.weight) : "0");
-      const match = Object.values(lineItemBalanceMap).find(
-        (li) => li.inwardId === activeInward.id && li.productId === entryProduct.id
-      );
-      if (match && match.processId) {
-        const procObj = processes.find((p: any) => p.id === match.processId);
-        if (procObj) setEntryProcess(procObj);
-      } else {
-        setEntryProcess(null);
+      // Only auto-set process if the user hasn't already selected one
+      if (!entryProcess) {
+        const match = Object.values(lineItemBalanceMap).find(
+          (li) => li.inwardId === activeInward.id && li.productId === entryProduct.id
+        );
+        if (match && match.processId) {
+          const procObj = processes.find((p: any) => p.id === match.processId);
+          if (procObj) setEntryProcess(procObj);
+        }
       }
-    } else {
+    } else if (!entryProduct) {
       setEntryWeight("");
       setEntryProcess(null);
     }
