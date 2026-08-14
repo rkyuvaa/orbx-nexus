@@ -212,10 +212,6 @@ export function InwardVoucherPage() {
           </table>
           <div class="totals-section">
             <div class="calculation-box">
-              <div class="calculation-row">
-                <span>Total Quantity:</span>
-                <span>${formatQty(printTotalQty)}</span>
-              </div>
               <div class="calculation-row grand-total">
                 <span>Net Weight (kg):</span>
                 <span>${formatWeight(printTotalWeight)} kg</span>
@@ -1056,13 +1052,16 @@ export function OutwardVoucherPage() {
             <tbody>
               ${rowsHtml}
             </tbody>
+            <tfoot>
+              <tr style="border-top: 2px solid #0f5132; background-color: #f0f9f4;">
+                <td colspan="4" style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">Total Quantity:</td>
+                <td style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">${formatQty(totalOutwardQty)}</td>
+                <td style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">${formatWeight(totalOutwardWeight)} kg</td>
+              </tr>
+            </tfoot>
           </table>
           <div class="totals-section">
             <div class="calculation-box">
-              <div class="calculation-row">
-                <span>Total Quantity:</span>
-                <span>${formatQty(totalOutwardQty)}</span>
-              </div>
               <div class="calculation-row grand-total">
                 <span>Net Weight (kg):</span>
                 <span>${formatWeight(totalOutwardWeight)} kg</span>
