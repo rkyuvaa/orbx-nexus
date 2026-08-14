@@ -2026,7 +2026,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                   </Typography>
                   <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
                     <Grid size={{ xs: 12, sm: 4.5 }}>
-                      <Autocomplete
+                      <LazyAutocomplete
                         size="small"
                         value={entryProduct}
                         onChange={(_, val) => setEntryProduct(val)}
@@ -2042,7 +2042,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 3.0 }}>
-                      <Autocomplete
+                      <LazyAutocomplete
                         size="small"
                         value={entryProcess}
                         onChange={(_, val) => setEntryProcess(val)}
@@ -2242,7 +2242,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
                         </TableCell>
                         <TableCell sx={{ width: 220, whiteSpace: "nowrap" }}>
-                          <Autocomplete
+                          <LazyAutocomplete
                             size="small"
                             value={processMapObj[item.process_id ?? ""] || null}
                             onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
