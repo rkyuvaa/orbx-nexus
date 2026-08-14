@@ -1457,7 +1457,10 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
           if (pid) {
             const targetInwardId = it.inward_id || editing.inward_id || "";
             if (targetInwardId) {
-              const key = `${targetInwardId}_${pid}_${it.process_id ?? ""}`;
+              const exactKey = `${targetInwardId}_${pid}_${it.process_id ?? ""}`;
+              const fallbackKey = `${targetInwardId}_${pid}_`;
+              const key = map[exactKey] ? exactKey : fallbackKey;
+              
               if (!map[key]) {
                 const prod = productMapObj[pid];
                 const inv = enrichedSelectedInwards.find((s) => s.id === Number(targetInwardId));
@@ -1466,7 +1469,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                   inwardId: Number(targetInwardId),
                   inwardNo: inv?.inward_no || `#${targetInwardId}`,
                   productId: pid,
-                  processId: it.process_id ?? null,
+                  processId: key === exactKey ? (it.process_id ?? null) : null,
                   quantity: Number(it.quantity) || 0,
                   balance: Number(it.quantity) || 0,
                   productName: prod?.name || `Product #${pid}`,
@@ -1481,7 +1484,10 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         const pid = Number(editing.product_id);
         const targetInwardId = editing.inward_id || "";
         if (targetInwardId) {
-          const key = `${targetInwardId}_${pid}_${editing.process_id ?? ""}`;
+          const exactKey = `${targetInwardId}_${pid}_${editing.process_id ?? ""}`;
+          const fallbackKey = `${targetInwardId}_${pid}_`;
+          const key = map[exactKey] ? exactKey : fallbackKey;
+          
           if (!map[key]) {
             const prod = productMapObj[pid];
             const inv = enrichedSelectedInwards.find((s) => s.id === Number(targetInwardId));
@@ -1490,7 +1496,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
               inwardId: Number(targetInwardId),
               inwardNo: inv?.inward_no || `#${targetInwardId}`,
               productId: pid,
-              processId: editing.process_id ?? null,
+              processId: key === exactKey ? (editing.process_id ?? null) : null,
               quantity: Number(editing.quantity) || 0,
               balance: Number(editing.quantity) || 0,
               productName: prod?.name || `Product #${pid}`,
@@ -1541,9 +1547,18 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
         if (lineItemBalanceMap[key]) {
           return lineItemBalanceMap[key].balance;
         }
-        if (processId !== null) {
-          const fallbackKey = `${inwardId}_${productId}_`;
-          return lineItemBalanceMap[fallbackKey]?.balance ?? 0;
+        // Fallback: if process-specific key is not found, or if processId is null/empty,
+        // check the process-less key or sum over all processes for this product and inward.
+        const fallbackKey = `${inwardId}_${productId}_`;
+        if (lineItemBalanceMap[fallbackKey]) {
+          return lineItemBalanceMap[fallbackKey].balance;
+        }
+        // Sum over all matching entries for this product and inward
+        const matches = Object.values(lineItemBalanceMap).filter(
+          (li) => li.inwardId === inwardId && li.productId === productId
+        );
+        if (matches.length > 0) {
+          return matches.reduce((sum, li) => sum + li.balance, 0);
         }
         return 0;
       }
