@@ -755,6 +755,8 @@ export default function LabourBillPage() {
 
           processName: resolveSeparateProcesses(item.process_id || out.process_id),
 
+          processId: item.process_id || out.process_id,
+
         });
 
       };
@@ -823,6 +825,8 @@ export default function LabourBillPage() {
 
             processName: "-",
 
+            processId: null,
+
           });
 
         };
@@ -832,219 +836,232 @@ export default function LabourBillPage() {
           pushInvRow(inv);
 
         } else {
-
-          invItems.forEach((item: any) => pushInvRow(item));
-
+      invItems.forEach((item: any) => pushInvRow(item));
         }
-
       });
-
     }
 
+    const billItems = (() => {
+      let parsed: any[] = [];
+      if (typeof row.items === "string") {
+        try { parsed = JSON.parse(row.items); } catch (e) {}
+      } else if (Array.isArray(row.items)) {
+        parsed = row.items;
+      }
+      return parsed;
+    })();
 
+    const uniqueActiveProcesses: any[] = [];
+    const seenProcIds = new Set<number>();
+    billItems.forEach((item: any) => {
+      if (item.process_id) {
+        const proc = processes.find((p: any) => p.id === Number(item.process_id));
+        if (proc && !seenProcIds.has(proc.id)) {
+          seenProcIds.add(proc.id);
+          uniqueActiveProcesses.push(proc);
+        }
+      }
+    });
+
+    if (uniqueActiveProcesses.length === 0 && row.process_id) {
+      const proc = processes.find((p: any) => p.id === Number(row.process_id));
+      if (proc) {
+        uniqueActiveProcesses.push(proc);
+      }
+    }
+
+    const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
+      if (!rowProcId) return false;
+      if (Number(rowProcId) === targetProcId) return true;
+      const proc = processes.find((p: any) => p.id === Number(rowProcId));
+      if (proc) {
+        if (proc.process_ids) {
+          const childIds = String(proc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+          if (childIds.includes(targetProcId)) return true;
+        }
+        if (proc.process_code && proc.process_code.includes(" / ")) {
+          const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          const targetProc = processes.find((p: any) => p.id === targetProcId);
+          if (targetProc && parts.includes(targetProc.process_code)) return true;
+        }
+      }
+      return false;
+    };
 
     const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
-
     const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
-
     const totalOutwardQty = reportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
-
     const totalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
 
-
-
     const fmtCell = (v: any, fmt: (x: any) => string): string =>
-
       v === null || v === undefined || v === "" || v === "-" ? "-" : fmt(v);
 
     const fmtWeightCell = (v: any): string => {
-
       const s = fmtCell(v, formatWeight);
-
       return s === "-" ? "-" : `${s} kg`;
-
     };
 
-
+    const processTotals: Record<number, number> = {};
+    uniqueActiveProcesses.forEach(proc => {
+      processTotals[proc.id] = 0;
+    });
 
     let reportRowsHtml = "";
 
     if (reportRows.length === 0) {
-
-      reportRowsHtml = `<tr><td colspan="11" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
-
+      const totalColSpan = 9 + (uniqueActiveProcesses.length || 1);
+      reportRowsHtml = `<tr><td colspan="${totalColSpan}" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
     } else {
-
-      reportRows.forEach((r, idx) => {
+      reportRows.forEach((r) => {
+        let processColsHtml = "";
+        if (uniqueActiveProcesses.length === 0) {
+          processColsHtml += `<td style="text-align: center; color: #a0aec0;">-</td>`;
+        } else {
+          uniqueActiveProcesses.forEach((proc, pIdx) => {
+            const matches = isProcessInRow(proc.id, r.processId);
+            const isLast = pIdx === uniqueActiveProcesses.length - 1;
+            const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
+            
+            if (matches) {
+              processColsHtml += `<td style="text-align: right; font-weight: 500; ${borderStyle}">${fmtWeightCell(r.outward_weight)}</td>`;
+              processTotals[proc.id] += Number(r.outward_weight) || 0;
+            } else {
+              processColsHtml += `<td style="text-align: center; color: #a0aec0; ${borderStyle}">-</td>`;
+            }
+          });
+        }
 
         reportRowsHtml += `
-
           <tr>
-
-            <td style="text-align: center;">${idx + 1}</td>
-
             <td style="font-weight: 600; white-space: nowrap;">${r.ref}</td>
-
             <td style="white-space: nowrap;">${r.inward_date}</td>
-
             <td style="font-weight: 600;">${r.productName}</td>
-
             <td style="text-align: right; white-space: nowrap;">${fmtCell(r.inward_qty, formatQty)}</td>
-
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${fmtWeightCell(r.inward_weight)}</td>
-
+            <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(r.inward_weight)}</td>
             <td style="font-weight: 600; white-space: nowrap;">${r.outward_no}</td>
-
             <td style="white-space: nowrap;">${r.outward_date}</td>
-
             <td style="text-align: right; white-space: nowrap;">${fmtCell(r.outward_qty, formatQty)}</td>
-
-            <td style="text-align: right; font-weight: 600; white-space: nowrap;">${fmtWeightCell(r.outward_weight)}</td>
-
-            <td style="white-space: nowrap;">${r.processName}</td>
-
+            <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(r.outward_weight)}</td>
+            ${processColsHtml}
           </tr>`;
-
       });
 
+      let processTotalsHtml = "";
+      if (uniqueActiveProcesses.length === 0) {
+        processTotalsHtml += `<td style="text-align: center; color: #0f5132; font-weight: 700;">-</td>`;
+      } else {
+        uniqueActiveProcesses.forEach((proc, idx) => {
+          const isLast = idx === uniqueActiveProcesses.length - 1;
+          const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
+          processTotalsHtml += `
+            <td style="text-align: right; font-weight: 700; color: #0f5132; ${borderStyle}">
+              ${formatWeight(processTotals[proc.id])} kg
+            </td>
+          `;
+        });
+      }
+
       reportRowsHtml += `
-
           <tr class="total-row">
-
-            <td colspan="4" style="text-align: right;">Total</td>
-
-            <td style="text-align: right;">${formatQty(totalInwardQty)}</td>
-
-            <td style="text-align: right; font-weight: 700;">${formatWeight(totalInwardWeight)} kg</td>
-
+            <td colspan="3" style="text-align: right; font-weight: 700; color: #0f5132;">Total</td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132;">${formatQty(totalInwardQty)}</td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;">${formatWeight(totalInwardWeight)} kg</td>
             <td></td>
-
             <td></td>
-
-            <td style="text-align: right;">${formatQty(totalOutwardQty)}</td>
-
-            <td style="text-align: right; font-weight: 700;">${formatWeight(totalOutwardWeight)} kg</td>
-
-            <td></td>
-
+            <td style="text-align: right; font-weight: 700; color: #0f5132;">${formatQty(totalOutwardQty)}</td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;">${formatWeight(totalOutwardWeight)} kg</td>
+            ${processTotalsHtml}
           </tr>`;
-
     }
 
+    const processingColSpan = uniqueActiveProcesses.length || 1;
+    const superHeaderHtml = `
+      <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+        <th colspan="5" style="text-align: center; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Inward Details</th>
+        <th colspan="4" style="text-align: center; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Outward details</th>
+        <th colspan="${processingColSpan}" style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">Processing</th>
+      </tr>
+    `;
 
+    let subHeaderHtml = `
+      <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+        <th style="background-color: #0f5132 !important; color: #ffffff !important;">inward ref no</th>
+        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Date</th>
+        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Product</th>
+        <th style="text-align: right; width: 60px; background-color: #0f5132 !important; color: #ffffff !important;">Qty</th>
+        <th style="text-align: right; width: 90px; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Weight</th>
+        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Outward No</th>
+        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Date</th>
+        <th style="text-align: right; width: 60px; background-color: #0f5132 !important; color: #ffffff !important;">Qty</th>
+        <th style="text-align: right; width: 90px; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Weight</th>
+    `;
+
+    if (uniqueActiveProcesses.length === 0) {
+      subHeaderHtml += `<th style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">Process Weight</th>`;
+    } else {
+      uniqueActiveProcesses.forEach((proc, idx) => {
+        const isLast = idx === uniqueActiveProcesses.length - 1;
+        const borderStyle = isLast ? "" : "border-right: 1px solid rgba(255,255,255,0.3) !important;";
+        subHeaderHtml += `
+          <th style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important; ${borderStyle}">
+            <div style="font-size: 0.75rem; margin-bottom: 2px; text-transform: uppercase;">${proc.name}</div>
+            <div style="font-size: 0.65rem; font-weight: normal; opacity: 0.85;">weight</div>
+          </th>
+        `;
+      });
+    }
+    subHeaderHtml += `</tr>`;
 
     printWindow.document.write(`
-
       <!DOCTYPE html>
-
       <html>
-
         <head>
-
           <title>Print Work Details - ${row.bill_no}</title>
-
           <style>
-
             @page { size: A4 landscape; margin: 10mm; }
-
             ${COMMON_PRINT_CSS}
-
+            /* Custom Table Borders overriding COMMON_PRINT_CSS to match the image grid */
+            table.items-table { border-collapse: collapse; width: 100%; border: 1.5px solid #0f5132 !important; }
+            table.items-table th, table.items-table td { border: 1px solid #198754 !important; padding: 6px 8px !important; }
+            table.items-table thead tr { border: 1px solid #198754 !important; }
+            table.items-table tr { border: 1px solid #198754 !important; }
           </style>
-
         </head>
-
         <body>
-
           <div class="header-container">
-
             <div class="logo-wrapper">${logoHtml}</div>
-
             <div class="company-details">
-
               <h1>${cName}</h1>
-
               ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
-
               ${cAddress2 ? `<p>${cAddress2}</p>` : ""}
-
               ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
-
               <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
-
               ${cTax ? `<p class="gstin">GSTIN: ${cTax}</p>` : ""}
-
             </div>
-
           </div>
-
           <div class="title-section">
-
             <h2>WORK DETAILS</h2>
-
             <div class="doc-no">Bill No: ${row.bill_no}</div>
-
             <div class="doc-date">Date: ${dateStr}</div>
-
           </div>
-
           <div class="address-section">
-
             <div class="address-column" style="width: 100%;">
-
               <h3>SUPPLIER DETAILS:</h3>
-
               <div class="name">${supplierName}</div>
-
               ${supplierAddr1 ? `<div class="address-lines">${supplierAddr1}</div>` : ""}
-
               ${supplierCityStatePin ? `<div class="address-lines">${supplierCityStatePin}</div>` : ""}
-
               ${supplierPhone ? `<div class="address-lines">${supplierPhone}</div>` : ""}
-
               ${supplierGstin ? `<div class="gstin">GSTIN: ${supplierGstin}</div>` : ""}
-
             </div>
-
           </div>
-
           <table class="items-table">
-
             <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-
-              <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-
-                <th style="width: 40px; text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">S.NO</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD REF</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">INWARD DATE</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
-
-                <th style="text-align: right; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">INWARD QTY</th>
-
-                <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">INWARD WEIGHT</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD NO</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD DATE</th>
-
-                <th style="text-align: right; width: 80px; background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD QTY</th>
-
-                <th style="text-align: right; width: 100px; background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD WEIGHT</th>
-
-                <th style="background-color: #0f5132 !important; color: #ffffff !important;">PROCESS</th>
-
-              </tr>
-
+              ${superHeaderHtml}
+              ${subHeaderHtml}
             </thead>
-
             <tbody>
-
               ${reportRowsHtml}
-
             </tbody>
-
           </table>
 
           <div class="signatures-container">
