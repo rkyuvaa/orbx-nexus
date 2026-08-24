@@ -543,6 +543,7 @@ class StockItemMovementIn(BaseModel):
     narration: str | None = None
     location_id: int | None = None
     to_location_id: int | None = None
+    items: list[dict] | None = None
 
 
 @router.get("/inventory")
@@ -625,12 +626,14 @@ async def create_inventory_movement(
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     s = _schema(fy)
+    import json
+    items_json = json.dumps(body.items) if body.items else "[]"
     result = await db.execute(
         text(
             f"INSERT INTO {s}.stock_item_movements "
             f"(movement_no, movement_date, movement_type, stock_item_id, ledger_id, "
-            f"quantity, rate, amount, uom_id, ref_no, narration, location_id, to_location_id, created_by) "
-            f"VALUES (:mno, :mdate, :mtype, :siid, :lid, :qty, :rate, :amt, :uom, :rno, :narr, :loc, :toloc, :cby) "
+            f"quantity, rate, amount, uom_id, ref_no, narration, location_id, to_location_id, items, created_by) "
+            f"VALUES (:mno, :mdate, :mtype, :siid, :lid, :qty, :rate, :amt, :uom, :rno, :narr, :loc, :toloc, :items, :cby) "
             f"RETURNING id"
         ),
         {
@@ -639,6 +642,7 @@ async def create_inventory_movement(
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "uom": body.uom_id, "rno": body.ref_no, "narr": body.narration,
             "loc": body.location_id, "toloc": body.to_location_id,
+            "items": items_json,
             "cby": current_user.id
         },
     )
@@ -651,12 +655,14 @@ async def update_inventory_movement(
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     s = _schema(fy)
+    import json
+    items_json = json.dumps(body.items) if body.items else "[]"
     await db.execute(
         text(
             f"UPDATE {s}.stock_item_movements SET "
             f"movement_no=:mno, movement_date=:mdate, movement_type=:mtype, "
             f"stock_item_id=:siid, ledger_id=:lid, quantity=:qty, rate=:rate, amount=:amt, "
-            f"uom_id=:uom, ref_no=:rno, narration=:narr, location_id=:loc, to_location_id=:toloc, updated_at=NOW() "
+            f"uom_id=:uom, ref_no=:rno, narration=:narr, location_id=:loc, to_location_id=:toloc, items=:items, updated_at=NOW() "
             f"WHERE id=:id"
         ),
         {
@@ -665,6 +671,7 @@ async def update_inventory_movement(
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "uom": body.uom_id, "rno": body.ref_no, "narr": body.narration,
             "loc": body.location_id, "toloc": body.to_location_id,
+            "items": items_json,
             "id": movement_id
         },
     )

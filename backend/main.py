@@ -77,6 +77,12 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.labour_bills ADD COLUMN IF NOT EXISTS {col}"))
                 await conn.execute(
                     text(
+                        f"ALTER TABLE fy_{fy['year_str']}.stock_item_movements "
+                        f"ADD COLUMN IF NOT EXISTS items JSONB DEFAULT '[]'::jsonb"
+                    )
+                )
+                await conn.execute(
+                    text(
                         f"ALTER TABLE fy_{fy['year_str']}.job_work_entries "
                         f"ADD COLUMN IF NOT EXISTS outward_id INTEGER REFERENCES fy_{fy['year_str']}.stock_outward(id)"
                     )
