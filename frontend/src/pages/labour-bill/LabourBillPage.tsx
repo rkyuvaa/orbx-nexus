@@ -1335,7 +1335,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     setFreightItem((prev: any) => {
       const updated = { ...prev, [field]: value };
       if (field === "process_id") {
-        updated.quantity = getShotBlastingWeight();
+        updated.quantity = getShotBlastingWeight().toFixed(3);
         updated.rate = getCompanyRate(undefined, value);
       }
       if (field === "process_id" || field === "quantity" || field === "rate") {
@@ -1440,10 +1440,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         } else {
           const key = Number(item.process_id);
           if (merged[key]) {
-            merged[key].quantity = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
-            merged[key].amount = Number((merged[key].quantity * Number(merged[key].rate || 0)).toFixed(2));
+            const sumQty = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
+            merged[key].quantity = sumQty.toFixed(3);
+            merged[key].amount = Number((sumQty * Number(merged[key].rate || 0)).toFixed(2));
           } else {
-            merged[key] = { ...item };
+            merged[key] = { ...item, quantity: Number(item.quantity || 0).toFixed(3) };
           }
         }
       });
@@ -1548,12 +1549,15 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         }
 
         if (parsedItems && parsedItems.length > 0) {
-          setLineItems(parsedItems);
+          setLineItems(parsedItems.map((item: any) => ({
+            ...item,
+            quantity: item.quantity !== undefined && item.quantity !== "" && item.quantity !== null ? Number(item.quantity).toFixed(3) : ""
+          })));
         } else {
           setLineItems([{
             product_id: editing.product_id || "",
             process_id: editing.process_id || "",
-            quantity: editing.quantity || "",
+            quantity: editing.quantity !== undefined && editing.quantity !== "" && editing.quantity !== null ? Number(editing.quantity).toFixed(3) : "",
             rate: editing.rate || "",
             amount: editing.amount || ""
           }]);
@@ -1566,7 +1570,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           parsedFreight = editing.freight_items;
         }
         if (parsedFreight && parsedFreight.length > 0) {
-          setFreightItem({ ...parsedFreight[0] });
+          setFreightItem({ 
+            ...parsedFreight[0],
+            quantity: parsedFreight[0].quantity !== undefined && parsedFreight[0].quantity !== "" && parsedFreight[0].quantity !== null ? Number(parsedFreight[0].quantity).toFixed(3) : ""
+          });
           setFreightOpen(true);
         } else {
           setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
@@ -1781,7 +1788,13 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                               type="number"
                               value={item.quantity}
                               onChange={(e) => handleLineItemChange(idx, "quantity", e.target.value)}
-                              slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              onBlur={(e) => {
+                                const val = e.target.value;
+                                if (val !== "") {
+                                  handleLineItemChange(idx, "quantity", Number(val).toFixed(3));
+                                }
+                              }}
+                              slotProps={{ htmlInput: { style: { textAlign: "right" }, step: "0.001" } }}
                               required
                             />
                           </TableCell>
@@ -1858,7 +1871,13 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                               type="number"
                               value={freightItem.quantity}
                               onChange={(e) => handleFreightChange("quantity", e.target.value)}
-                              slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              onBlur={(e) => {
+                                const val = e.target.value;
+                                if (val !== "") {
+                                  handleFreightChange("quantity", Number(val).toFixed(3));
+                                }
+                              }}
+                              slotProps={{ htmlInput: { style: { textAlign: "right" }, step: "0.001" } }}
                               required
                             />
                           </TableCell>
