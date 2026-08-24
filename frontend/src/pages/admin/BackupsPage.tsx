@@ -165,7 +165,7 @@ export default function BackupsPage() {
           </Button>
 
           <Tooltip title="Delete Backup">
-            <IconButton size="small" color="error" onClick={() => deleteMutation.mutate(p.data.filename)}>
+            <IconButton size="small" color="error" onClick={() => { if (window.confirm(`Delete backup file "${p.data.filename}"?`)) deleteMutation.mutate(p.data.filename); }}>
               <Delete fontSize="small" />
             </IconButton>
           </Tooltip>

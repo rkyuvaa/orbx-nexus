@@ -88,7 +88,7 @@ export default function StockAdjustmentPage() {
     { headerName: "Actions", width: 100, sortable: false, filter: false,
       cellRenderer: (p: any) => (
         <Box sx={{ display: "flex", gap: 0.5 }}>
-          <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => deleteMutation.mutate(p.data.id)}><Delete fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { if (window.confirm(`Delete stock adjustment entry "${p.data.adjustment_no}"?`)) deleteMutation.mutate(p.data.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
         </Box>
       ),
     },

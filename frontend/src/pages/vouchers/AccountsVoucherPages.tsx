@@ -240,7 +240,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     { headerName: "Actions", width: 110, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Print Slip"><IconButton size="small" onClick={() => handlePrintSingleVoucher(p.data)}><Print fontSize="small" /></IconButton></Tooltip>
-        <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => deleteMutation.mutate(p.data.id)}><Delete fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { if (window.confirm(`Delete voucher "${p.data.voucher_no}"?`)) deleteMutation.mutate(p.data.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
       </Box>
     )},
   ];
