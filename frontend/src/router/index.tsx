@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import AppShell from "../components/layout/AppShell";
+import AuthLayout from "../layouts/AuthLayout";
 import LoginPage from "../pages/auth/LoginPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import AccountsGroupPage from "../pages/accounts/AccountsGroupPage";
@@ -43,7 +44,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export const router = createBrowserRouter([
-  { path: "/login", element: <LoginPage /> },
+  {
+    path: "/login",
+    element: <AuthLayout />,
+    children: [
+      { path: "", element: <LoginPage /> },
+    ],
+  },
   {
     path: "/",
     element: <ProtectedRoute><AppShell /></ProtectedRoute>,
