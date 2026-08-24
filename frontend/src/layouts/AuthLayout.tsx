@@ -274,7 +274,7 @@ const AuthLayout: React.FC = () => {
               src={isDark ? '/logo-dark.svg' : '/logo-light.svg'}
               alt="OrbX Logo"
               sx={{
-                height: { xs: 140, sm: 180, md: 210 },
+                height: { xs: 50, sm: 60, md: 65 },
                 width: 'auto',
                 filter: 'drop-shadow(0px 4px 10px rgba(27, 67, 50, 0.15))',
                 animation: 'pulse 3s infinite ease-in-out',
