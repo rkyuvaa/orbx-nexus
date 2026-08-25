@@ -126,6 +126,8 @@ const NAV_ITEMS: NavItem[] = [
     icon: <AccountBalance sx={{ fontSize: 20 }} />,
     children: [
       { label: "Accounts Group", path: "/accounts/groups", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Payables", path: "/purchase/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Receivables", path: "/reports/receivables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {
