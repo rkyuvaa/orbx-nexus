@@ -18,44 +18,7 @@ import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { useAuthStore } from "../../store";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 
-// ──── Helpers ────
 
-function generateMovementNo(type: "Inward" | "Outward"): string {
-  const savedConfig = localStorage.getItem("orbx_print_config");
-  if (savedConfig) {
-    try {
-      const config = JSON.parse(savedConfig);
-      if (type === "Inward") {
-        const prefix = config.invInwardPrefix || "INV-IN/";
-        const nextNo = config.invInwardNextNo || 1;
-        const padding = config.invInwardPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}`;
-      } else {
-        const prefix = config.invOutwardPrefix || "INV-OUT/";
-        const nextNo = config.invOutwardNextNo || 1;
-        const padding = config.invOutwardPadding || 4;
-        return `${prefix}${String(nextNo).padStart(padding, "0")}`;
-      }
-    } catch (e) {}
-  }
-  return type === "Inward"
-    ? `INV-IN/${String(1).padStart(4, "0")}`
-    : `INV-OUT/${String(1).padStart(4, "0")}`;
-}
-
-function incrementMovementNo(type: "Inward" | "Outward") {
-  const savedConfig = localStorage.getItem("orbx_print_config");
-  if (savedConfig) {
-    try {
-      const config = JSON.parse(savedConfig);
-      const key = type === "Inward" ? "invInwardNextNo" : "invOutwardNextNo";
-      if (config[key] !== undefined) {
-        config[key] = Number(config[key]) + 1;
-        localStorage.setItem("orbx_print_config", JSON.stringify(config));
-      }
-    } catch (e) {}
-  }
-}
 
 // ──── Shared Dialog ────
 
@@ -187,16 +150,21 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
         }
       } else {
         reset({
-          movement_no: generateMovementNo(movementType),
+          movement_no: "",
           movement_date: new Date().toISOString().split("T")[0],
           ledger_id: "",
           ref_no: "",
           narration: "",
         });
         setLineItems([{ stock_item_id: "", quantity: "", rate: "", amount: "", uom_id: "" }]);
+
+        const seqType = movementType === "Inward" ? "inventory_inward" : "inventory_outward";
+        api.get(`/sequences/preview/${seqType}`)
+          .then((res) => setValue("movement_no", res.data.next_no))
+          .catch((e) => console.error(e));
       }
     }
-  }, [open, editing, reset, movementType]);
+  }, [open, editing, reset, movementType, setValue]);
 
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const totalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -231,7 +199,6 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
         : api.post(`/stock/inventory/movements?fy=${activeFY}`, payload);
     },
     onSuccess: () => {
-      if (!editing) incrementMovementNo(movementType);
       qc.invalidateQueries({ queryKey: ["inventory-movements"] });
       qc.invalidateQueries({ queryKey: ["inventory-balance"] });
       qc.invalidateQueries({ queryKey: ["stock-items-balance"] });

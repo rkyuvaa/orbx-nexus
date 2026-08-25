@@ -627,6 +627,11 @@ async def create_inventory_movement(
 ):
     s = _schema(fy)
     import json
+    from app.services.sequences import generate_and_increment_sequence
+    
+    seq_type = "inventory_inward" if body.movement_type == "Inward" else "inventory_outward"
+    mno = await generate_and_increment_sequence(db, seq_type)
+
     items_json = json.dumps(body.items) if body.items else "[]"
     result = await db.execute(
         text(
@@ -637,7 +642,7 @@ async def create_inventory_movement(
             f"RETURNING id"
         ),
         {
-            "mno": body.movement_no, "mdate": body.movement_date, "mtype": body.movement_type,
+            "mno": mno, "mdate": body.movement_date, "mtype": body.movement_type,
             "siid": body.stock_item_id, "lid": body.ledger_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "uom": body.uom_id, "rno": body.ref_no, "narr": body.narration,
