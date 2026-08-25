@@ -63,6 +63,8 @@ export default function DocumentNumberingPage() {
       staff_advance_receipt: "Staff Advance Receipt",
       salary_voucher: "Staff Salary Voucher",
       stock_adjustment: "Stock Adjustment",
+      inventory_inward: "Purchase Order",
+      inventory_outward: "Stock Outward",
     };
     return labels[docType] || docType;
   };
