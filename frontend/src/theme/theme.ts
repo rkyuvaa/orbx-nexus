@@ -73,6 +73,16 @@ export const getOrbxTheme = (mode?: "dark" | "light") => {
           ::-webkit-scrollbar-thumb:hover { background: ${PRIMARY_LIGHT}; }
           body { background: ${BACKGROUND}; color: ${TEXT_PRIMARY}; }
           
+          /* Globally hide number input spinners */
+          input[type=number]::-webkit-outer-spin-button,
+          input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+          }
+          input[type=number] {
+            -moz-appearance: textfield;
+          }
+          
           /* Globally shrink input label when input has value or browser autofill */
           .MuiFormControl-root:has(input:not(:placeholder-shown)) .MuiInputLabel-root,
           .MuiFormControl-root:has(input:-webkit-autofill) .MuiInputLabel-root,

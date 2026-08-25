@@ -311,8 +311,8 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                 <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                   <TableRow>
                     <TableCell sx={{ minWidth: 260, fontWeight: 700 }}>Stock Item *</TableCell>
-                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
-                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Rate</TableCell>
+                    <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Qty *</TableCell>
+                    <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Rate</TableCell>
                     <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Amount</TableCell>
                     <TableCell sx={{ width: 180, minWidth: 180, fontWeight: 700 }}>UOM</TableCell>
                     <TableCell sx={{ width: 50, minWidth: 50 }} align="center">Del</TableCell>
@@ -341,7 +341,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 1.5 }} align="right">
+                        <TableCell sx={{ minWidth: 120, verticalAlign: "top", pt: 1.5 }} align="right">
                           <TextField
                             size="small"
                             type="number"
@@ -357,7 +357,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             fullWidth
                           />
                         </TableCell>
-                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 1.5 }} align="right">
+                        <TableCell sx={{ minWidth: 120, verticalAlign: "top", pt: 1.5 }} align="right">
                           <TextField
                             size="small"
                             type="number"

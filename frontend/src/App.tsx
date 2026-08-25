@@ -119,10 +119,10 @@ function App() {
         // Find parent container
         const container = active.closest("dialog, [role='dialog'], form, .MuiPaper-root, body") || document.body;
         
-        // Find visible focusable input elements
+        // Find visible focusable input elements (excluding any buttons)
         const focusable = Array.from(
           container.querySelectorAll(
-            'input:not([disabled]):not([readonly]), select:not([disabled]), [tabindex="0"]:not([disabled])'
+            'input:not([disabled]):not([readonly]):not([type="button"]):not([type="submit"]):not([type="reset"]), select:not([disabled]), textarea:not([disabled])'
           )
         ).filter(el => {
           const htmlEl = el as HTMLElement;
