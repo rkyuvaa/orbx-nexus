@@ -1,4 +1,4 @@
-import { Component, ReactNode } from "react";
+import { Component, ReactNode, useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { ThemeProvider, CssBaseline, Box, Typography, Button } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -90,6 +90,78 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 function App() {
   const { themeMode } = useUIStore();
   const theme = getOrbxTheme(themeMode || "dark");
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        if (e.defaultPrevented) return;
+        
+        const active = document.activeElement as HTMLElement;
+        if (!active) return;
+
+        // Skip textareas, buttons, submit inputs
+        if (
+          active.tagName === "TEXTAREA" ||
+          active.tagName === "BUTTON" ||
+          active.role === "button" ||
+          active.getAttribute("type") === "submit"
+        ) {
+          return;
+        }
+
+        // Skip if autocomplete listbox or popup dropdown is currently open
+        if (document.querySelector(".MuiAutocomplete-popper, [role='listbox']")) {
+          return;
+        }
+
+        e.preventDefault();
+
+        // Find parent container
+        const container = active.closest("dialog, [role='dialog'], form, .MuiPaper-root, body") || document.body;
+        
+        // Find visible focusable input elements
+        const focusable = Array.from(
+          container.querySelectorAll(
+            'input:not([disabled]):not([readonly]), select:not([disabled]), [tabindex="0"]:not([disabled])'
+          )
+        ).filter(el => {
+          const htmlEl = el as HTMLElement;
+          // Only focus visible elements
+          return htmlEl.offsetWidth > 0 && htmlEl.offsetHeight > 0 && htmlEl.tabIndex !== -1;
+        }) as HTMLElement[];
+
+        const index = focusable.indexOf(active);
+        if (index > -1) {
+          const next = focusable[index + 1];
+          if (next) {
+            next.focus();
+            if (next instanceof HTMLInputElement) {
+              next.select();
+            }
+          } else {
+            // Trigger submit on container form or dialog action
+            const form = active.closest("form");
+            if (form) {
+              form.requestSubmit();
+            } else {
+              const dialog = active.closest("dialog, [role='dialog']");
+              if (dialog) {
+                const containedButton = dialog.querySelector("button.MuiButton-contained") as HTMLButtonElement;
+                if (containedButton) {
+                  containedButton.click();
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, []);
 
   return (
     <ErrorBoundary>
