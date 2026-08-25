@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { Box, Button, Grid, TextField, Switch, FormControlLabel, MenuItem, Paper, Typography, Divider } from "@mui/material";
+import { Box, Button, Grid, TextField, Switch, FormControlLabel, MenuItem, Paper, Typography, Divider, CircularProgress } from "@mui/material";
 import Save from "@mui/icons-material/Save";
 import Refresh from "@mui/icons-material/Refresh";
 import PageHeader from "../../components/PageHeader";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "../../api/client";
 
 interface PrintConfig {
   showLogo: boolean;
@@ -45,35 +47,117 @@ const DEFAULTS: PrintConfig = {
 };
 
 export default function PrintConfigPage() {
+  const qc = useQueryClient();
   const [config, setConfig] = useState<PrintConfig>(DEFAULTS);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("orbx_print_config");
-    if (saved) {
+  const { data: companyData, isLoading } = useQuery({
+    queryKey: ["company"],
+    queryFn: async () => {
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed.outwardTitle === "Outward Challan") {
-          parsed.outwardTitle = "Delivery Note";
-          localStorage.setItem("orbx_print_config", JSON.stringify(parsed));
+        const response = await api.get("/company/");
+        return response.data;
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          return null;
         }
-        setConfig({ ...DEFAULTS, ...parsed });
-      } catch (e) {
-        setConfig(DEFAULTS);
+        throw err;
       }
+    },
+  });
+
+  useEffect(() => {
+    if (companyData) {
+      const parsed: PrintConfig = {
+        showLogo: companyData.show_logo ?? true,
+        voucherPaperSize: companyData.voucher_paper_size ?? "A5",
+        inwardPaperSize: companyData.inward_paper_size ?? "A4",
+        outwardPaperSize: companyData.outward_paper_size ?? "A5",
+        billPaperSize: companyData.bill_paper_size ?? "A4",
+        reportPaperSize: companyData.report_paper_size ?? "A4",
+        gridPaperSize: companyData.grid_paper_size ?? "A4",
+        
+        voucherTitle: companyData.voucher_title ?? "Voucher Receipt",
+        voucherTerms: companyData.voucher_terms ?? "",
+        inwardTitle: companyData.inward_title ?? "Inward Challan",
+        inwardTerms: companyData.inward_terms ?? "",
+        outwardTitle: companyData.outward_title ?? "Delivery Note",
+        outwardTerms: companyData.outward_terms ?? "",
+        billTitle: companyData.bill_title ?? "Labour Bill Invoice",
+        billTerms: companyData.bill_terms ?? "",
+      };
+      setConfig(parsed);
+      localStorage.setItem("orbx_print_config", JSON.stringify(parsed));
     }
-  }, []);
+  }, [companyData]);
+
+  const saveMutation = useMutation({
+    mutationFn: (newConfig: PrintConfig) => {
+      const payload = {
+        show_logo: newConfig.showLogo,
+        voucher_paper_size: newConfig.voucherPaperSize,
+        inward_paper_size: newConfig.inwardPaperSize,
+        outward_paper_size: newConfig.outwardPaperSize,
+        bill_paper_size: newConfig.billPaperSize,
+        report_paper_size: newConfig.reportPaperSize,
+        grid_paper_size: newConfig.gridPaperSize,
+        
+        voucher_title: newConfig.voucherTitle,
+        voucher_terms: newConfig.voucherTerms,
+        inward_title: newConfig.inwardTitle,
+        inward_terms: newConfig.inwardTerms,
+        outward_title: newConfig.outwardTitle,
+        outward_terms: newConfig.outwardTerms,
+        bill_title: newConfig.billTitle,
+        bill_terms: newConfig.billTerms,
+      };
+      return api.put("/company/", payload);
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["company"] });
+      const updatedConfig = {
+        showLogo: res.data.show_logo ?? true,
+        voucherPaperSize: res.data.voucher_paper_size ?? "A5",
+        inwardPaperSize: res.data.inward_paper_size ?? "A4",
+        outwardPaperSize: res.data.outward_paper_size ?? "A5",
+        billPaperSize: res.data.bill_paper_size ?? "A4",
+        reportPaperSize: res.data.report_paper_size ?? "A4",
+        gridPaperSize: res.data.grid_paper_size ?? "A4",
+        
+        voucherTitle: res.data.voucher_title ?? "Voucher Receipt",
+        voucherTerms: res.data.voucher_terms ?? "",
+        inwardTitle: res.data.inward_title ?? "Inward Challan",
+        inwardTerms: res.data.inward_terms ?? "",
+        outwardTitle: res.data.outward_title ?? "Delivery Note",
+        outwardTerms: res.data.outward_terms ?? "",
+        billTitle: res.data.bill_title ?? "Labour Bill Invoice",
+        billTerms: res.data.bill_terms ?? "",
+      };
+      localStorage.setItem("orbx_print_config", JSON.stringify(updatedConfig));
+      alert("Print & Document configurations saved successfully!");
+    },
+    onError: (err) => {
+      console.error(err);
+      alert("Failed to save configurations.");
+    }
+  });
 
   const handleSave = () => {
-    localStorage.setItem("orbx_print_config", JSON.stringify(config));
-    alert("Print & Document configurations saved successfully!");
+    saveMutation.mutate(config);
   };
 
   const handleReset = () => {
     if (window.confirm("Are you sure you want to reset to default configurations?")) {
-      setConfig(DEFAULTS);
-      localStorage.setItem("orbx_print_config", JSON.stringify(DEFAULTS));
+      saveMutation.mutate(DEFAULTS);
     }
   };
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px" }}>
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
 
   return (
     <Box>

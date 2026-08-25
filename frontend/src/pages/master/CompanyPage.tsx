@@ -15,22 +15,31 @@ export default function CompanyPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["company"],
-    queryFn: async () => (await api.get("/company/")).data,
+    queryFn: async () => {
+      try {
+        const response = await api.get("/company/");
+        if (response.data.logo_path) {
+          localStorage.setItem("company_logo", response.data.logo_path);
+          setLogo(response.data.logo_path);
+        } else {
+          localStorage.removeItem("company_logo");
+          setLogo(null);
+        }
+        return response.data;
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
   });
 
   const { register, handleSubmit, reset } = useForm({ values: data || {} });
 
-  useEffect(() => {
-    // Retrieve logo from localStorage on load
-    const savedLogo = localStorage.getItem("company_logo");
-    if (savedLogo) {
-      setLogo(savedLogo);
-    }
-  }, []);
-
   const saveMutation = useMutation({
     mutationFn: (d: any) => {
-      const payload = { ...d };
+      const payload = { ...d, logo_path: logo };
       // Pydantic strict integer validation fails on empty strings or strings from text inputs
       if (payload.financial_year_start_month === "") {
         payload.financial_year_start_month = null;
@@ -39,11 +48,11 @@ export default function CompanyPage() {
       }
       return api.put("/company/", payload);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["company"] });
       // Persistent logo save
-      if (logo) {
-        localStorage.setItem("company_logo", logo);
+      if (res.data.logo_path) {
+        localStorage.setItem("company_logo", res.data.logo_path);
       } else {
         localStorage.removeItem("company_logo");
       }

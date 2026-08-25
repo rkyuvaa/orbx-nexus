@@ -55,6 +55,29 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(f"ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS {col}"))
         # Migrate products table if needed
         await conn.execute(text("ALTER TABLE master.products ADD COLUMN IF NOT EXISTS weight NUMERIC(15, 3) DEFAULT 0"))
+        
+        # Migrate company table print settings and logo_path columns if needed
+        for col, col_type in [
+            ("show_logo", "BOOLEAN DEFAULT TRUE"),
+            ("voucher_paper_size", "VARCHAR(10) DEFAULT 'A5'"),
+            ("inward_paper_size", "VARCHAR(10) DEFAULT 'A4'"),
+            ("outward_paper_size", "VARCHAR(10) DEFAULT 'A5'"),
+            ("bill_paper_size", "VARCHAR(10) DEFAULT 'A4'"),
+            ("report_paper_size", "VARCHAR(10) DEFAULT 'A4'"),
+            ("grid_paper_size", "VARCHAR(10) DEFAULT 'A4'"),
+            ("voucher_title", "VARCHAR(200) DEFAULT 'Voucher Receipt'"),
+            ("voucher_terms", "TEXT DEFAULT '1. Subject to local jurisdiction.\n2. This is a computer-generated voucher and requires no physical signature.'"),
+            ("inward_title", "VARCHAR(200) DEFAULT 'Inward Challan'"),
+            ("inward_terms", "TEXT DEFAULT '1. Received goods are subject to count & quality checks.\n2. Report discrepancies within 24 hours.'"),
+            ("outward_title", "VARCHAR(200) DEFAULT 'Delivery Note'"),
+            ("outward_terms", "TEXT DEFAULT '1. Goods once sold/delivered cannot be taken back.\n2. Subject to company terms of carriage.'"),
+            ("bill_title", "VARCHAR(200) DEFAULT 'Labour Bill Invoice'"),
+            ("bill_terms", "TEXT DEFAULT '1. Payment terms: Net 15 days.\n2. Interest @ 18% p.a. will be charged for delayed payments.'"),
+        ]:
+            await conn.execute(text(f"ALTER TABLE master.company ADD COLUMN IF NOT EXISTS {col} {col_type}"))
+        
+        # Alter logo_path type to TEXT if it's currently string
+        await conn.execute(text("ALTER TABLE master.company ALTER COLUMN logo_path TYPE TEXT"))
         # Migrate locations table if needed
         for col in (
             "p1_id INTEGER REFERENCES master.ledgers(id)",

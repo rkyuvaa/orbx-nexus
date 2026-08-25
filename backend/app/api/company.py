@@ -26,6 +26,23 @@ class CompanySchema(BaseModel):
     financial_year_start_month: int = 4
     logo_path: str | None = None
 
+    show_logo: bool = True
+    voucher_paper_size: str = "A5"
+    inward_paper_size: str = "A4"
+    outward_paper_size: str = "A5"
+    bill_paper_size: str = "A4"
+    report_paper_size: str = "A4"
+    grid_paper_size: str = "A4"
+
+    voucher_title: str | None = "Voucher Receipt"
+    voucher_terms: str | None = ""
+    inward_title: str | None = "Inward Challan"
+    inward_terms: str | None = ""
+    outward_title: str | None = "Delivery Note"
+    outward_terms: str | None = ""
+    bill_title: str | None = "Labour Bill Invoice"
+    bill_terms: str | None = ""
+
 
 class CompanyUpdate(BaseModel):
     name: str | None = None
@@ -40,6 +57,24 @@ class CompanyUpdate(BaseModel):
     pan: str | None = None
     tan: str | None = None
     financial_year_start_month: int | None = None
+    logo_path: str | None = None
+
+    show_logo: bool | None = None
+    voucher_paper_size: str | None = None
+    inward_paper_size: str | None = None
+    outward_paper_size: str | None = None
+    bill_paper_size: str | None = None
+    report_paper_size: str | None = None
+    grid_paper_size: str | None = None
+
+    voucher_title: str | None = None
+    voucher_terms: str | None = None
+    inward_title: str | None = None
+    inward_terms: str | None = None
+    outward_title: str | None = None
+    outward_terms: str | None = None
+    bill_title: str | None = None
+    bill_terms: str | None = None
 
 
 @router.get("/", response_model=CompanySchema)
@@ -65,5 +100,6 @@ async def update_company(body: CompanyUpdate, current_user: CurrentUser, db: DBS
         for k, v in body.model_dump(exclude_none=True).items():
             setattr(company, k, v)
     await db.flush()
+    await db.commit()
     await db.refresh(company)
     return company

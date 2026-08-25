@@ -253,7 +253,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
   }, [lineItems, balanceMap, movementType]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
         {editing 
           ? `Edit ${movementType === "Inward" ? "Purchase" : movementType}` 
@@ -287,7 +287,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
           <Grid size={{ xs: 4 }}>
             <TextField label="Ref No." fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...register("ref_no")} />
           </Grid>
-
+ 
           <Grid size={{ xs: 12 }}>
             <Controller
               name="ledger_id"
@@ -303,19 +303,19 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               )}
             />
           </Grid>
-
+ 
           <Grid size={{ xs: 12 }}>
             <Typography variant="subtitle2" sx={{ color: "#0f5132", fontWeight: 700, mb: 1 }}>Items List</Typography>
             <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
               <Table size="small">
                 <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Stock Item *</TableCell>
-                    <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
-                    <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Rate</TableCell>
-                    <TableCell sx={{ width: 120, fontWeight: 700 }} align="right">Amount</TableCell>
-                    <TableCell sx={{ width: 150, fontWeight: 700 }}>UOM</TableCell>
-                    <TableCell sx={{ width: 50 }} align="center">Del</TableCell>
+                    <TableCell sx={{ minWidth: 260, fontWeight: 700 }}>Stock Item *</TableCell>
+                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
+                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Rate</TableCell>
+                    <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Amount</TableCell>
+                    <TableCell sx={{ width: 180, minWidth: 180, fontWeight: 700 }}>UOM</TableCell>
+                    <TableCell sx={{ width: 50, minWidth: 50 }} align="center">Del</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -325,7 +325,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                     
                     return (
                       <TableRow key={idx}>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 260 }}>
                           <LazyAutocomplete
                             size="small"
                             options={stockItems}
@@ -340,7 +340,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 100 }}>
                           <TextField
                             size="small"
                             type="number"
@@ -353,23 +353,25 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             }}
                             slotProps={{ htmlInput: { style: { textAlign: "right" }, step: "0.001", min: 0 } }}
                             required
+                            sx={{ width: 90 }}
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 100 }}>
                           <TextField
                             size="small"
                             type="number"
                             value={item.rate}
                             onChange={(e) => handleLineItemChange(idx, "rate", e.target.value)}
                             slotProps={{ htmlInput: { style: { textAlign: "right" }, step: "0.01", min: 0 } }}
+                            sx={{ width: 90 }}
                           />
                         </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        <TableCell sx={{ minWidth: 120 }} align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 600, pr: 1 }}>
                             {item.amount ? `₹${formatAmount(item.amount)}` : "-"}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ minWidth: 180 }}>
                           <LazyAutocomplete
                             size="small"
                             options={uoms}
@@ -377,9 +379,10 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             value={uoms.find((u: any) => u.id === Number(item.uom_id)) || null}
                             onChange={(_, v) => handleLineItemChange(idx, "uom_id", v ? String(v.id) : "")}
                             renderInput={(params) => <TextField {...params} />}
+                            sx={{ width: 170 }}
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell sx={{ minWidth: 50 }} align="center">
                           <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>

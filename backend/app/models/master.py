@@ -63,7 +63,25 @@ class Company(Base):
     pan: Mapped[str | None] = mapped_column(String(20))
     tan: Mapped[str | None] = mapped_column(String(20))
     financial_year_start_month: Mapped[int] = mapped_column(Integer, default=4)  # April
-    logo_path: Mapped[str | None] = mapped_column(String(500))
+    logo_path: Mapped[str | None] = mapped_column(Text)
+    
+    show_logo: Mapped[bool] = mapped_column(Boolean, default=True)
+    voucher_paper_size: Mapped[str] = mapped_column(String(10), default="A5")
+    inward_paper_size: Mapped[str] = mapped_column(String(10), default="A4")
+    outward_paper_size: Mapped[str] = mapped_column(String(10), default="A5")
+    bill_paper_size: Mapped[str] = mapped_column(String(10), default="A4")
+    report_paper_size: Mapped[str] = mapped_column(String(10), default="A4")
+    grid_paper_size: Mapped[str] = mapped_column(String(10), default="A4")
+    
+    voucher_title: Mapped[str | None] = mapped_column(String(200), default="Voucher Receipt")
+    voucher_terms: Mapped[str | None] = mapped_column(Text, default="1. Subject to local jurisdiction.\n2. This is a computer-generated voucher and requires no physical signature.")
+    inward_title: Mapped[str | None] = mapped_column(String(200), default="Inward Challan")
+    inward_terms: Mapped[str | None] = mapped_column(Text, default="1. Received goods are subject to count & quality checks.\n2. Report discrepancies within 24 hours.")
+    outward_title: Mapped[str | None] = mapped_column(String(200), default="Delivery Note")
+    outward_terms: Mapped[str | None] = mapped_column(Text, default="1. Goods once sold/delivered cannot be taken back.\n2. Subject to company terms of carriage.")
+    bill_title: Mapped[str | None] = mapped_column(String(200), default="Labour Bill Invoice")
+    bill_terms: Mapped[str | None] = mapped_column(Text, default="1. Payment terms: Net 15 days.\n2. Interest @ 18% p.a. will be charged for delayed payments.")
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
