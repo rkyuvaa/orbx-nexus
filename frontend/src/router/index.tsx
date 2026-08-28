@@ -32,7 +32,6 @@ import StockTransferPage from "../pages/inventory/StockTransferPage";
 import DocumentNumberingPage from "../pages/settings/DocumentNumberingPage";
 import ContractorPages from "../pages/contractor/ContractorPages";
 import StockItemsPage from "../pages/inventory/StockItemsPage";
-import StockAdjustmentPage from "../pages/inventory/StockAdjustmentPage";
 import { InventoryInwardPage, InventoryOutwardPage } from "../pages/inventory/InventoryMovementPages";
 import LocationsPage from "../pages/inventory/LocationsPage";
 import { useAuthStore } from "../store";
@@ -73,7 +72,6 @@ export const router = createBrowserRouter([
       { path: "inventory/uom", element: <UoMPage /> },
       { path: "inventory/inward",  element: <InventoryInwardPage /> },
       { path: "inventory/outward", element: <InventoryOutwardPage /> },
-      { path: "inventory/adjustments", element: <StockAdjustmentPage /> },
       { path: "inventory/locations", element: <LocationsPage /> },
 
       // Purchase
