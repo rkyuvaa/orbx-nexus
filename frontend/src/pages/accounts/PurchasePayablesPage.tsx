@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -438,7 +438,7 @@ export default function PurchasePayablesPage() {
                   const isCollapsed = !!collapsedGroups[group.supplier];
 
                   return (
-                    <g key={group.supplier}>
+                    <Fragment key={group.supplier}>
                       <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 0.75 } }}>
                         <TableCell padding="checkbox">
                           <Checkbox
@@ -464,7 +464,7 @@ export default function PurchasePayablesPage() {
                         <TableCell colSpan={2} />
                       </TableRow>
                       {!isCollapsed && group.items.map((m: any) => renderRow(m))}
-                    </g>
+                    </Fragment>
                   );
                 })}
 
