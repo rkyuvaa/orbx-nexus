@@ -525,7 +525,48 @@ async def pending_bills(
     return [dict(r) for r in result.mappings().all()]
 
 
-# ─────── Staff Salary Account ───────
+# ─────── Purchase Payables ───────
+
+@router.get("/payables")
+async def purchase_payables(
+    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
+    from_date: str = Query(None), to_date: str = Query(None),
+    ledger_id: int = Query(None),
+):
+    """Returns all Inward (Purchase) movements grouped to show outstanding payables per supplier."""
+    schema = s(fy)
+    conds = ["m.movement_type = 'Inward'"]
+    params: dict = {}
+    if from_date:
+        conds.append("m.movement_date >= :fd")
+        params["fd"] = from_date
+    if to_date:
+        conds.append("m.movement_date <= :td")
+        params["td"] = to_date
+    if ledger_id:
+        conds.append("m.ledger_id = :lid")
+        params["lid"] = ledger_id
+    where = " AND ".join(conds)
+    result = await db.execute(
+        text(
+            f"SELECT m.id, m.movement_no, m.movement_date::text, m.movement_type, "
+            f"m.amount, m.ref_no, m.narration, "
+            f"l.name AS supplier, "
+            f"si.name AS stock_item_name, "
+            f"m.quantity, m.rate, "
+            f"u.symbol AS uom "
+            f"FROM {schema}.stock_item_movements m "
+            f"LEFT JOIN master.ledgers l ON l.id = m.ledger_id "
+            f"LEFT JOIN master.stock_items si ON si.id = m.stock_item_id "
+            f"LEFT JOIN master.units_of_measure u ON u.id = m.uom_id "
+            f"WHERE {where} "
+            f"ORDER BY m.movement_date DESC, m.id DESC"
+        ),
+        params,
+    )
+    return [dict(r) for r in result.mappings().all()]
+
+
 
 @router.get("/staff-salary-account")
 async def staff_salary_account(

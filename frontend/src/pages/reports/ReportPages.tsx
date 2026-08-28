@@ -1282,7 +1282,7 @@ export function StockInHandReport() {
         });
 
         tablesHtml += `
-          <div style="margin-top: 15px; margin-bottom: 20px; page-break-inside: avoid;">
+          <div style="margin-top: 15px; margin-bottom: 20px;">
             <div style="background-color: #0f5132; color: #fff; padding: 6px 12px; font-weight: 700; font-size: 13px; border-radius: 4px 4px 0 0;">
               SUPPLIER: ${sName.toUpperCase()}
             </div>
