@@ -75,6 +75,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Product Register", path: "/process/products", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Process Register", path: "/process/processes", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Process Groups", path: "/process/groups", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Unit of Measure", path: "/inventory/uom", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {
@@ -96,12 +97,11 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "Inventory",
+    label: "Tools Management",
     icon: <PrecisionManufacturing sx={{ fontSize: 20 }} />,
     children: [
       { label: "Tools & Consumables", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Unit of Measure", path: "/inventory/uom", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Location Inventory", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Tools Management", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {

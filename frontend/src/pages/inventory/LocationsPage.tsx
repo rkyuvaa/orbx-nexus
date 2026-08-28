@@ -288,9 +288,9 @@ export default function LocationsPage() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <PageHeader
-        title="Location Inventory"
+        title="Tools Management"
         subtitle="Manage locations and track tools/consumables issue and consumption"
-        breadcrumbs={[{ label: "Inventory" }, { label: "Locations" }]}
+        breadcrumbs={[{ label: "Tools Management" }, { label: "Locations" }]}
       />
 
       <Tabs value={tabValue} onChange={(_, val) => setTabValue(val)} sx={{ borderBottom: 1, borderColor: "divider", mb: 1 }}>
