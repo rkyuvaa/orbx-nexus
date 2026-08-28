@@ -447,26 +447,6 @@ export function InventoryInwardPage() {
     },
   });
 
-  const totalQty = movements.reduce((acc: number, m: any) => acc + Number(m.quantity || 0), 0);
-  const totalValue = movements.reduce((acc: number, m: any) => acc + Number(m.amount || 0), 0);
-
-  const summaryCards = (
-    <Box sx={{ display: "flex", gap: 2, mb: 1.5 }}>
-      <Box sx={{ px: 2, py: 1, borderRadius: 2, bgcolor: "success.main", color: "#fff", minWidth: 140, textAlign: "center" }}>
-        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Purchased Qty</Typography>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>{formatQty(totalQty)}</Typography>
-      </Box>
-      <Box sx={{ px: 2, py: 1, borderRadius: 2, bgcolor: "success.dark", color: "#fff", minWidth: 160, textAlign: "center" }}>
-        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Purchase Value</Typography>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>₹{formatAmount(totalValue)}</Typography>
-      </Box>
-      <Box sx={{ px: 2, py: 1, borderRadius: 2, bgcolor: "primary.main", color: "#fff", minWidth: 120, textAlign: "center" }}>
-        <Typography variant="caption" sx={{ opacity: 0.85, display: "block" }}>Total Purchase Entries</Typography>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>{movements.length}</Typography>
-      </Box>
-    </Box>
-  );
-
   const colDefs: ColDef[] = [
     { field: "movement_no", headerName: "Purchase No.", width: 150 },
     { field: "movement_date", headerName: "Date", width: 110 },
@@ -493,7 +473,6 @@ export function InventoryInwardPage() {
         return p.data?.stock_item_name || "-";
       }
     },
-    { field: "item_code", headerName: "Code", width: 100 },
     { field: "ledger_name", headerName: "Supplier / Party", width: 180 },
     {
       field: "quantity", headerName: "Quantity", width: 110, type: "numericColumn",
@@ -507,7 +486,6 @@ export function InventoryInwardPage() {
       field: "amount", headerName: "Amount", width: 120, type: "numericColumn",
       valueFormatter: (p) => p.value ? `₹${formatAmount(p.value)}` : "-",
     },
-    { field: "ref_no", headerName: "Bill/Ref No.", width: 110 },
     {
       headerName: "Actions", width: 110, sortable: false, filter: false,
       cellRenderer: (p: any) => (
@@ -542,7 +520,6 @@ export function InventoryInwardPage() {
         onRefresh={refetch}
         onAdd={() => { setEditing(null); setOpen(true); }}
         addLabel="New Purchase"
-        summaryCards={summaryCards}
       />
       <MovementDialog
         open={open}
