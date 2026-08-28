@@ -3,13 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Grid, Typography, Chip, MenuItem, Checkbox,
-  Divider, Table, TableHead, TableBody, TableRow, TableCell,
+  Divider, Table, TableHead, TableBody, TableFooter, TableRow, TableCell,
   TableContainer, Paper, LinearProgress, Tooltip, IconButton,
-  InputAdornment,
+  InputAdornment, FormControlLabel, Switch,
 } from "@mui/material";
 import PaymentIcon from "@mui/icons-material/Payment";
 import Refresh from "@mui/icons-material/Refresh";
 import Search from "@mui/icons-material/Search";
+import ExpandMore from "@mui/icons-material/ExpandMore";
+import ExpandLess from "@mui/icons-material/ExpandLess";
 import { useForm, Controller } from "react-hook-form";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
@@ -197,6 +199,8 @@ export default function PurchasePayablesPage() {
   const [singleItem, setSingleItem] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState("");
+  const [groupBySupplier, setGroupBySupplier] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const { data: movements = [], isLoading, refetch } = useQuery({
     queryKey: ["purchase-payables", activeFY],
@@ -214,6 +218,20 @@ export default function PurchasePayablesPage() {
     );
   }, [movements, search]);
 
+  const supplierGroups = useMemo(() => {
+    if (!groupBySupplier) return [];
+    const groupsMap: Record<string, any[]> = {};
+    filtered.forEach((m: any) => {
+      const supplierName = m.ledger_name || "Unassigned";
+      if (!groupsMap[supplierName]) groupsMap[supplierName] = [];
+      groupsMap[supplierName].push(m);
+    });
+    return Object.entries(groupsMap).map(([supplier, items]) => {
+      const totalAmount = items.reduce((s, item) => s + Number(item.amount || 0), 0);
+      return { supplier, items, totalAmount };
+    });
+  }, [filtered, groupBySupplier]);
+
   const summary = useMemo(() => {
     const totalAmount = movements.reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     const totalPaid = movements.reduce((s: number, m: any) => s + Number(m.paid_amount || 0), 0);
@@ -221,6 +239,10 @@ export default function PurchasePayablesPage() {
     const unpaidCount = movements.filter((m: any) => !m.payment_status || m.payment_status === "Unpaid").length;
     return { totalAmount, totalPaid, totalPending, unpaidCount };
   }, [movements]);
+
+  const filteredTotalAmount = useMemo(() => {
+    return filtered.reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+  }, [filtered]);
 
   const allIds = filtered.map((m: any) => m.id as number);
   const allChecked = allIds.length > 0 && allIds.every((id: number) => selectedIds.has(id));
@@ -241,6 +263,27 @@ export default function PurchasePayablesPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  const toggleGroup = (groupItems: any[]) => {
+    const groupItemIds = groupItems.map((it) => it.id);
+    const allGroupChecked = groupItemIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allGroupChecked) {
+        groupItemIds.forEach((id) => next.delete(id));
+      } else {
+        groupItemIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const toggleCollapseGroup = (supplierName: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [supplierName]: !prev[supplierName],
+    }));
   };
 
   const selectedPurchases = movements.filter((m: any) => selectedIds.has(m.id));
@@ -269,6 +312,35 @@ export default function PurchasePayablesPage() {
     { label: "Pending Balance", value: `${RUPEE}${formatAmount(summary.totalPending)}`, color: "warning.dark" },
     { label: "Unpaid Entries", value: String(summary.unpaidCount), color: "primary.main" },
   ];
+
+  const renderRow = (m: any) => (
+    <TableRow key={m.id} selected={selectedIds.has(m.id)} hover sx={{ cursor: "pointer" }} onClick={() => toggleOne(m.id)}>
+      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+        <Checkbox size="small" checked={selectedIds.has(m.id)} onChange={() => toggleOne(m.id)} />
+      </TableCell>
+      <TableCell sx={{ whiteSpace: "nowrap", color: "primary.main", fontWeight: 600, fontSize: 13 }}>
+        {m.movement_no}
+      </TableCell>
+      <TableCell sx={{ whiteSpace: "nowrap", fontSize: 13 }}>{m.movement_date}</TableCell>
+      <TableCell sx={{ fontSize: 13, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {m.stock_item_name || DASH}
+      </TableCell>
+      <TableCell sx={{ fontSize: 13, whiteSpace: "nowrap" }}>{m.ledger_name || DASH}</TableCell>
+      <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>
+        {RUPEE}{formatAmount(m.amount)}
+      </TableCell>
+      <TableCell sx={{ textAlign: "center" }}>
+        {statusChip(m.payment_status)}
+      </TableCell>
+      <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+        <Tooltip title="Update Payment">
+          <IconButton size="small" color="success" onClick={() => openSingle(m)}>
+            <PaymentIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </TableCell>
+    </TableRow>
+  );
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -306,14 +378,30 @@ export default function PurchasePayablesPage() {
             }}
             sx={{ width: 280, "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
           />
+
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={groupBySupplier}
+                onChange={(e) => setGroupBySupplier(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Group by Supplier</Typography>}
+            sx={{ ml: 1, mr: 1 }}
+          />
+
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
             {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} entries`}
           </Typography>
+
           {selectedIds.size > 0 && (
             <Button size="small" variant="contained" color="success" startIcon={<PaymentIcon />} onClick={openBulk} sx={{ textTransform: "none", borderRadius: 2 }}>
               Pay {selectedIds.size} Selected
             </Button>
           )}
+
           <Tooltip title="Refresh">
             <IconButton size="small" onClick={() => refetch()}>
               <Refresh fontSize="small" />
@@ -340,34 +428,46 @@ export default function PurchasePayablesPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map((m: any) => (
-                <TableRow key={m.id} selected={selectedIds.has(m.id)} hover sx={{ cursor: "pointer" }} onClick={() => toggleOne(m.id)}>
-                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox size="small" checked={selectedIds.has(m.id)} onChange={() => toggleOne(m.id)} />
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap", color: "primary.main", fontWeight: 600, fontSize: 13 }}>
-                    {m.movement_no}
-                  </TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap", fontSize: 13 }}>{m.movement_date}</TableCell>
-                  <TableCell sx={{ fontSize: 13, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {m.stock_item_name || DASH}
-                  </TableCell>
-                  <TableCell sx={{ fontSize: 13, whiteSpace: "nowrap" }}>{m.ledger_name || DASH}</TableCell>
-                  <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>
-                    {RUPEE}{formatAmount(m.amount)}
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "center" }}>
-                    {statusChip(m.payment_status)}
-                  </TableCell>
-                  <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <Tooltip title="Update Payment">
-                      <IconButton size="small" color="success" onClick={() => openSingle(m)}>
-                        <PaymentIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {!groupBySupplier && filtered.map((m: any) => renderRow(m))}
+
+              {groupBySupplier &&
+                supplierGroups.map((group) => {
+                  const groupItemIds = group.items.map((it) => it.id);
+                  const isGroupAllChecked = groupItemIds.every((id) => selectedIds.has(id));
+                  const isGroupSomeChecked = groupItemIds.some((id) => selectedIds.has(id)) && !isGroupAllChecked;
+                  const isCollapsed = !!collapsedGroups[group.supplier];
+
+                  return (
+                    <g key={group.supplier}>
+                      <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 0.75 } }}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={isGroupAllChecked}
+                            indeterminate={isGroupSomeChecked}
+                            onChange={() => toggleGroup(group.items)}
+                          />
+                        </TableCell>
+                        <TableCell colSpan={4}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <IconButton size="small" onClick={() => toggleCollapseGroup(group.supplier)} sx={{ p: 0.25 }}>
+                              {isCollapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
+                            </IconButton>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "primary.main" }}>
+                              {group.supplier} ({group.items.length} {group.items.length === 1 ? "entry" : "entries"})
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={{ textAlign: "right", fontWeight: 700 }}>
+                          {RUPEE}{formatAmount(group.totalAmount)}
+                        </TableCell>
+                        <TableCell colSpan={2} />
+                      </TableRow>
+                      {!isCollapsed && group.items.map((m: any) => renderRow(m))}
+                    </g>
+                  );
+                })}
+
               {filtered.length === 0 && !isLoading && (
                 <TableRow>
                   <TableCell colSpan={8} align="center" sx={{ py: 6, color: "text.secondary" }}>
@@ -376,6 +476,17 @@ export default function PurchasePayablesPage() {
                 </TableRow>
               )}
             </TableBody>
+            <TableFooter sx={{ position: "sticky", bottom: 0, bgcolor: (t) => t.palette.mode === "dark" ? "#1e293b" : "#e2e8f0" }}>
+              <TableRow sx={{ "& > td": { fontWeight: 700, py: 1.2 } }}>
+                <TableCell colSpan={5} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
+                  Total
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: 14, textAlign: "right", color: "primary.main" }}>
+                  {RUPEE}{formatAmount(filteredTotalAmount)}
+                </TableCell>
+                <TableCell colSpan={2} />
+              </TableRow>
+            </TableFooter>
           </Table>
         </TableContainer>
       </Paper>
