@@ -692,7 +692,43 @@ async def delete_inventory_movement(
     )
 
 
-# ──── Locations CRUD & Tracking API ────
+class PaymentUpdateIn(BaseModel):
+    payment_status: str  # 'Unpaid', 'Partial', 'Paid'
+    paid_amount: float = 0
+    payment_date: str | None = None
+    payment_mode: str | None = None
+    payment_notes: str | None = None
+
+
+@router.patch("/inventory/movements/{movement_id}/payment")
+async def update_movement_payment(
+    movement_id: int,
+    body: PaymentUpdateIn,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+):
+    """Update payment details for a purchase (Inward) movement."""
+    s = _schema(fy)
+    await db.execute(
+        text(
+            f"UPDATE {s}.stock_item_movements SET "
+            f"payment_status=:pstatus, paid_amount=:paid, payment_date=:pdate, "
+            f"payment_mode=:pmode, payment_notes=:pnotes, updated_at=NOW() "
+            f"WHERE id=:id"
+        ),
+        {
+            "pstatus": body.payment_status,
+            "paid": body.paid_amount,
+            "pdate": body.payment_date,
+            "pmode": body.payment_mode,
+            "pnotes": body.payment_notes,
+            "id": movement_id,
+        },
+    )
+    return {"message": "Payment details updated"}
+
+
 
 from app.models.master import Location
 from sqlalchemy import select

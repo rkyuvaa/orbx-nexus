@@ -34,6 +34,7 @@ import ContractorPages from "../pages/contractor/ContractorPages";
 import StockItemsPage from "../pages/inventory/StockItemsPage";
 import { InventoryInwardPage, InventoryOutwardPage } from "../pages/inventory/InventoryMovementPages";
 import LocationsPage from "../pages/inventory/LocationsPage";
+import PurchasePayablesPage from "../pages/accounts/PurchasePayablesPage";
 import { useAuthStore } from "../store";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
       // Accounts Info
       { path: "accounts/groups", element: <AccountsGroupPage /> },
       { path: "accounts/staff", element: <LedgerPage ledgerType="Staff" title="Staff Ledgers" breadcrumbs={[{ label: "Accounts Info" }, { label: "Staff Ledgers" }]} /> },
+      { path: "accounts/payables", element: <PurchasePayablesPage /> },
 
       // Inventory
       { path: "inventory/stock-in-hand", element: <StockInHandReport /> },

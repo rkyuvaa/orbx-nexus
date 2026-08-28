@@ -123,6 +123,11 @@ CREATE TABLE IF NOT EXISTS {schema}.stock_item_movements (
     items         JSONB DEFAULT '[]'::jsonb,
     location_id   INTEGER,
     to_location_id INTEGER,
+    payment_status VARCHAR(20) DEFAULT 'Unpaid',
+    paid_amount   NUMERIC(15,2) DEFAULT 0,
+    payment_date  DATE,
+    payment_mode  VARCHAR(50),
+    payment_notes TEXT,
     created_by    INTEGER,
     created_at    TIMESTAMP DEFAULT NOW(),
     updated_at    TIMESTAMP DEFAULT NOW()
@@ -309,6 +314,11 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS to_location_id INTEGER;
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'Unpaid';
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(15,2) DEFAULT 0;
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS payment_date DATE;
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50);
+        ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS payment_notes TEXT;
         CREATE TABLE IF NOT EXISTS {schema}.stock_adjustments (
             id SERIAL PRIMARY KEY,
             adjustment_no VARCHAR(50) UNIQUE NOT NULL,
