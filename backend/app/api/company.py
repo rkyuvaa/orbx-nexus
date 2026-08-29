@@ -77,6 +77,9 @@ class CompanyUpdate(BaseModel):
     bill_terms: str | None = None
 
 
+from app.api.audit import log_audit_event
+
+
 @router.get("/", response_model=CompanySchema)
 async def get_company(current_user: CurrentUser, db: DBSession):
     result = await db.execute(select(Company))
@@ -90,8 +93,9 @@ async def get_company(current_user: CurrentUser, db: DBSession):
 async def update_company(body: CompanyUpdate, current_user: CurrentUser, db: DBSession):
     result = await db.execute(select(Company))
     company = result.scalar_one_or_none()
+    action = "UPDATE"
     if not company:
-        # Create
+        action = "CREATE"
         data = body.model_dump(exclude_none=True)
         data.setdefault("name", "OrbX Nexus Company")
         company = Company(**data)
@@ -102,4 +106,15 @@ async def update_company(body: CompanyUpdate, current_user: CurrentUser, db: DBS
     await db.flush()
     await db.commit()
     await db.refresh(company)
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action=action,
+        module="Company/Settings",
+        record_id=company.id,
+        new_values=body.model_dump(exclude_none=True),
+    )
     return company
+

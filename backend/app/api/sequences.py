@@ -36,6 +36,8 @@ async def list_sequence_settings(current_user: CurrentUser, db: DBSession):
     result = await db.execute(select(DocumentSequence).order_by(DocumentSequence.document_type))
     return result.scalars().all()
 
+from app.api.audit import log_audit_event
+
 @router.put("/settings/{id}")
 async def update_sequence_setting(id: int, body: DocumentSequenceUpdate, current_user: CurrentUser, db: DBSession):
     if current_user.role != "Admin":
@@ -50,4 +52,14 @@ async def update_sequence_setting(id: int, body: DocumentSequenceUpdate, current
     seq.current_number = body.current_number
     seq.padding_width = body.padding_width
     await db.flush()
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        module="DocumentNumbering/Settings",
+        record_id=id,
+        new_values=body.model_dump(),
+    )
     return {"message": "Sequence setting updated"}
+

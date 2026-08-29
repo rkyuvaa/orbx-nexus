@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.api.deps import CurrentUser, DBSession, get_fy_schema
+from app.api.audit import log_audit_event
 
 router = APIRouter()
 
@@ -135,6 +136,16 @@ async def create_voucher(
                 "narr": line.narration,
             },
         )
+
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        module="vouchers",
+        record_id=voucher_id,
+        fy=fy,
+    )
     return {"id": voucher_id, "message": "Voucher created"}
 
 
@@ -174,6 +185,15 @@ async def update_voucher(
             ),
             {"vid": voucher_id, "lid": line.ledger_id, "dr": line.dr_amount, "cr": line.cr_amount, "narr": line.narration},
         )
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        module="vouchers",
+        record_id=voucher_id,
+        fy=fy,
+    )
     return {"message": "Updated"}
 
 
@@ -185,3 +205,13 @@ async def delete_voucher(
     await db.execute(
         text(f"DELETE FROM {schema}.vouchers WHERE id = :id"), {"id": voucher_id}
     )
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        module="vouchers",
+        record_id=voucher_id,
+        fy=fy,
+    )
+

@@ -63,6 +63,8 @@ Token.model_rebuild()
 
 # ──────── Routes ────────
 
+from app.api.audit import log_audit_event
+
 @router.post("/login", response_model=Token)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -83,6 +85,14 @@ async def login(
     access_token = create_access_token(
         data={"sub": str(user.id), "username": user.username, "role": user.role},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    await log_audit_event(
+        db=db,
+        user_id=user.id,
+        username=user.username,
+        action="LOGIN",
+        module="Auth",
+        record_id=user.id,
     )
     return Token(
         access_token=access_token,
@@ -122,6 +132,15 @@ async def create_user(body: UserCreate, current_user: CurrentUser, db: DBSession
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="CREATE",
+        module="UserManagement",
+        record_id=user.id,
+        new_values={"username": user.username, "role": user.role},
+    )
     return user
 
 
@@ -145,6 +164,15 @@ async def update_user(user_id: int, body: UserUpdate, current_user: CurrentUser,
         user.hashed_password = get_password_hash(body.password)
     await db.flush()
     await db.refresh(user)
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE",
+        module="UserManagement",
+        record_id=user_id,
+        new_values=body.model_dump(exclude={"password"}, exclude_none=True),
+    )
     return user
 
 
@@ -159,6 +187,14 @@ async def delete_user(user_id: int, current_user: CurrentUser, db: DBSession):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     await db.delete(user)
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="DELETE",
+        module="UserManagement",
+        record_id=user_id,
+    )
 
 
 @router.get("/users/{user_id}/permissions", response_model=list[PermissionSchema])
@@ -194,4 +230,13 @@ async def set_user_permissions(
         db.add(perm)
         new_perms.append(perm)
     await db.flush()
+    await log_audit_event(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="UPDATE_PERMISSIONS",
+        module="UserManagement",
+        record_id=user_id,
+    )
     return new_perms
+

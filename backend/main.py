@@ -8,7 +8,7 @@ if sys.platform == "win32":
 
 import uvicorn
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, func, text
 
@@ -17,7 +17,7 @@ from app.db.session import engine, AsyncSessionLocal
 from app.db.base_class import Base
 from app.db.schema_manager import ensure_master_schema, ensure_year_schema
 from app.models.master import User, FinancialYear, DocumentSequence
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_token
 
 # Import all API routers
 from app.api import (
@@ -228,6 +228,77 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def audit_logger_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        path = request.url.path
+        if (
+            path.startswith(settings.API_V1_STR)
+            and not path.startswith(f"{settings.API_V1_STR}/audit")
+            and response.status_code < 400
+            and not getattr(request.state, "audit_logged", False)
+        ):
+            try:
+                auth_header = request.headers.get("authorization")
+                user_id = None
+                username = "System"
+                if auth_header and auth_header.startswith("Bearer "):
+                    token = auth_header.split(" ")[1]
+                    payload = verify_token(token)
+                    if payload:
+                        user_id = int(payload.get("sub")) if payload.get("sub") else None
+                        username = payload.get("username") or "User"
+
+                fy = request.query_params.get("fy", "2026_2027")
+                schema = f"fy_{fy}"
+
+                # Infer module from path
+                rel_path = path.replace(settings.API_V1_STR, "")
+                parts = [p for p in rel_path.split("/") if p]
+                module_raw = parts[0] if parts else "System"
+                module_map = {
+                    "company": "Company/Settings",
+                    "sequences": "DocumentNumbering/Settings",
+                    "ledgers": "Ledgers",
+                    "vouchers": "Vouchers",
+                    "stock": "Stock",
+                    "labour-bills": "LabourBills",
+                    "payroll": "Payroll",
+                    "contractor": "Contractor",
+                    "biometrics": "Biometrics",
+                    "backups": "Backups",
+                    "financial-years": "FinancialYears",
+                    "auth": "Auth",
+                    "products": "Products",
+                }
+                module = module_map.get(module_raw.lower(), module_raw.capitalize())
+                action_map = {"POST": "CREATE", "PUT": "UPDATE", "DELETE": "DELETE", "PATCH": "UPDATE"}
+                action = action_map.get(request.method, request.method)
+                ip_address = request.client.host if request.client else None
+
+                async with AsyncSessionLocal() as session:
+                    await session.execute(
+                        text(
+                            f"INSERT INTO {schema}.audit_logs (user_id, username, action, module, ip_address) "
+                            f"VALUES (:uid, :uname, :action, :mod, :ip)"
+                        ),
+                        {
+                            "uid": user_id,
+                            "uname": username,
+                            "action": action,
+                            "mod": module,
+                            "ip": ip_address,
+                        }
+                    )
+                    await session.commit()
+            except Exception as e:
+                print(f"[AUDIT MIDDLEWARE ERROR] Failed to log audit event: {e}")
+
+    return response
+
 
 # Mount all routers
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Authentication"])

@@ -10,23 +10,39 @@ export default function AuditLogsPage() {
   const { activeFY } = useAuthStore();
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ["audit-logs", activeFY],
-    queryFn: async () => (await api.get(`/audit/?fy=${activeFY}&limit=200`)).data,
+    queryFn: async () => (await api.get(`/audit/?fy=${activeFY}&limit=500`)).data,
   });
 
   const colDefs: ColDef[] = [
-    { field: "created_at", headerName: "Timestamp", width: 170, valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : "-" },
-    { field: "username", headerName: "User", width: 120 },
-    { field: "module", headerName: "Module", width: 120 },
-    { field: "action", headerName: "Action", width: 100,
-      cellRenderer: (p: any) => <Chip label={p.value} size="small" color={p.value === "DELETE" ? "error" : p.value === "CREATE" ? "success" : "info"} sx={{ fontSize: "0.7rem" }} /> },
-    { field: "record_id", headerName: "Record ID", width: 100, type: "numericColumn" },
-    { field: "ip_address", headerName: "IP Address", width: 130 },
+    { field: "created_at", headerName: "Timestamp", width: 180, valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : "-" },
+    { field: "username", headerName: "User", width: 140 },
+    { field: "module", headerName: "Module", width: 150 },
+    {
+      field: "action",
+      headerName: "Action",
+      width: 120,
+      cellRenderer: (p: any) => {
+        const act = (p.value || "").toUpperCase();
+        let color: "error" | "success" | "info" | "warning" = "info";
+        if (act === "DELETE") color = "error";
+        else if (act === "CREATE") color = "success";
+        else if (act === "LOGIN") color = "warning";
+        return <Chip label={act} size="small" color={color} sx={{ fontSize: "0.7rem", fontWeight: 600 }} />;
+      },
+    },
+    { field: "record_id", headerName: "Record ID", width: 110, type: "numericColumn", valueFormatter: (p) => p.value ?? "-" },
+    { field: "ip_address", headerName: "IP Address", width: 140, valueFormatter: (p) => p.value || "-" },
   ];
 
   return (
     <Box>
-      <PageHeader title="Audit Logs" subtitle="System-wide action trail" breadcrumbs={[{ label: "Audit Logs" }]} />
+      <PageHeader
+        title="Audit Logs"
+        subtitle="System-wide action & activity trail"
+        breadcrumbs={[{ label: "Settings" }, { label: "Audit Logs" }]}
+      />
       <OrbxGrid rowData={data} columnDefs={colDefs} loading={isLoading} onRefresh={refetch} />
     </Box>
   );
 }
+

@@ -83,6 +83,9 @@ class LedgerUpdate(LedgerCreate):
     is_active: bool | None = None
 
 
+from app.api.audit import log_audit_event
+
+
 # ──── Ledger Groups ────
 
 @router.get("/groups", response_model=list[LedgerGroupOut])
@@ -97,6 +100,10 @@ async def create_group(body: LedgerGroupCreate, current_user: CurrentUser, db: D
     db.add(group)
     await db.flush()
     await db.refresh(group)
+    await log_audit_event(
+        db=db, user_id=current_user.id, username=current_user.username,
+        action="CREATE", module="LedgerGroups", record_id=group.id
+    )
     return group
 
 
@@ -110,6 +117,10 @@ async def update_group(group_id: int, body: LedgerGroupCreate, current_user: Cur
         setattr(group, k, v)
     await db.flush()
     await db.refresh(group)
+    await log_audit_event(
+        db=db, user_id=current_user.id, username=current_user.username,
+        action="UPDATE", module="LedgerGroups", record_id=group_id
+    )
     return group
 
 
@@ -120,6 +131,10 @@ async def delete_group(group_id: int, current_user: CurrentUser, db: DBSession):
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
     await db.delete(group)
+    await log_audit_event(
+        db=db, user_id=current_user.id, username=current_user.username,
+        action="DELETE", module="LedgerGroups", record_id=group_id
+    )
 
 
 # ──── Ledgers ────
@@ -162,6 +177,10 @@ async def create_ledger(body: LedgerCreate, current_user: CurrentUser, db: DBSes
     db.add(ledger)
     await db.flush()
     await db.refresh(ledger)
+    await log_audit_event(
+        db=db, user_id=current_user.id, username=current_user.username,
+        action="CREATE", module="Ledgers", record_id=ledger.id
+    )
     return ledger
 
 
@@ -175,6 +194,10 @@ async def update_ledger(ledger_id: int, body: LedgerUpdate, current_user: Curren
         setattr(ledger, k, v)
     await db.flush()
     await db.refresh(ledger)
+    await log_audit_event(
+        db=db, user_id=current_user.id, username=current_user.username,
+        action="UPDATE", module="Ledgers", record_id=ledger_id
+    )
     return ledger
 
 
@@ -185,3 +208,8 @@ async def delete_ledger(ledger_id: int, current_user: CurrentUser, db: DBSession
     if not ledger:
         raise HTTPException(status_code=404, detail="Ledger not found")
     await db.delete(ledger)
+    await log_audit_event(
+        db=db, user_id=current_user.id, username=current_user.username,
+        action="DELETE", module="Ledgers", record_id=ledger_id
+    )
+
