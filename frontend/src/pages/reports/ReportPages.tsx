@@ -329,7 +329,7 @@ export function DayBookReport() {
   return (
     <Box>
       <Box className="no-print">
-        <PageHeader title="Day Book" breadcrumbs={[{ label: "Reports" }, { label: "Day Book" }]} />
+        <PageHeader title="Day Book" breadcrumbs={[{ label: "Accounts" }, { label: "Day Book" }]} />
         <FilterRow>
           <TextField label="From Date" type="date" size="small" value={fromDate} onChange={(e) => setFromDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 160 }} />
           <TextField label="To Date" type="date" size="small" value={toDate} onChange={(e) => setToDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 160 }} />
@@ -1306,7 +1306,7 @@ export function ReceivablesReport() {
         <PageHeader
           title="Receivables"
           subtitle="Outstanding labour bill amounts by contractor"
-          breadcrumbs={[{ label: "Reports" }, { label: "Receivables" }]}
+          breadcrumbs={[{ label: "Accounts" }, { label: "Receivables" }]}
         />
 
         {/* Filters */}
