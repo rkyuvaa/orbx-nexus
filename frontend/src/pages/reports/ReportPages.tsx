@@ -1169,7 +1169,273 @@ export function PendingBillsReport() {
   );
 }
 
+// ── Receivables (from Labour Bills) ──
+export function ReceivablesReport() {
+  const { activeFY } = useAuthStore();
+  const [selectedLedgerId, setSelectedLedgerId] = useState<number | "">("");
+
+  const { data: ledgers = [] } = useQuery({
+    queryKey: ["ledgers-account"],
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+  });
+
+  const { data: rawData = [], isLoading, refetch } = useQuery<any[]>({
+    queryKey: ["receivables", activeFY, selectedLedgerId],
+    queryFn: async () => {
+      let url = `/reports/receivables?fy=${activeFY}`;
+      if (selectedLedgerId) url += `&ledger_id=${selectedLedgerId}`;
+      return (await api.get(url)).data;
+    },
+  });
+
+  const { data: companyData } = useQuery({
+    queryKey: ["company"],
+    queryFn: async () => (await api.get("/company/")).data,
+  });
+
+  // Group by ledger
+  const grouped = useMemo(() => {
+    const map: Record<string, { ledger_name: string; ledger_id: number; bills: any[]; total: number }> = {};
+    rawData.forEach((bill: any) => {
+      const key = String(bill.ledger_id);
+      if (!map[key]) {
+        map[key] = { ledger_name: bill.ledger_name || `Ledger #${bill.ledger_id}`, ledger_id: bill.ledger_id, bills: [], total: 0 };
+      }
+      map[key].bills.push(bill);
+      map[key].total += Number(bill.total_amount || 0);
+    });
+    return Object.values(map).sort((a, b) => a.ledger_name.localeCompare(b.ledger_name));
+  }, [rawData]);
+
+  // Aging summary across all bills
+  const agingTotals = useMemo(() => {
+    const buckets: Record<string, number> = { "0-30 days": 0, "31-60 days": 0, "61-90 days": 0, "90+ days": 0 };
+    rawData.forEach((b: any) => {
+      const bucket = b.aging_bucket as string;
+      buckets[bucket] = (buckets[bucket] || 0) + Number(b.total_amount || 0);
+    });
+    return buckets;
+  }, [rawData]);
+
+  const grandTotal = rawData.reduce((s: number, b: any) => s + Number(b.total_amount || 0), 0);
+  const totalBills = rawData.length;
+  const totalContractors = grouped.length;
+
+  const AGING_COLORS: Record<string, string> = {
+    "0-30 days": "#2e7d32",
+    "31-60 days": "#ed6c02",
+    "61-90 days": "#d32f2f",
+    "90+ days": "#7b1fa2",
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const cName = compData?.name || "";
+    const cAddress = [compData?.address, compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(", ");
+    const cGstin = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+    const logoBase64 = localStorage.getItem("company_logo");
+    let showLogo = true;
+    try { const cfg = localStorage.getItem("orbx_print_config"); if (cfg) showLogo = JSON.parse(cfg).showLogo !== false; } catch (_) {}
+    const logoHtml = showLogo && logoBase64 ? `<img src="${logoBase64}" style="max-height:50px;object-fit:contain;" />` : "";
+
+    let tableRows = "";
+    grouped.forEach((grp) => {
+      tableRows += `<tr style="background:#e8f5e9;font-weight:700;">
+        <td colspan="5">${grp.ledger_name}</td>
+        <td style="text-align:right;">₹${formatAmount(grp.total)}</td>
+        <td></td>
+      </tr>`;
+      grp.bills.forEach((bill: any) => {
+        const aging = bill.aging_bucket as string;
+        const agingColor = aging === "0-30 days" ? "#2e7d32" : aging === "31-60 days" ? "#ed6c02" : aging === "61-90 days" ? "#d32f2f" : "#7b1fa2";
+        tableRows += `<tr>
+          <td style="padding-left:20px;">${bill.bill_no}</td>
+          <td>${bill.bill_date}</td>
+          <td>${bill.days_outstanding} days</td>
+          <td><span style="color:${agingColor};font-weight:600;">${bill.aging_bucket}</span></td>
+          <td>${bill.narration || ""}</td>
+          <td style="text-align:right;">₹${formatAmount(bill.total_amount)}</td>
+          <td></td>
+        </tr>`;
+      });
+    });
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Receivables</title>
+      <style>
+        ${COMMON_PRINT_CSS}
+        @page { size: A4 portrait; margin: 15mm; }
+        table { width:100%; border-collapse: collapse; font-size:11px; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px 7px; }
+        th { background:#0f5132; color:#fff; font-weight:700; }
+        .total-row td { font-weight:700; background:#f0fdf4; border-top:2px solid #0f5132; }
+      </style></head><body>
+      <div style="display:flex;align-items:center;border-bottom:1px solid #000;padding-bottom:10px;margin-bottom:14px;">
+        ${logoHtml}
+        <div style="flex:1;text-align:center;">
+          <h2 style="margin:0;">${cName}</h2>
+          <p style="margin:2px 0;font-size:11px;">${cAddress}</p>
+          ${cGstin ? `<p style="margin:2px 0;font-size:11px;font-weight:700;">${cGstin}</p>` : ""}
+        </div>
+      </div>
+      <h3 style="text-align:right;border-bottom:1px solid #000;margin-bottom:10px;">Receivables Statement</h3>
+      <table>
+        <thead><tr>
+          <th>Bill No.</th><th>Bill Date</th><th>Days O/S</th><th>Aging</th><th>Narration</th>
+          <th style="text-align:right;">Amount (₹)</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${tableRows}
+          <tr class="total-row">
+            <td colspan="5" style="text-align:right;">GRAND TOTAL OUTSTANDING</td>
+            <td style="text-align:right;">₹${formatAmount(grandTotal)}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top:20px;font-size:10px;color:#777;">Generated on: ${new Date().toLocaleString("en-IN")} | OrbX Nexus ERP</p>
+      <script>window.onload=function(){window.print();}</script>
+    </body></html>`);
+    printWindow.document.close();
+  };
+
+  return (
+    <Box>
+      <Box className="no-print">
+        <PageHeader
+          title="Receivables"
+          subtitle="Outstanding labour bill amounts by contractor"
+          breadcrumbs={[{ label: "Reports" }, { label: "Receivables" }]}
+        />
+
+        {/* Filters */}
+        <FilterRow>
+          <Autocomplete
+            size="small"
+            options={ledgers}
+            getOptionLabel={(o: any) => o.name}
+            value={ledgers.find((l: any) => l.id === selectedLedgerId) || null}
+            onChange={(_, val) => setSelectedLedgerId(val ? val.id : "")}
+            renderInput={(params) => <TextField {...params} label="Filter by Contractor" sx={{ minWidth: 260 }} />}
+          />
+          <Button variant="outlined" size="small" onClick={() => { setSelectedLedgerId(""); refetch(); }}>Clear</Button>
+          {rawData.length > 0 && (
+            <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print</Button>
+          )}
+        </FilterRow>
+
+        {/* Summary pills */}
+        {rawData.length > 0 && (
+          <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mb: 2 }}>
+            <StatPill label="Contractors" value={totalContractors} color="#1565c0" />
+            <StatPill label="Pending Bills" value={totalBills} color="#0288d1" />
+            <StatPill label="Total Outstanding" value={`₹${formatAmount(grandTotal)}`} color="#c62828" />
+            {Object.entries(agingTotals).filter(([, v]) => v > 0).map(([bucket, amt]) => (
+              <StatPill key={bucket} label={bucket} value={`₹${formatAmount(amt)}`} color={AGING_COLORS[bucket]} />
+            ))}
+          </Box>
+        )}
+      </Box>
+
+      {/* Table — grouped by contractor */}
+      {isLoading && (
+        <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
+          <Typography color="text.secondary">Loading receivables…</Typography>
+        </Paper>
+      )}
+      {!isLoading && rawData.length === 0 && (
+        <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
+          <Typography color="text.secondary">No outstanding receivables found. All labour bills are paid.</Typography>
+        </Paper>
+      )}
+      {!isLoading && grouped.length > 0 && grouped.map((grp) => (
+        <Paper key={grp.ledger_id} variant="outlined" sx={{ mb: 2, overflow: "hidden" }}>
+          {/* Supplier header row */}
+          <Box sx={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            px: 2, py: 1, bgcolor: "#e8f5e9", borderBottom: "1px solid #a5d6a7",
+          }}>
+            <Typography sx={{ fontWeight: 700, color: "#0f5132", fontSize: "0.9rem" }}>
+              {grp.ledger_name}
+            </Typography>
+            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+              <Typography sx={{ fontSize: "0.78rem", color: "#555" }}>
+                {grp.bills.length} bill{grp.bills.length !== 1 ? "s" : ""}
+              </Typography>
+              <Typography sx={{ fontWeight: 700, color: "#c62828", fontSize: "0.9rem" }}>
+                ₹{formatAmount(grp.total)}
+              </Typography>
+            </Box>
+          </Box>
+          {/* Bills table */}
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill No.</TableCell>
+                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill Date</TableCell>
+                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Days O/S</TableCell>
+                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Aging</TableCell>
+                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Narration</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Amount (₹)</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {grp.bills.map((bill: any) => {
+                const bucket: string = bill.aging_bucket;
+                const bucketColor = AGING_COLORS[bucket] || "#333";
+                return (
+                  <TableRow key={bill.id} hover>
+                    <TableCell sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#023020", p: "5px 10px" }}>{bill.bill_no}</TableCell>
+                    <TableCell sx={{ fontSize: "0.8rem", p: "5px 10px", whiteSpace: "nowrap" }}>
+                      {bill.bill_date ? new Date(bill.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: "0.8rem", p: "5px 10px" }}>{bill.days_outstanding} days</TableCell>
+                    <TableCell sx={{ p: "5px 10px" }}>
+                      <Box sx={{
+                        display: "inline-block", px: 1, py: 0.25, borderRadius: 1,
+                        bgcolor: `${bucketColor}18`, border: `1px solid ${bucketColor}55`,
+                        color: bucketColor, fontSize: "0.72rem", fontWeight: 700,
+                      }}>
+                        {bucket}
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ fontSize: "0.78rem", color: "#555", p: "5px 10px" }}>{bill.narration || "-"}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 700, p: "5px 10px" }}>
+                      ₹{formatAmount(bill.total_amount)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {/* Subtotal row */}
+              <TableRow sx={{ bgcolor: "#f0fdf4" }}>
+                <TableCell colSpan={5} sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#0f5132", textAlign: "right" }}>
+                  Subtotal — {grp.ledger_name}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#c62828" }}>
+                  ₹{formatAmount(grp.total)}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Paper>
+      ))}
+
+      {/* Grand total footer */}
+      {!isLoading && rawData.length > 0 && (
+        <Paper variant="outlined" sx={{ p: 2, bgcolor: "#fef3c7", borderColor: "#f59e0b" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography sx={{ fontWeight: 700, color: "#92400e" }}>Grand Total Outstanding</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: "#92400e" }}>₹{formatAmount(grandTotal)}</Typography>
+          </Box>
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
 // ── Stock In Hand ──
+
 export function StockInHandReport() {
   const { activeFY } = useAuthStore();
   const [asOfDate, setAsOfDate] = useState(today);

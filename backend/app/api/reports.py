@@ -525,6 +525,67 @@ async def pending_bills(
     return [dict(r) for r in result.mappings().all()]
 
 
+# ─────── Receivables (Labour Bills) ───────
+
+@router.get("/receivables")
+async def receivables(
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    ledger_id: Optional[int] = Query(None),
+):
+    """
+    Returns unpaid labour bills with aging buckets and per-ledger subtotals.
+    Aging is calculated from bill_date to today.
+    """
+    schema = s(fy)
+    ledger_filter = "AND lb.ledger_id = :lid" if ledger_id else ""
+    params: dict = {}
+    if ledger_id:
+        params["lid"] = ledger_id
+
+    result = await db.execute(
+        text(
+            f"SELECT "
+            f"  lb.id, "
+            f"  lb.bill_no, "
+            f"  lb.bill_date::text, "
+            f"  lb.ledger_id, "
+            f"  l.name AS ledger_name, "
+            f"  lb.total_amount, "
+            f"  lb.net_amount, "
+            f"  lb.narration, "
+            f"  lb.dispatch_through, "
+            f"  lb.is_paid, "
+            f"  lb.payment_date::text, "
+            f"  (CURRENT_DATE - lb.bill_date::date) AS days_outstanding "
+            f"FROM {schema}.labour_bills lb "
+            f"LEFT JOIN master.ledgers l ON l.id = lb.ledger_id "
+            f"WHERE lb.is_paid = FALSE {ledger_filter} "
+            f"ORDER BY l.name ASC, lb.bill_date ASC"
+        ),
+        params,
+    )
+    rows = [dict(r) for r in result.mappings().all()]
+
+    # Compute aging bucket for each row
+    for row in rows:
+        days = int(row.get("days_outstanding") or 0)
+        if days <= 30:
+            row["aging_bucket"] = "0-30 days"
+        elif days <= 60:
+            row["aging_bucket"] = "31-60 days"
+        elif days <= 90:
+            row["aging_bucket"] = "61-90 days"
+        else:
+            row["aging_bucket"] = "90+ days"
+        row["days_outstanding"] = days
+
+    return rows
+
+
+
+
 # ─────── Purchase Payables ───────
 
 @router.get("/payables")
