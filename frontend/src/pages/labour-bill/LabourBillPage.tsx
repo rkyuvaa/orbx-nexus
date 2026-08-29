@@ -1187,9 +1187,55 @@ interface OutwardPickerProps {
   pendingOutwards: any[];
   selectedOutwards: any[];
   onSelect: (voucher: any) => void;
+  inwardMap: Record<number, any>;
 }
 
-const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect }: OutwardPickerProps) {
+const getInwardDetails = (out: any, inwardMap: Record<number, any>) => {
+  const inNos: string[] = [];
+  const inSerials: string[] = [];
+
+  const addInward = (invId: number | string) => {
+    const inv = inwardMap[Number(invId)];
+    if (inv) {
+      if (inv.inward_no && !inNos.includes(inv.inward_no)) {
+        inNos.push(inv.inward_no);
+      }
+      const sNo = inv.serial_no || inv.ref_no;
+      if (sNo && !inSerials.includes(sNo)) {
+        inSerials.push(sNo);
+      }
+    }
+  };
+
+  if (out.inward_id) {
+    addInward(out.inward_id);
+  }
+  if (Array.isArray(out.inward_ids)) {
+    out.inward_ids.forEach((id: any) => addInward(id));
+  }
+  if (Array.isArray(out.items)) {
+    out.items.forEach((item: any) => {
+      if (item.inward_id) {
+        addInward(item.inward_id);
+      }
+      if (item.serial_no && !inSerials.includes(item.serial_no)) {
+        inSerials.push(item.serial_no);
+      }
+    });
+  }
+
+  if (inSerials.length === 0) {
+    if (out.serial_no) inSerials.push(out.serial_no);
+    else if (out.ref_no) inSerials.push(out.ref_no);
+  }
+
+  return {
+    inwardNo: inNos.length > 0 ? inNos.join(", ") : "-",
+    serialNo: inSerials.length > 0 ? inSerials.join(", ") : "-",
+  };
+};
+
+const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect, inwardMap }: OutwardPickerProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ fontWeight: 700, color: "#023020", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1215,8 +1261,8 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Outward No</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Serial / Ref</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Inward No</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Inward Serial No</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="right">Weight (kg)</TableCell>
                 <TableCell sx={{ width: 90 }} />
               </TableRow>
@@ -1224,6 +1270,7 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
             <TableBody>
               {pendingOutwards.map((out: any) => {
                 const alreadySelected = selectedOutwards.some((s) => s.id === out.id);
+                const { inwardNo, serialNo } = getInwardDetails(out, inwardMap);
                 return (
                   <TableRow key={out.id} hover
                     sx={{ cursor: alreadySelected ? "default" : "pointer", bgcolor: alreadySelected ? "#e8f5e9" : "inherit" }}
@@ -1238,11 +1285,13 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {out.ref_no || "-"}
+                        {inwardNo}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" color="text.secondary">{out.process_id || "-"}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {serialNo}
+                      </Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -1294,6 +1343,20 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data,
     enabled: open
   });
+  const { data: inwardVouchers = [] } = useQuery<any>({
+    queryKey: ["inward-vouchers-list"],
+    queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data,
+    enabled: open
+  });
+
+  const inwardMap = useMemo(() => {
+    const map: Record<number, any> = {};
+    inwardVouchers.forEach((inv: any) => {
+      if (inv.id) map[inv.id] = inv;
+    });
+    return map;
+  }, [inwardVouchers]);
+
 
   const ledgerMapObj = useMemo(() => {
     const map: Record<number | string, any> = {};
@@ -1986,7 +2049,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         pendingOutwards={supplierOutwardVouchers}
         selectedOutwards={selectedOutwards}
         onSelect={handleOutwardSelect}
+        inwardMap={inwardMap}
       />
     </>
   );
-}
+}
