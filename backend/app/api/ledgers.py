@@ -50,6 +50,7 @@ class LedgerOut(BaseModel):
     department: str | None = None
     basic_salary: float | None = None
     join_date: str | None = None
+    photo: str | None = None
     is_active: bool
 
 
@@ -75,12 +76,14 @@ class LedgerCreate(BaseModel):
     department: str | None = None
     basic_salary: float | None = None
     join_date: str | None = None
+    photo: str | None = None
 
 
 class LedgerUpdate(LedgerCreate):
     name: str | None = None
     group_id: int | None = None
     is_active: bool | None = None
+    photo: str | None = None
 
 
 from app.api.audit import log_audit_event

@@ -73,7 +73,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
-      const payload = { ...data, ledger_type: ledgerType, group_id: 157 };
+      const payload = { ...data, photo, ledger_type: ledgerType, group_id: 157 };
       const res = editing ? await api.put(`/ledgers/${editing.id}`, payload) : await api.post("/ledgers/", payload);
       const savedLedger = res.data;
       if (photo) {
@@ -109,7 +109,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   const handleOpen = (row?: any) => {
     setEditing(row || null);
     if (row?.id) {
-      setPhoto(localStorage.getItem(`ledger_photo_${row.id}`) || null);
+      setPhoto(row.photo || localStorage.getItem(`ledger_photo_${row.id}`) || null);
     } else {
       setPhoto(null);
     }
@@ -131,7 +131,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       minWidth: 180,
       cellRenderer: (p: any) => {
         const photoKey = `ledger_photo_${p.data?.id}`;
-        const storedPhoto = localStorage.getItem(photoKey);
+        const storedPhoto = p.data?.photo || localStorage.getItem(photoKey);
         return (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, height: "100%" }}>
             {storedPhoto ? (

@@ -149,6 +149,7 @@ class Ledger(Base):
     department: Mapped[str | None] = mapped_column(String(100))
     basic_salary: Mapped[float | None] = mapped_column(Numeric(15, 2))
     join_date: Mapped[str | None] = mapped_column(String(10))
+    photo: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
