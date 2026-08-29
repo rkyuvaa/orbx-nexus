@@ -1237,7 +1237,7 @@ const getInwardDetails = (out: any, inwardMap: Record<number, any>) => {
 
 const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect, inwardMap }: OutwardPickerProps) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ fontWeight: 700, color: "#023020", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box>
           Select Pending Outward Voucher
@@ -1249,22 +1249,22 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
           sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none" }}
           onClick={onClose}>Done</Button>
       </DialogTitle>
-      <DialogContent dividers sx={{ p: 0 }}>
+      <DialogContent dividers sx={{ p: 0, overflowX: "auto" }}>
         {pendingOutwards.length === 0 ? (
           <Box sx={{ py: 6, textAlign: "center" }}>
             <Typography color="text.secondary">No pending outward vouchers found for this supplier.</Typography>
             <Button sx={{ mt: 2 }} variant="outlined" onClick={onClose}>Continue without selecting</Button>
           </Box>
         ) : (
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 800 }}>
             <TableHead sx={{ bgcolor: "#f4f9f6" }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Outward No</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Inward No</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Inward Serial No</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="right">Weight (kg)</TableCell>
-                <TableCell sx={{ width: 90 }} />
+                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap", width: 140 }}>Outward No</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap", width: 120 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Inward No</TableCell>
+                <TableCell sx={{ fontWeight: 700, minWidth: 220 }}>Inward Serial No</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap", width: 130 }} align="right">Weight (kg)</TableCell>
+                <TableCell sx={{ width: 100, whiteSpace: "nowrap" }} align="center" />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1275,30 +1275,30 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
                   <TableRow key={out.id} hover
                     sx={{ cursor: alreadySelected ? "default" : "pointer", bgcolor: alreadySelected ? "#e8f5e9" : "inherit" }}
                     onClick={() => !alreadySelected && onSelect(out)}>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
                       <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>{out.outward_no}</Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>
                       <Typography variant="body2">
                         {out.outward_date ? new Date(out.outward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ wordBreak: "break-word" }}>
                       <Typography variant="body2" color="text.secondary">
                         {inwardNo}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ wordBreak: "break-word" }}>
                       <Typography variant="body2" color="text.secondary">
                         {serialNo}
                       </Typography>
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>
                         {formatWeight(out.total_weight || out.weight || 0)}
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
                       {alreadySelected ? (
                         <Typography variant="caption" sx={{ color: "#023020", fontWeight: 700 }}>✓ Added</Typography>
                       ) : (
