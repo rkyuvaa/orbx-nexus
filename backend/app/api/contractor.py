@@ -147,56 +147,61 @@ def parse_date_iso(date_str: str | None) -> str:
 async def create_job_work(
     body: JobWorkIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
-    schema = s(fy)
-    
-    seq_type = "job_work_register"
-    if body.entry_type == "Payment":
-        seq_type = "job_work_payment"
-    elif body.entry_type == "Advance Payment":
-        seq_type = "job_work_advance_payment"
-    elif body.entry_type == "Advance Receipt":
-        seq_type = "job_work_advance_receipt"
+    try:
+        schema = s(fy)
         
-    from app.services.sequences import generate_and_increment_sequence
-    entry_no = await generate_and_increment_sequence(db, seq_type)
-    
-    import json
-    oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
-    first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
-    items_json = json.dumps(body.items) if body.items else "[]"
-    rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
-    edate = parse_date_iso(body.entry_date)
+        seq_type = "job_work_register"
+        if body.entry_type == "Payment":
+            seq_type = "job_work_payment"
+        elif body.entry_type == "Advance Payment":
+            seq_type = "job_work_advance_payment"
+        elif body.entry_type == "Advance Receipt":
+            seq_type = "job_work_advance_receipt"
+            
+        from app.services.sequences import generate_and_increment_sequence
+        entry_no = await generate_and_increment_sequence(db, seq_type)
+        
+        import json
+        oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+        first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
+        items_json = json.dumps(body.items) if body.items else "[]"
+        rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
+        edate = parse_date_iso(body.entry_date)
 
-    valid_outward_id = None
-    if first_oid:
-        chk = await db.execute(text(f"SELECT id FROM {schema}.stock_outward WHERE id = :oid"), {"oid": first_oid})
-        if chk.scalar_one_or_none():
-            valid_outward_id = first_oid
+        valid_outward_id = None
+        if first_oid:
+            chk = await db.execute(text(f"SELECT id FROM {schema}.stock_outward WHERE id = :oid"), {"oid": first_oid})
+            if chk.scalar_one_or_none():
+                valid_outward_id = first_oid
 
-    result = await db.execute(
-        text(
-            f"INSERT INTO {schema}.job_work_entries "
-            f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, register_ids, created_by) "
-            f"VALUES (:eno, :edate::date, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
-        ),
-        {
-            "eno": entry_no, "edate": edate, "lid": body.ledger_id,
-            "oid": valid_outward_id, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
-            "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "cby": current_user.id
-        }
-    )
-
-    if body.entry_type == "Payment" and body.register_ids:
-        await db.execute(
+        result = await db.execute(
             text(
-                f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
-                f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                f"INSERT INTO {schema}.job_work_entries "
+                f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, register_ids, created_by) "
+                f"VALUES (:eno, :edate::date, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
             ),
-            {"rids": body.register_ids}
+            {
+                "eno": entry_no, "edate": edate, "lid": body.ledger_id,
+                "oid": valid_outward_id, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+                "qty": body.quantity, "rate": body.rate, "amt": body.amount,
+                "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "cby": current_user.id
+            }
         )
 
-    return {"id": result.scalar_one(), "message": "Job work entry created"}
+        if body.entry_type == "Payment" and body.register_ids:
+            await db.execute(
+                text(
+                    f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
+                    f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                ),
+                {"rids": body.register_ids}
+            )
+
+        return {"id": result.scalar_one(), "message": "Job work entry created"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/{entry_id}")
@@ -204,49 +209,65 @@ async def update_job_work(
     entry_id: int, body: JobWorkIn, current_user: CurrentUser,
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
-    schema = s(fy)
-    import json
-    oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
-    first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
-    items_json = json.dumps(body.items) if body.items else "[]"
-    rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
+    try:
+        schema = s(fy)
+        import json
+        oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+        first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
+        items_json = json.dumps(body.items) if body.items else "[]"
+        rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
 
-    if body.entry_type == "Payment":
-        prev = await db.execute(
-            text(f"SELECT register_ids FROM {schema}.job_work_entries WHERE id = :id"),
-            {"id": entry_id}
+        if body.entry_type == "Payment":
+            prev = await db.execute(
+                text(f"SELECT register_ids FROM {schema}.job_work_entries WHERE id = :id"),
+                {"id": entry_id}
+            )
+            prev_row = prev.first()
+            prev_rids = (prev_row.register_ids if prev_row and prev_row.register_ids else []) or []
+            if prev_rids:
+                await db.execute(
+                    text(
+                        f"UPDATE {schema}.job_work_entries SET is_paid = FALSE "
+                        f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                    ),
+                    {"rids": prev_rids}
+                )
+
+        edate = parse_date_iso(body.entry_date)
+        valid_outward_id = None
+        if first_oid:
+            chk = await db.execute(text(f"SELECT id FROM {schema}.stock_outward WHERE id = :oid"), {"oid": first_oid})
+            if chk.scalar_one_or_none():
+                valid_outward_id = first_oid
+
+        await db.execute(
+            text(
+                f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate::date, ledger_id=:lid, "
+                f"outward_id=:oid, outward_ids=:oids::jsonb, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
+                f"entry_type=:et, narration=:narr, items=:items::jsonb, register_ids=:rids::jsonb, updated_at=NOW() WHERE id=:id"
+            ),
+            {
+                "eno": body.entry_no, "edate": edate, "lid": body.ledger_id,
+                "oid": valid_outward_id, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+                "qty": body.quantity, "rate": body.rate, "amt": body.amount,
+                "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "id": entry_id
+            }
         )
-        prev_row = prev.first()
-        prev_rids = (prev_row.register_ids if prev_row and prev_row.register_ids else []) or []
-        if prev_rids:
+
+        if body.entry_type == "Payment" and body.register_ids:
             await db.execute(
                 text(
-                    f"UPDATE {schema}.job_work_entries SET is_paid = FALSE "
+                    f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
                     f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
                 ),
-                {"rids": prev_rids}
+                {"rids": body.register_ids}
             )
 
-    edate = parse_date_iso(body.entry_date)
-    valid_outward_id = None
-    if first_oid:
-        chk = await db.execute(text(f"SELECT id FROM {schema}.stock_outward WHERE id = :oid"), {"oid": first_oid})
-        if chk.scalar_one_or_none():
-            valid_outward_id = first_oid
-
-    await db.execute(
-        text(
-            f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate::date, ledger_id=:lid, "
-            f"outward_id=:oid, outward_ids=:oids::jsonb, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
-            f"entry_type=:et, narration=:narr, items=:items::jsonb, register_ids=:rids::jsonb, updated_at=NOW() WHERE id=:id"
-        ),
-        {
-            "eno": body.entry_no, "edate": edate, "lid": body.ledger_id,
-            "oid": valid_outward_id, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
-            "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "id": entry_id
-        }
-    )
+        return {"id": entry_id, "message": "Job work entry updated"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
 
     if body.entry_type == "Payment" and body.register_ids:
         await db.execute(

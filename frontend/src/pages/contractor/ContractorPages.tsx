@@ -397,6 +397,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       return editing ? api.put(`/contractor/${editing.id}?fy=${activeFY}`, payload) : api.post(`/contractor/?fy=${activeFY}`, payload);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["contractor", type] }); setOpen(false); },
+    onError: (err: any) => {
+      const msg = err.response?.data?.detail || err.message || "Failed to save entry.";
+      setSubmitError(typeof msg === "string" ? msg : JSON.stringify(msg));
+    },
   });
 
   const handleSave = (d: any) => {
