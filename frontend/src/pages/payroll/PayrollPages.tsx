@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -39,6 +39,14 @@ function VoucherModule({
     queryFn: async () => (await api.get(`/ledgers/?ledger_type=${ledgerType}`)).data,
   });
 
+  const ledgerMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    ledgers.forEach((l: any) => {
+      map[l.id] = l.name;
+    });
+    return map;
+  }, [ledgers]);
+
   const { register, handleSubmit, reset, control } = useForm({
     defaultValues: { voucher_no: "", voucher_date: today, ledger_id: "", payment_type: paymentType, ledger_type: ledgerType, amount: 0, narration: "" },
   });
@@ -64,7 +72,16 @@ function VoucherModule({
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 140 },
     { field: "voucher_date", headerName: "Date", width: 100 },
-    { field: "ledger_id", headerName: ledgerType, width: 200 },
+    {
+      field: "ledger_name",
+      headerName: ledgerType,
+      width: 200,
+      valueGetter: (p: any) =>
+        p.data?.ledger_name ||
+        (ledgerType === "Contractor" ? p.data?.contractor_name : p.data?.staff_name) ||
+        ledgerMap[p.data?.ledger_id] ||
+        (p.data?.ledger_id ? `Ledger #${p.data.ledger_id}` : "-"),
+    },
     { field: "amount", headerName: "Amount", width: 120, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
     { field: "narration", headerName: "Narration", flex: 1 },
     { headerName: "Actions", width: 90, sortable: false, filter: false, cellRenderer: (p: any) => (
@@ -152,6 +169,14 @@ export function SalaryVoucherPage() {
   });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Staff"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Staff")).data });
 
+  const ledgerMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    ledgers.forEach((l: any) => {
+      map[l.id] = l.name;
+    });
+    return map;
+  }, [ledgers]);
+
   const { register, handleSubmit, reset, control } = useForm({
     defaultValues: { voucher_no: "", voucher_date: today, ledger_id: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), days_worked: 0, basic_salary: 0, allowances: 0, deductions: 0, net_salary: 0, narration: "" },
   });
@@ -164,7 +189,16 @@ export function SalaryVoucherPage() {
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 130 },
     { field: "voucher_date", headerName: "Date", width: 100 },
-    { field: "ledger_id", headerName: "Staff", width: 180 },
+    {
+      field: "ledger_name",
+      headerName: "Staff",
+      width: 180,
+      valueGetter: (p: any) =>
+        p.data?.ledger_name ||
+        p.data?.staff_name ||
+        ledgerMap[p.data?.ledger_id] ||
+        (p.data?.ledger_id ? `Staff #${p.data.ledger_id}` : "-"),
+    },
     { field: "month", headerName: "Month", width: 80 },
     { field: "year", headerName: "Year", width: 80 },
     { field: "days_worked", headerName: "Days", width: 75 },

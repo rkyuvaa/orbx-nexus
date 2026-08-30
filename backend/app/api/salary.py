@@ -45,16 +45,21 @@ async def list_salary_vouchers(
     conds = ["1=1"]
     params: dict = {}
     if ledger_id:
-        conds.append("ledger_id = :lid")
+        conds.append("s.ledger_id = :lid")
         params["lid"] = ledger_id
     if month:
-        conds.append("month = :m")
+        conds.append("s.month = :m")
         params["m"] = month
     if year:
-        conds.append("year = :y")
+        conds.append("s.year = :y")
         params["y"] = year
     result = await db.execute(
-        text(f"SELECT * FROM {schema}.salary_vouchers WHERE {' AND '.join(conds)} ORDER BY voucher_date DESC"),
+        text(
+            f"SELECT s.*, l.name AS ledger_name, l.name AS staff_name, l.ledger_code "
+            f"FROM {schema}.salary_vouchers s "
+            f"LEFT JOIN master.ledgers l ON l.id = s.ledger_id "
+            f"WHERE {' AND '.join(conds)} ORDER BY s.voucher_date DESC"
+        ),
         params
     )
     return [dict(r) for r in result.mappings().all()]
@@ -99,16 +104,21 @@ async def list_advances(
     conds = ["1=1"]
     params: dict = {}
     if ledger_type:
-        conds.append("ledger_type = :lt")
+        conds.append("a.ledger_type = :lt")
         params["lt"] = ledger_type
     if payment_type:
-        conds.append("payment_type = :pt")
+        conds.append("a.payment_type = :pt")
         params["pt"] = payment_type
     if ledger_id:
-        conds.append("ledger_id = :lid")
+        conds.append("a.ledger_id = :lid")
         params["lid"] = ledger_id
     result = await db.execute(
-        text(f"SELECT * FROM {schema}.advance_payments WHERE {' AND '.join(conds)} ORDER BY voucher_date DESC"),
+        text(
+            f"SELECT a.*, l.name AS ledger_name, l.name AS contractor_name, l.name AS staff_name, l.ledger_code "
+            f"FROM {schema}.advance_payments a "
+            f"LEFT JOIN master.ledgers l ON l.id = a.ledger_id "
+            f"WHERE {' AND '.join(conds)} ORDER BY a.voucher_date DESC"
+        ),
         params
     )
     return [dict(r) for r in result.mappings().all()]
