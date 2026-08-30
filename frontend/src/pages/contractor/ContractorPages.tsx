@@ -57,6 +57,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   });
 
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
+  const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/all")).data });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
 
   const { data: outwardVouchers = [] } = useQuery<any>({
@@ -65,7 +66,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     enabled: type === "job-work",
   });
 
-  const [lineItems, setLineItems] = useState<any[]>([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+  const [lineItems, setLineItems] = useState<any[]>([{ product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
   const [submitError, setSubmitError] = useState("");
 
   const { register, handleSubmit, reset, control, watch, setValue } = useForm({
@@ -125,8 +126,29 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return () => { cancelled = true; };
   }, [type, selectedLedgerId, activeFY, editing]);
 
+  const inwardProducts = useMemo(() => {
+    if (selectedOutwardIds.length === 0) return products;
+    const resolvedIds = new Set<number>();
+    
+    selectedOutwardIds.forEach((id: number) => {
+      const v = outwardVouchers.find((inv: any) => inv.id === id);
+      if (v) {
+        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
+          v.items.forEach((item: any) => {
+            if (item.product_id) resolvedIds.add(Number(item.product_id));
+          });
+        } else if (v.product_id) {
+          resolvedIds.add(Number(v.product_id));
+        }
+      }
+    });
+    
+    const filtered = products.filter((p: any) => resolvedIds.has(p.id));
+    return filtered.length > 0 ? filtered : products;
+  }, [selectedOutwardIds, outwardVouchers, products]);
+
   // Sum of previously registered quantities for these inward vouchers and process in other register entries
-  const getBalanceQtyForProcess = (processId: number | string) => {
+  const getBalanceQtyForProcess = (processId: number | string, productId?: number | string) => {
     if (!processId || selectedOutwardIds.length === 0) return 0;
     
     let totalDispatched = 0;
@@ -135,11 +157,13 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       if (v) {
         if (v.items && Array.isArray(v.items) && v.items.length > 0) {
           v.items.forEach((item: any) => {
-            if (!item.process_id || dispatchCoversProcess(item.process_id, processId, processes)) {
+            const matchProd = !productId || !item.product_id || Number(item.product_id) === Number(productId);
+            const matchProc = !item.process_id || dispatchCoversProcess(item.process_id, processId, processes);
+            if (matchProd && matchProc) {
               totalDispatched += Number(item.quantity) || 0;
             }
           });
-        } else if (!v.process_id || dispatchCoversProcess(v.process_id, processId, processes)) {
+        } else if ((!v.product_id || !productId || Number(v.product_id) === Number(productId)) && (!v.process_id || dispatchCoversProcess(v.process_id, processId, processes))) {
           totalDispatched += Number(v.quantity) || Number(v.total_weight) || 0;
         }
       }
@@ -157,7 +181,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         }
         if (entryItems && entryItems.length > 0) {
           entryItems.forEach((it: any) => {
-            if (Number(it.process_id) === Number(processId)) {
+            const matchProc = Number(it.process_id) === Number(processId);
+            const matchProd = !productId || !it.product_id || Number(it.product_id) === Number(productId);
+            if (matchProc && matchProd) {
               const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
               const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
               if (intersects) {
@@ -165,12 +191,6 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               }
             }
           });
-        } else if (Number(entry.process_id) === Number(processId)) {
-          const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
-          const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
-          if (intersects) {
-            totalCompleted += Number(entry.quantity) || 0;
-          }
         }
       }
     });
@@ -238,13 +258,19 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const handleLineChange = (index: number, field: string, val: any) => {
     const updated = [...lineItems];
     updated[index][field] = val;
-    if (field === "process_id") {
-      const proc = processes.find((p: any) => p.id === Number(val));
-      const bal = getBalanceQtyForProcess(val);
+    if (field === "product_id" || field === "process_id") {
+      const procId = updated[index].process_id;
+      const prodId = updated[index].product_id;
+      const proc = processes.find((p: any) => p.id === Number(procId));
+      const bal = getBalanceQtyForProcess(procId, prodId);
       updated[index].rate = proc ? proc.contractor_rate || 0 : 0;
       updated[index].balance_qty = bal;
-      updated[index].quantity = bal;
-      updated[index].amount = Number((Number(bal) * (proc ? proc.contractor_rate || 0 : 0)).toFixed(2));
+      if (!updated[index].quantity || Number(updated[index].quantity) > bal) {
+        updated[index].quantity = bal;
+      }
+      const q = Number(updated[index].quantity) || 0;
+      const r = Number(updated[index].rate) || 0;
+      updated[index].amount = Number((q * r).toFixed(2));
     }
     if (field === "quantity") {
       if (selectedOutwardIds.length > 0) {
@@ -259,14 +285,14 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     }
     if (field === "rate") {
       const q = Number(updated[index].quantity) || 0;
-      const r = Number(updated[index].rate) || 0;
+      const r = Number(val) || 0;
       updated[index].amount = Number((q * r).toFixed(2));
     }
     setLineItems(updated);
   };
 
   const handleAddLine = () => {
-    setLineItems([...lineItems, { process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+    setLineItems([...lineItems, { product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
   };
 
   const handleRemoveLine = (index: number) => {
@@ -278,10 +304,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
+      const firstLineProdId = lineItems[0]?.product_id ? Number(lineItems[0].product_id) : null;
       const payload = {
         ...formData,
         outward_id: type === "payment" ? null : (formData.outward_id ? Number(formData.outward_id) : null),
-        product_id: type === "payment" ? null : (formData.product_id ? Number(formData.product_id) : null),
+        product_id: type === "job-work" ? firstLineProdId : type === "payment" ? null : Number(formData.product_id) || null,
         rate_id: formData.rate_id ? Number(formData.rate_id) : null,
         outward_ids: type === "payment" ? [] : (Array.isArray(formData.outward_ids) ? formData.outward_ids.map((x: any) => Number(x)) : []),
         quantity: type === "job-work" ? totalQuantity : type === "payment" ? payTotalQty : Number(formData.quantity) || 0,
@@ -290,6 +317,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         items: type === "job-work" ? lineItems
           .filter((item: any) => item.process_id && Number(item.process_id) > 0)
           .map(item => ({
+            product_id: item.product_id ? Number(item.product_id) : null,
             process_id: Number(item.process_id),
             quantity: Number(item.quantity) || 0,
             rate: Number(item.rate) || 0,
@@ -354,11 +382,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       if (parsedItems && parsedItems.length > 0) {
         setLineItems(parsedItems.map(it => ({
           ...it,
-          balance_qty: getBalanceQtyForProcess(it.process_id) + (Number(it.quantity) || 0)
+          product_id: it.product_id || row.product_id || "",
+          balance_qty: getBalanceQtyForProcess(it.process_id, it.product_id || row.product_id) + (Number(it.quantity) || 0)
         })));
       } else {
-        const bal = getBalanceQtyForProcess(row.process_id) + (Number(row.quantity) || 0);
-        setLineItems([{ process_id: row.process_id || "", quantity: row.quantity || 0, balance_qty: bal, rate: row.rate || 0, amount: row.amount || 0 }]);
+        const bal = getBalanceQtyForProcess(row.process_id, row.product_id) + (Number(row.quantity) || 0);
+        setLineItems([{ product_id: row.product_id || "", process_id: row.process_id || "", quantity: row.quantity || 0, balance_qty: bal, rate: row.rate || 0, amount: row.amount || 0 }]);
       }
     } else {
       setEditing(null);
@@ -521,7 +550,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                         <TableRow>
                           <TableCell sx={{ width: 50, fontWeight: 700 }} align="center">S. No</TableCell>
-                          <TableCell sx={{ minWidth: 200, fontWeight: 700 }}>Process *</TableCell>
+                          <TableCell sx={{ minWidth: 180, fontWeight: 700 }}>Product *</TableCell>
+                          <TableCell sx={{ minWidth: 180, fontWeight: 700 }}>Process *</TableCell>
                           <TableCell sx={{ width: 140, fontWeight: 700 }} align="right">Qty *</TableCell>
                           <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Balance Qty</TableCell>
                           <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Rate *</TableCell>
@@ -533,6 +563,20 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                         {lineItems.map((item, idx) => (
                           <TableRow key={idx}>
                             <TableCell align="center">{idx + 1}</TableCell>
+                            <TableCell>
+                              <Select
+                                size="small"
+                                fullWidth
+                                value={item.product_id || ""}
+                                onChange={(e) => handleLineChange(idx, "product_id", e.target.value)}
+                                displayEmpty
+                              >
+                                <MenuItem value=""><em>Select Product</em></MenuItem>
+                                {inwardProducts.map((p: any) => (
+                                  <MenuItem key={p.id} value={p.id}>{p.name} {p.product_code ? `(${p.product_code})` : ""}</MenuItem>
+                                ))}
+                              </Select>
+                            </TableCell>
                             <TableCell>
                               <Select
                                 size="small"
@@ -585,14 +629,14 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                         ))}
                         {lineItems.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={7} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                            <TableCell colSpan={8} align="center" sx={{ py: 3, color: "text.secondary" }}>
                               No processes added. Please select Inward Vouchers or add a line manually.
                             </TableCell>
                           </TableRow>
                         )}
                         {lineItems.length > 0 && (
                           <TableRow sx={{ bgcolor: "#fafafa" }}>
-                            <TableCell colSpan={2} sx={{ fontWeight: 700 }} align="right">
+                            <TableCell colSpan={3} sx={{ fontWeight: 700 }} align="right">
                               Total:
                             </TableCell>
                             <TableCell sx={{ fontWeight: 700 }} align="right">
