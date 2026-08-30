@@ -95,28 +95,52 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     const mainLedgerGstin = mainLedger?.gstin || "";
     const mainLedgerAddress = mainLedger?.address || "";
 
+    const isToolMode = voucherType === "Misc. Expenses" || voucherType === "Purchase";
+
     let linesHtml = "";
     if (row.lines && row.lines.length > 0) {
       row.lines.forEach((line: any, index: number) => {
-        const ledgerName = ledgers.find((l: any) => l.id === line.ledger_id)?.name || `Ledger #${line.ledger_id}`;
-        const drAmount = line.dr_amount ? `₹${formatAmount(line.dr_amount)}` : "-";
-        const crAmount = line.cr_amount ? `₹${formatAmount(line.cr_amount)}` : "-";
-        linesHtml += `
-          <tr>
-            <td style="text-align: center;">${index + 1}</td>
-            <td style="font-weight: 600;">${line.narration || ledgerName}</td>
-            <td>${line.narration ? "" : line.narration || ""}</td>
-            <td style="text-align: right;">${drAmount}</td>
-            <td style="text-align: right; font-weight: 600;">${crAmount}</td>
-          </tr>
-        `;
+        if (isToolMode) {
+          let itemName = line.narration || "";
+          let qtyStr = "-";
+          let rateStr = "-";
+          const match = line.narration ? line.narration.match(/^(.*?)\s*\(Qty:\s*([\d\.]+),\s*Rate:\s*₹?([\d\.]+)\)/) : null;
+          if (match) {
+            itemName = match[1];
+            qtyStr = match[2];
+            rateStr = `₹${formatAmount(match[3])}`;
+          }
+          const amtStr = line.dr_amount ? `₹${formatAmount(line.dr_amount)}` : (line.amount ? `₹${formatAmount(line.amount)}` : "-");
+          linesHtml += `
+            <tr>
+              <td style="text-align: center;">${index + 1}</td>
+              <td style="font-weight: 600;">${itemName}</td>
+              <td style="text-align: right;">${qtyStr}</td>
+              <td style="text-align: right;">${rateStr}</td>
+              <td style="text-align: right; font-weight: 600;">${amtStr}</td>
+            </tr>
+          `;
+        } else {
+          const ledgerName = ledgers.find((l: any) => l.id === line.ledger_id)?.name || `Ledger #${line.ledger_id}`;
+          const drAmount = line.dr_amount ? `₹${formatAmount(line.dr_amount)}` : "-";
+          const crAmount = line.cr_amount ? `₹${formatAmount(line.cr_amount)}` : "-";
+          linesHtml += `
+            <tr>
+              <td style="text-align: center;">${index + 1}</td>
+              <td style="font-weight: 600;">${ledgerName}</td>
+              <td>${line.narration || ""}</td>
+              <td style="text-align: right;">${drAmount}</td>
+              <td style="text-align: right; font-weight: 600;">${crAmount}</td>
+            </tr>
+          `;
+        }
       });
     }
 
     const formattedTerms = printConfig.voucherTerms.replace(/\n/g, "<br/>");
     const amountInWordsStr = toWords(Number(row.amount));
 
-    const leftColTitle = voucherType === "Payment" ? "PAID TO:" : voucherType === "Receipt" ? "RECEIVED FROM:" : "PARTY DETAILS:";
+    const leftColTitle = voucherType === "Payment" ? "PAID TO:" : voucherType === "Receipt" ? "RECEIVED FROM:" : isToolMode ? "SUPPLIER DETAILS:" : "PARTY DETAILS:";
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -156,15 +180,27 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
             </div>
           </div>
           <table class="items-table">
-            <thead>
-              <tr>
-                <th style="width: 5%; text-align: center;">S.No</th>
-                <th style="width: 45%;">Particulars</th>
-                <th style="width: 20%;">Narration</th>
-                <th style="width: 15%; text-align: right;">Dr (₹)</th>
-                <th style="width: 15%; text-align: right;">Cr (₹)</th>
-              </tr>
-            </thead>
+            ${isToolMode ? `
+              <thead>
+                <tr>
+                  <th style="width: 5%; text-align: center;">S.No</th>
+                  <th style="width: 50%;">Tool / Item Name</th>
+                  <th style="width: 15%; text-align: right;">Qty</th>
+                  <th style="width: 15%; text-align: right;">Rate (₹)</th>
+                  <th style="width: 15%; text-align: right;">Amount (₹)</th>
+                </tr>
+              </thead>
+            ` : `
+              <thead>
+                <tr>
+                  <th style="width: 5%; text-align: center;">S.No</th>
+                  <th style="width: 45%;">Particulars</th>
+                  <th style="width: 20%;">Narration</th>
+                  <th style="width: 15%; text-align: right;">Dr (₹)</th>
+                  <th style="width: 15%; text-align: right;">Cr (₹)</th>
+                </tr>
+              </thead>
+            `}
             <tbody>
               ${linesHtml}
             </tbody>
@@ -200,7 +236,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
             <div class="signatures-container">
               <div class="signature-block">
                 <div class="signature-line"></div>
-                <div class="signature-label">${voucherType === "Payment" ? "Receiver Signature" : "Customer Signature"}</div>
+                <div class="signature-label">${voucherType === "Payment" ? "Receiver Signature" : isToolMode ? "Supplier / Receiver Signature" : "Customer Signature"}</div>
               </div>
               <div class="signature-block">
                 <div class="signature-line"></div>
