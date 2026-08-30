@@ -549,21 +549,21 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                     <Table size="small">
                       <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                         <TableRow>
-                          <TableCell sx={{ width: 50, fontWeight: 700 }} align="center">S. No</TableCell>
-                          <TableCell sx={{ minWidth: 180, fontWeight: 700 }}>Product *</TableCell>
-                          <TableCell sx={{ minWidth: 180, fontWeight: 700 }}>Process *</TableCell>
-                          <TableCell sx={{ width: 140, fontWeight: 700 }} align="right">Qty *</TableCell>
-                          <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Balance Qty</TableCell>
-                          <TableCell sx={{ width: 130, fontWeight: 700 }} align="right">Rate *</TableCell>
-                          <TableCell sx={{ width: 150, fontWeight: 700 }} align="right">Amount</TableCell>
-                          <TableCell sx={{ width: 60 }} align="center">Del</TableCell>
+                          <TableCell sx={{ width: 50, fontWeight: 700, py: 1, px: 1 }} align="center">S. No</TableCell>
+                          <TableCell sx={{ minWidth: 180, fontWeight: 700, py: 1, px: 1 }}>Product *</TableCell>
+                          <TableCell sx={{ minWidth: 180, fontWeight: 700, py: 1, px: 1 }}>Process *</TableCell>
+                          <TableCell sx={{ width: 130, fontWeight: 700, py: 1, px: 1 }} align="right">Qty *</TableCell>
+                          <TableCell sx={{ width: 110, fontWeight: 700, py: 1, px: 1 }} align="right">Balance Qty</TableCell>
+                          <TableCell sx={{ width: 120, fontWeight: 700, py: 1, px: 1 }} align="right">Rate *</TableCell>
+                          <TableCell sx={{ width: 130, fontWeight: 700, py: 1, px: 1 }} align="right">Amount</TableCell>
+                          <TableCell sx={{ width: 50, py: 1, px: 1 }} align="center">Del</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {lineItems.map((item, idx) => (
                           <TableRow key={idx}>
-                            <TableCell align="center">{idx + 1}</TableCell>
-                            <TableCell>
+                            <TableCell align="center" sx={{ py: 0.75, px: 1 }}>{idx + 1}</TableCell>
+                            <TableCell sx={{ py: 0.75, px: 1 }}>
                               <Select
                                 size="small"
                                 fullWidth
@@ -577,7 +577,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 ))}
                               </Select>
                             </TableCell>
-                            <TableCell>
+                            <TableCell sx={{ py: 0.75, px: 1 }}>
                               <Select
                                 size="small"
                                 fullWidth
@@ -586,14 +586,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 displayEmpty
                               >
                                 <MenuItem value=""><em>Select Process</em></MenuItem>
-                                {availableProcesses
-                                  .filter((p: any) => lineItems.every((other: any, oi: number) => oi === idx || Number(other.process_id) !== Number(p.id)))
-                                  .map((p: any) => (
-                                    <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                                  ))}
+                                {availableProcesses.map((p: any) => (
+                                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                                ))}
                               </Select>
                             </TableCell>
-                            <TableCell align="right">
+                            <TableCell align="right" sx={{ py: 0.75, px: 1 }}>
                               <TextField
                                 size="small"
                                 type="number"
@@ -601,13 +599,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 value={item.quantity === "" ? "" : item.quantity}
                                 onChange={(e) => handleLineChange(idx, "quantity", e.target.value)}
                                 slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
-                                helperText={selectedOutwardIds.length > 0 && item.process_id ? `Max: ${item.balance_qty}` : undefined}
                               />
                             </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                            <TableCell align="right" sx={{ fontWeight: 600, color: "text.secondary", py: 0.75, px: 1 }}>
                               {item.balance_qty}
                             </TableCell>
-                            <TableCell align="right">
+                            <TableCell align="right" sx={{ py: 0.75, px: 1 }}>
                               <TextField
                                 size="small"
                                 type="number"
@@ -617,10 +614,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
                               />
                             </TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                            <TableCell align="right" sx={{ fontWeight: 600, py: 0.75, px: 1 }}>
                               ₹{formatAmount(item.amount)}
                             </TableCell>
-                            <TableCell align="center">
+                            <TableCell align="center" sx={{ py: 0.75, px: 1 }}>
                               <IconButton size="small" color="error" onClick={() => handleRemoveLine(idx)}>
                                 <Delete fontSize="small" />
                               </IconButton>
