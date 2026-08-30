@@ -240,29 +240,29 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                   name="process_ids"
                   control={control}
                   render={({ field }) => {
-                    const selectedValue = useMemo(() => {
-                      let rawIds: number[] = [];
-                      if (Array.isArray(field.value)) {
-                        rawIds = field.value.map(Number);
-                      } else if (typeof field.value === "string" && field.value) {
-                        rawIds = field.value.split(",").map((x: string) => Number(x.trim())).filter(Boolean);
-                      } else if (watch("process_id")) {
-                        rawIds = [Number(watch("process_id"))];
-                      }
-                      return processes.filter((p: any) => rawIds.includes(Number(p.id)));
-                    }, [field.value, watch("process_id"), processes]);
+                    let rawIds: number[] = [];
+                    const val = field.value ?? (editing?.process_ids || (editing?.process_id ? String(editing.process_id) : ""));
+                    if (Array.isArray(val)) {
+                      rawIds = val.map(Number);
+                    } else if (typeof val === "string" && val) {
+                      rawIds = val.split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+                    } else if (watch("process_id")) {
+                      rawIds = [Number(watch("process_id"))];
+                    }
+                    const selectedValue = processes.filter((p: any) => rawIds.includes(Number(p.id)));
 
                     return (
                       <Autocomplete
                         multiple
                         size="small"
                         options={processes}
-                        getOptionLabel={(option: any) => option.name || ""}
+                        getOptionLabel={(option: any) => option?.name || ""}
+                        isOptionEqualToValue={(option: any, val: any) => option?.id === val?.id}
                         value={selectedValue}
                         onChange={(_, val) => {
-                          const ids = val.map((item: any) => item.id).join(",");
+                          const ids = val ? val.map((item: any) => item.id).join(",") : "";
                           field.onChange(ids);
-                          if (val.length > 0) {
+                          if (val && val.length > 0) {
                             setValue("process_id", val[0].id);
                           } else {
                             setValue("process_id", null);
