@@ -49,7 +49,16 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
   });
 
-  const handlePrintSingleVoucher = (row: any) => {
+  const handlePrintSingleVoucher = async (row: any) => {
+    let voucherData = row;
+    if (!voucherData.lines || voucherData.lines.length === 0) {
+      try {
+        voucherData = (await api.get(`/vouchers/${row.id}?fy=${activeFY}`)).data;
+      } catch (e) {
+        console.error("Error fetching voucher lines for printing:", e);
+      }
+    }
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
@@ -96,10 +105,11 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     const mainLedgerAddress = mainLedger?.address || "";
 
     const isToolMode = voucherType === "Misc. Expenses" || voucherType === "Purchase";
+    const linesToRender = (voucherData && voucherData.lines && voucherData.lines.length > 0) ? voucherData.lines : [];
 
     let linesHtml = "";
-    if (row.lines && row.lines.length > 0) {
-      row.lines.forEach((line: any, index: number) => {
+    if (linesToRender.length > 0) {
+      linesToRender.forEach((line: any, index: number) => {
         if (isToolMode) {
           let itemName = line.narration || "";
           let qtyStr = "-";
@@ -135,6 +145,17 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
           `;
         }
       });
+    } else {
+      const fallbackName = row.narration || mainLedgerName;
+      linesHtml += `
+        <tr>
+          <td style="text-align: center;">1</td>
+          <td style="font-weight: 600;">${fallbackName}</td>
+          <td style="text-align: right;">-</td>
+          <td style="text-align: right;">₹${formatAmount(row.amount)}</td>
+          <td style="text-align: right; font-weight: 600;">₹${formatAmount(row.amount)}</td>
+        </tr>
+      `;
     }
 
     const formattedTerms = printConfig.voucherTerms.replace(/\n/g, "<br/>");
