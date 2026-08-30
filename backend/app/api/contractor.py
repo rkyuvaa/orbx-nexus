@@ -167,15 +167,21 @@ async def create_job_work(
     rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
     edate = parse_date_iso(body.entry_date)
 
+    valid_outward_id = None
+    if first_oid:
+        chk = await db.execute(text(f"SELECT id FROM {schema}.stock_outward WHERE id = :oid"), {"oid": first_oid})
+        if chk.scalar_one_or_none():
+            valid_outward_id = first_oid
+
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.job_work_entries "
             f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, register_ids, created_by) "
-            f"VALUES (:eno, :edate, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
+            f"VALUES (:eno, :edate::date, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
         ),
         {
             "eno": entry_no, "edate": edate, "lid": body.ledger_id,
-            "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+            "oid": valid_outward_id, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "cby": current_user.id
         }
@@ -222,15 +228,21 @@ async def update_job_work(
             )
 
     edate = parse_date_iso(body.entry_date)
+    valid_outward_id = None
+    if first_oid:
+        chk = await db.execute(text(f"SELECT id FROM {schema}.stock_outward WHERE id = :oid"), {"oid": first_oid})
+        if chk.scalar_one_or_none():
+            valid_outward_id = first_oid
+
     await db.execute(
         text(
-            f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
+            f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate::date, ledger_id=:lid, "
             f"outward_id=:oid, outward_ids=:oids::jsonb, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
             f"entry_type=:et, narration=:narr, items=:items::jsonb, register_ids=:rids::jsonb, updated_at=NOW() WHERE id=:id"
         ),
         {
             "eno": body.entry_no, "edate": edate, "lid": body.ledger_id,
-            "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
+            "oid": valid_outward_id, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "id": entry_id
         }
