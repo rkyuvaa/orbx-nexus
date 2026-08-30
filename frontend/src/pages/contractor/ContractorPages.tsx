@@ -158,12 +158,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         if (v.items && Array.isArray(v.items) && v.items.length > 0) {
           v.items.forEach((item: any) => {
             const matchProd = !productId || !item.product_id || Number(item.product_id) === Number(productId);
-            const matchProc = !processId || !item.process_id || dispatchCoversProcess(item.process_id, processId, processes);
-            if (matchProd && matchProc) {
+            if (matchProd) {
               totalDispatched += Number(item.quantity) || 0;
             }
           });
-        } else if ((!v.product_id || !productId || Number(v.product_id) === Number(productId)) && (!v.process_id || !processId || dispatchCoversProcess(v.process_id, processId, processes))) {
+        } else if (!v.product_id || !productId || Number(v.product_id) === Number(productId)) {
           totalDispatched += Number(v.quantity) || Number(v.total_weight) || 0;
         }
       }
@@ -181,9 +180,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         }
         if (entryItems && entryItems.length > 0) {
           entryItems.forEach((it: any) => {
-            const matchProc = !processId || Number(it.process_id) === Number(processId);
             const matchProd = !productId || !it.product_id || Number(it.product_id) === Number(productId);
-            if (matchProc && matchProd) {
+            if (matchProd) {
               const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
               const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
               if (intersects) {
@@ -191,6 +189,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               }
             }
           });
+        } else if (!productId || !entry.product_id || Number(entry.product_id) === Number(productId)) {
+          const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
+          const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
+          if (intersects) {
+            totalCompleted += Number(entry.quantity) || 0;
+          }
         }
       }
     });
@@ -201,46 +205,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const getProductRemainingBalance = (productId: number | string, currentRowIdx?: number) => {
     if (!productId || selectedOutwardIds.length === 0) return 999999;
     
-    let totalInwardQty = 0;
-    selectedOutwardIds.forEach((id: number) => {
-      const v = outwardVouchers.find((inv: any) => inv.id === id);
-      if (v) {
-        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
-          v.items.forEach((item: any) => {
-            if (!item.product_id || Number(item.product_id) === Number(productId)) {
-              totalInwardQty += Number(item.quantity) || 0;
-            }
-          });
-        } else if (!v.product_id || Number(v.product_id) === Number(productId)) {
-          totalInwardQty += Number(v.quantity) || Number(v.total_weight) || 0;
-        }
-      }
-    });
-
-    let totalCompletedInDB = 0;
-    data.forEach((entry: any) => {
-      if (editing && entry.id === editing.id) return;
-      if (entry.entry_type === "Register") {
-        let entryItems: any[] = [];
-        if (entry.items) {
-          try {
-            entryItems = typeof entry.items === "string" ? JSON.parse(entry.items) : entry.items;
-          } catch (e) {}
-        }
-        if (entryItems && entryItems.length > 0) {
-          entryItems.forEach((it: any) => {
-            if (!it.product_id || Number(it.product_id) === Number(productId)) {
-              const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
-              if (entryOids.some((id: number) => selectedOutwardIds.includes(id))) {
-                totalCompletedInDB += Number(it.quantity) || 0;
-              }
-            }
-          });
-        }
-      }
-    });
-
-    const netAvailableInward = Math.max(0, totalInwardQty - totalCompletedInDB);
+    const rawBal = getRawBalanceQtyForProcess(undefined, productId);
 
     const usedInOtherRows = lineItems.reduce((sum, item, oi) => {
       if (oi !== currentRowIdx && Number(item.product_id) === Number(productId)) {
@@ -249,7 +214,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       return sum;
     }, 0);
 
-    return Math.max(0, netAvailableInward - usedInOtherRows);
+    return Math.max(0, rawBal - usedInOtherRows);
   };
 
   const recomputeLineItems = (items: any[]) => {
@@ -261,7 +226,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       const rawBal = getRawBalanceQtyForProcess(item.process_id, item.product_id);
       
       const otherRowsUsed = items.reduce((sum, other, oi) => {
-        if (oi !== idx && Number(other.process_id) === Number(item.process_id)) {
+        if (oi !== idx) {
           const matchProd = !item.product_id || !other.product_id || Number(other.product_id) === Number(item.product_id);
           if (matchProd) {
             return sum + (Number(other.quantity) || 0);
