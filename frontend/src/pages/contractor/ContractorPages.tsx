@@ -60,8 +60,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
 
   const { data: outwardVouchers = [] } = useQuery<any>({
-    queryKey: ["outward-vouchers", activeFY],
-    queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data,
+    queryKey: ["inward-vouchers", activeFY],
+    queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data,
     enabled: type === "job-work",
   });
 
@@ -125,19 +125,23 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return () => { cancelled = true; };
   }, [type, selectedLedgerId, activeFY, editing]);
 
-  // Sum of previously registered quantities for these outward vouchers and process in other register entries
+  // Sum of previously registered quantities for these inward vouchers and process in other register entries
   const getBalanceQtyForProcess = (processId: number | string) => {
     if (!processId || selectedOutwardIds.length === 0) return 0;
     
     let totalDispatched = 0;
     selectedOutwardIds.forEach((id: number) => {
-      const v = outwardVouchers.find((out: any) => out.id === id);
-      if (v && v.items && Array.isArray(v.items)) {
-        v.items.forEach((item: any) => {
-          if (dispatchCoversProcess(item.process_id, processId, processes)) {
-            totalDispatched += Number(item.quantity) || 0;
-          }
-        });
+      const v = outwardVouchers.find((inv: any) => inv.id === id);
+      if (v) {
+        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
+          v.items.forEach((item: any) => {
+            if (dispatchCoversProcess(item.process_id, processId, processes)) {
+              totalDispatched += Number(item.quantity) || 0;
+            }
+          });
+        } else if (v.process_id && dispatchCoversProcess(v.process_id, processId, processes)) {
+          totalDispatched += Number(v.quantity) || 0;
+        }
       }
     });
 
@@ -174,16 +178,27 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return Math.max(0, totalDispatched - totalCompleted);
   };
 
-  // Filter processes by selected Outward Vouchers, including group processes child expansion
+  // Filter processes by selected Inward Vouchers, including group processes child expansion
   const outwardProcesses = useMemo(() => {
     if (selectedOutwardIds.length === 0) return [];
     const resolvedIds = new Set<number>();
     
     selectedOutwardIds.forEach((id: number) => {
-      const v = outwardVouchers.find((out: any) => out.id === id);
-      if (v && v.items && Array.isArray(v.items)) {
-        v.items.forEach((item: any) => {
-          const procId = Number(item.process_id);
+      const v = outwardVouchers.find((inv: any) => inv.id === id);
+      if (v) {
+        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
+          v.items.forEach((item: any) => {
+            const procId = Number(item.process_id);
+            const proc = processes.find((p: any) => p.id === procId);
+            const childIds = proc ? getChildProcessIds(proc, processes) : [];
+            if (childIds.length > 0) {
+              childIds.forEach((cid: number) => resolvedIds.add(cid));
+            } else if (proc) {
+              resolvedIds.add(proc.id);
+            }
+          });
+        } else if (v.process_id) {
+          const procId = Number(v.process_id);
           const proc = processes.find((p: any) => p.id === procId);
           const childIds = proc ? getChildProcessIds(proc, processes) : [];
           if (childIds.length > 0) {
@@ -191,7 +206,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
           } else if (proc) {
             resolvedIds.add(proc.id);
           }
-        });
+        }
       }
     });
     
@@ -448,7 +463,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                       <Autocomplete
                         multiple
                         options={outwardVouchers}
-                        getOptionLabel={(o: any) => `${o.outward_no} (${o.outward_date})`}
+                        getOptionLabel={(o: any) => `${o.inward_no || o.outward_no || `Voucher #${o.id}`} (${o.inward_date || o.outward_date || ""})`}
                         value={outwardVouchers.filter((v: any) => field.value?.includes(v.id))}
                         onChange={(_, v) => {
                           const ids = v ? (v as any[]).map((x) => x.id) : [];
@@ -459,7 +474,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                           setValue("amount", 0);
                           setLineItems([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
                         }}
-                        renderInput={(params) => <TextField {...params} label="Outward Vouchers / Dispatches *" required={field.value?.length === 0} />}
+                        renderInput={(params) => <TextField {...params} label="Inward Vouchers / Receipts *" required={field.value?.length === 0} />}
                       />
                     )}
                   />
@@ -551,7 +566,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                         {lineItems.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={7} align="center" sx={{ py: 3, color: "text.secondary" }}>
-                              No processes added. Please select Outward Vouchers or add a line manually.
+                              No processes added. Please select Inward Vouchers or add a line manually.
                             </TableCell>
                           </TableRow>
                         )}
