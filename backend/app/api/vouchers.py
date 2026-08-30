@@ -100,10 +100,10 @@ async def create_voucher(
     fy: str = Query(default="2026_2027"),
 ):
     schema = f"fy_{fy}"
-    vtype = body.voucher_type.lower()
+    vtype = body.voucher_type.lower().replace(" ", "_").replace(".", "")
     seq_type = f"voucher_{vtype}"
     from app.services.sequences import generate_and_increment_sequence
-    voucher_no = await generate_and_increment_sequence(db, seq_type)
+    voucher_no = body.voucher_no if (body.voucher_no and body.voucher_no.strip()) else await generate_and_increment_sequence(db, seq_type)
     
     result = await db.execute(
         text(

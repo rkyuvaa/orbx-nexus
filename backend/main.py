@@ -171,6 +171,7 @@ async def lifespan(app: FastAPI):
             {"document_type": "voucher_contra", "prefix": "CON-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "voucher_journal", "prefix": "JOU-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "voucher_purchase", "prefix": "PUR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "voucher_misc_expenses", "prefix": "EXP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "labour_bill", "prefix": "LBB-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "staff_advance_payment", "prefix": "SAP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "staff_advance_receipt", "prefix": "SAR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},

@@ -58,6 +58,7 @@ export default function DocumentNumberingPage() {
       voucher_contra: "Voucher - Contra",
       voucher_journal: "Voucher - Journal",
       voucher_purchase: "Voucher - Purchase",
+      voucher_misc_expenses: "Voucher - Misc. Expenses",
       labour_bill: "Labour Bill",
       staff_advance_payment: "Staff Advance Payment",
       staff_advance_receipt: "Staff Advance Receipt",

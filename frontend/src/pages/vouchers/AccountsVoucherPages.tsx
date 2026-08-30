@@ -233,7 +233,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 140 },
     { field: "voucher_date", headerName: "Date", width: 100 },
-    { field: "ledger_id", headerName: "Ledger", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
+    { field: "ledger_id", headerName: (voucherType === "Purchase" || voucherType === "Misc. Expenses") ? "Supplier Name" : "Ledger", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
     { field: "amount", headerName: "Amount", width: 120, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
     { field: "narration", headerName: "Narration", flex: 1 },
     { field: "ref_no", headerName: "Ref No.", width: 120 },
@@ -393,7 +393,7 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
                 options={ledgers}
                 getOptionLabel={(option: any) => option.name || ""}
                 noOptionsText="No matching ledgers"
-                renderInput={(params) => <TextField {...params} label="Main Ledger *" required={!watch("ledger_id")} />}
+                renderInput={(params) => <TextField {...params} label={(voucherType === "Purchase" || voucherType === "Misc. Expenses") ? "Supplier Name *" : "Main Ledger *"} required={!watch("ledger_id")} />}
               />
             </Grid>
             <Grid size={{ xs: 6, sm: 4 }}><TextField {...register("amount")} label="Amount" type="number" fullWidth size="small" /></Grid>
