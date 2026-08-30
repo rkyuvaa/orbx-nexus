@@ -148,7 +148,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [selectedOutwardIds, outwardVouchers, products]);
 
   // Sum of previously registered quantities for these inward vouchers and process in other register entries
-  const getBalanceQtyForProcess = (processId: number | string, productId?: number | string) => {
+  const getRawBalanceQtyForProcess = (processId: number | string, productId?: number | string) => {
     if (!processId || selectedOutwardIds.length === 0) return 0;
     
     let totalDispatched = 0;
@@ -196,6 +196,42 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     });
 
     return Math.max(0, totalDispatched - totalCompleted);
+  };
+
+  const recomputeLineItems = (items: any[]) => {
+    return items.map((item, idx) => {
+      if (!item.process_id) return item;
+      const proc = processes.find((p: any) => p.id === Number(item.process_id));
+      const rate = item.rate !== undefined && item.rate !== "" ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
+      
+      const rawBal = getRawBalanceQtyForProcess(item.process_id, item.product_id);
+      
+      const otherRowsUsed = items.reduce((sum, other, oi) => {
+        if (oi !== idx && Number(other.process_id) === Number(item.process_id)) {
+          const matchProd = !item.product_id || !other.product_id || Number(other.product_id) === Number(item.product_id);
+          if (matchProd) {
+            return sum + (Number(other.quantity) || 0);
+          }
+        }
+        return sum;
+      }, 0);
+      
+      const remainingBal = selectedOutwardIds.length > 0 ? Math.max(0, rawBal - otherRowsUsed) : rawBal;
+      
+      let qty = item.quantity;
+      if (selectedOutwardIds.length > 0 && typeof qty === "number" && qty > remainingBal) {
+        qty = remainingBal;
+      }
+      const amount = Number(((Number(qty) || 0) * (Number(rate) || 0)).toFixed(2));
+      
+      return {
+        ...item,
+        rate,
+        balance_qty: remainingBal,
+        quantity: qty,
+        amount
+      };
+    });
   };
 
   // Filter processes by selected Inward Vouchers, including group processes child expansion
@@ -253,50 +289,26 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return selectedOutwardIds.length > 0 && outwardProcesses.length > 0 ? outwardProcesses : processes;
   }, [selectedOutwardIds, outwardProcesses, processes, contractorProcessIds]);
 
-  // We do not auto-fill lineItems with processes, the user selects them manually
-
   const handleLineChange = (index: number, field: string, val: any) => {
     const updated = [...lineItems];
     updated[index][field] = val;
     if (field === "product_id" || field === "process_id") {
-      const procId = updated[index].process_id;
-      const prodId = updated[index].product_id;
-      const proc = processes.find((p: any) => p.id === Number(procId));
-      const bal = getBalanceQtyForProcess(procId, prodId);
-      updated[index].rate = proc ? proc.contractor_rate || 0 : 0;
-      updated[index].balance_qty = bal;
-      if (!updated[index].quantity || Number(updated[index].quantity) > bal) {
-        updated[index].quantity = bal;
+      const proc = processes.find((p: any) => p.id === Number(updated[index].process_id));
+      if (proc) {
+        updated[index].rate = proc.contractor_rate || 0;
       }
-      const q = Number(updated[index].quantity) || 0;
-      const r = Number(updated[index].rate) || 0;
-      updated[index].amount = Number((q * r).toFixed(2));
     }
-    if (field === "quantity") {
-      if (selectedOutwardIds.length > 0) {
-        const bal = Number(updated[index].balance_qty) || 0;
-        if ((Number(updated[index].quantity) || 0) > bal) {
-          updated[index].quantity = bal;
-        }
-      }
-      const q = Number(updated[index].quantity) || 0;
-      const r = Number(updated[index].rate) || 0;
-      updated[index].amount = Number((q * r).toFixed(2));
-    }
-    if (field === "rate") {
-      const q = Number(updated[index].quantity) || 0;
-      const r = Number(val) || 0;
-      updated[index].amount = Number((q * r).toFixed(2));
-    }
-    setLineItems(updated);
+    setLineItems(recomputeLineItems(updated));
   };
 
   const handleAddLine = () => {
-    setLineItems([...lineItems, { product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+    const newItems = [...lineItems, { product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }];
+    setLineItems(recomputeLineItems(newItems));
   };
 
   const handleRemoveLine = (index: number) => {
-    setLineItems(lineItems.filter((_, i) => i !== index));
+    const filtered = lineItems.filter((_, i) => i !== index);
+    setLineItems(recomputeLineItems(filtered));
   };
 
   const totalQuantity = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -383,10 +395,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         setLineItems(parsedItems.map(it => ({
           ...it,
           product_id: it.product_id || row.product_id || "",
-          balance_qty: getBalanceQtyForProcess(it.process_id, it.product_id || row.product_id) + (Number(it.quantity) || 0)
+          balance_qty: getRawBalanceQtyForProcess(it.process_id, it.product_id || row.product_id) + (Number(it.quantity) || 0)
         })));
       } else {
-        const bal = getBalanceQtyForProcess(row.process_id, row.product_id) + (Number(row.quantity) || 0);
+        const bal = getRawBalanceQtyForProcess(row.process_id, row.product_id) + (Number(row.quantity) || 0);
         setLineItems([{ product_id: row.product_id || "", process_id: row.process_id || "", quantity: row.quantity || 0, balance_qty: bal, rate: row.rate || 0, amount: row.amount || 0 }]);
       }
     } else {
