@@ -464,7 +464,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const colDefs: ColDef[] = [
     { field: "entry_no", headerName: "Entry No.", width: 130 },
     { field: "entry_date", headerName: "Date", width: 100 },
-    { field: "contractor_name", headerName: "Contractor", width: 180, valueFormatter: (p) => p.value || "General" },
+    { field: "contractor_name", headerName: "Contractor", width: 160, valueFormatter: (p) => p.value || "General" },
     ...(type === "payment" ? [
       {
         field: "register_ids",
@@ -476,13 +476,13 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         }
       },
     ] : [
-      { field: "process_name", headerName: "Process", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
+      { field: "process_name", headerName: "Process", flex: 1, minWidth: 130, valueFormatter: (p: any) => p.value || "-" },
     ]),
     ...(type === "job-work" ? [
       {
         field: "outward_ids",
         headerName: "Outward No(s)",
-        width: 180,
+        width: 140,
         cellRenderer: (p: any) => {
           const ids = p.data.outward_ids || (p.data.outward_id ? [p.data.outward_id] : []);
           const names = ids.map((id: number) => outwardVouchers.find((v: any) => v.id === id)?.outward_no).filter(Boolean);
@@ -492,9 +492,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       { field: "product_name", headerName: "Product", flex: 1, minWidth: 150, valueFormatter: (p: any) => p.value || "-" },
     ] : []),
     { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
-    ...(type === "payment" ? [] : [{ field: "rate", headerName: "Rate", width: 80, type: "numericColumn" }]),
     { field: "amount", headerName: "Amount", width: 110, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
-    { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
+    { headerName: "Actions", width: 90, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
         <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { if (window.confirm("Delete this contractor entry?")) deleteMutation.mutate(p.data.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
