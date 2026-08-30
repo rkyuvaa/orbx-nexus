@@ -268,7 +268,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                             setValue("process_id", null);
                           }
                         }}
-                        renderInput={(params) => <TextField {...params} label="Processes" placeholder="Select processes..." slotProps={{ inputLabel: { shrink: true } }} />}
+                        renderInput={(params) => <TextField {...params} label="Processes" placeholder="Select processes..." />}
                       />
                     );
                   }}
