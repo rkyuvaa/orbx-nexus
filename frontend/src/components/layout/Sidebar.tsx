@@ -128,6 +128,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Day Book", path: "/reports/day-book", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Payables", path: "/accounts/payables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Receivables", path: "/reports/receivables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Misc. Expenses", path: "/accounts/misc-expenses", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {

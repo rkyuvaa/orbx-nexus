@@ -14,7 +14,7 @@ import {
 } from "../pages/payroll/PayrollPages";
 import {
   PaymentVoucherPage, ReceiptVoucherPage, ContraVoucherPage,
-  JournalVoucherPage, PurchaseVoucherPage
+  JournalVoucherPage, PurchaseVoucherPage, MiscExpensesPage
 } from "../pages/vouchers/AccountsVoucherPages";
 import {
   DayBookReport, InwardRegisterReport, OutwardRegisterReport,
@@ -66,6 +66,7 @@ export const router = createBrowserRouter([
       { path: "accounts/groups", element: <AccountsGroupPage /> },
       { path: "accounts/staff", element: <LedgerPage ledgerType="Staff" title="Staff Ledgers" breadcrumbs={[{ label: "Accounts Info" }, { label: "Staff Ledgers" }]} /> },
       { path: "accounts/payables", element: <PurchasePayablesPage /> },
+      { path: "accounts/misc-expenses", element: <MiscExpensesPage /> },
 
       // Inventory
       { path: "inventory/stock-in-hand", element: <StockInHandReport /> },

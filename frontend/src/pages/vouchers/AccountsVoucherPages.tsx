@@ -254,12 +254,15 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     setOpen(true);
   };
 
+  const pageTitle = voucherType === "Misc. Expenses" ? "Misc. Expenses" : `${voucherType} Voucher`;
+  const pageSubtitle = voucherType === "Misc. Expenses" ? "Manage and record miscellaneous expense vouchers" : `Post ${voucherType.toLowerCase()} entries`;
+
   return (
     <Box>
       <PageHeader
-        title={`${voucherType} Voucher`}
-        subtitle={`Post ${voucherType.toLowerCase()} entries`}
-        breadcrumbs={[{ label: "Accounts Voucher" }, { label: "Breadcrumb" }]}
+        title={pageTitle}
+        subtitle={pageSubtitle}
+        breadcrumbs={[{ label: "Accounts" }, { label: pageTitle }]}
       />
       <OrbxGrid
         rowData={vouchers}
@@ -267,7 +270,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
         loading={isLoading}
         onRefresh={refetch}
         onAdd={handleOpenNewVoucher}
-        addLabel={`New ${voucherType}`}
+        addLabel={voucherType === "Misc. Expenses" ? "New Expense Entry" : `New ${voucherType}`}
       />
       <AccountsVoucherDialog
         open={open}
@@ -306,7 +309,7 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
       setLines([{ ledger_id: "", dr_amount: "", cr_amount: "", narration: "" }]);
       reset({ voucher_no: "", voucher_date: today, ledger_id: "", amount: "" as any, narration: "", ref_no: "" });
 
-      const vtype = voucherType.toLowerCase();
+      const vtype = voucherType.toLowerCase().replace(/[^a-z0-9]/g, "_");
       api.get(`/sequences/preview/voucher_${vtype}`)
         .then((res) => {
           setValue("voucher_no", res.data.next_no);
@@ -377,7 +380,7 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} onKeyDown={handleKeyDown}>
-        <DialogTitle>New {voucherType} Voucher</DialogTitle>
+        <DialogTitle>{voucherType === "Misc. Expenses" ? "New Expense Voucher" : `New ${voucherType} Voucher`}</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required size="small" disabled /></Grid>
@@ -451,3 +454,4 @@ export const ReceiptVoucherPage = () => <AccountsVoucherPage voucherType="Receip
 export const ContraVoucherPage = () => <AccountsVoucherPage voucherType="Contra" />;
 export const JournalVoucherPage = () => <AccountsVoucherPage voucherType="Journal" />;
 export const PurchaseVoucherPage = () => <AccountsVoucherPage voucherType="Purchase" />;
+export const MiscExpensesPage = () => <AccountsVoucherPage voucherType="Misc. Expenses" />;
