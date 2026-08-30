@@ -151,6 +151,7 @@ class Ledger(Base):
     join_date: Mapped[str | None] = mapped_column(String(10))
     photo: Mapped[str | None] = mapped_column(Text)
     process_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.processes.id"))
+    process_ids: Mapped[str | None] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography, Divider,
+  TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography, Divider, Autocomplete
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
 import Edit from "@mui/icons-material/Edit";
@@ -28,6 +28,7 @@ const schema = z.object({
   phone: z.string().nullish(),
   mobile: z.string().nullish(),
   process_id: z.coerce.number().nullish(),
+  process_ids: z.any().nullish(),
   address: z.string().nullish(),
   city: z.string().nullish(),
   pincode: z.string().nullish(),
@@ -73,7 +74,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     queryFn: async () => (await api.get("/products/processes/all")).data,
   });
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<any>({
+  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<any>({
     resolver: zodResolver(schema),
     defaultValues: { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0 },
   });
@@ -175,12 +176,15 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       cellRenderer: (p: any) => <Chip label={p.value} size="small" color={p.value === "Dr" ? "info" : "warning"} sx={{ fontSize: "0.7rem" }} /> },
     { field: "mobile", headerName: "Mobile", width: 130 },
     {
-      field: "process_id",
-      headerName: "Process",
-      width: 140,
+      field: "process_ids",
+      headerName: "Processes",
+      width: 180,
       valueGetter: (p: any) => {
-        const proc = processes.find((item: any) => item.id === Number(p.value));
-        return proc ? proc.name : "-";
+        const raw = p.data?.process_ids || (p.data?.process_id ? String(p.data.process_id) : "");
+        if (!raw) return "-";
+        const ids = String(raw).split(",").map((x) => Number(x.trim())).filter(Boolean);
+        const names = ids.map((id) => processes.find((proc: any) => proc.id === id)?.name).filter(Boolean);
+        return names.length > 0 ? names.join(", ") : "-";
       }
     },
     ...(ledgerType === "Staff" ? [{ field: "basic_salary", headerName: "Basic Salary", width: 130,
@@ -233,24 +237,41 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
               <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("mobile")} label="Mobile" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <Controller
-                  name="process_id"
+                  name="process_ids"
                   control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      select
-                      label="Process"
-                      fullWidth
-                      value={field.value || ""}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                      slotProps={{ inputLabel: { shrink: true } }}
-                    >
-                      <MenuItem value=""><em>None / Select Process</em></MenuItem>
-                      {processes.map((p: any) => (
-                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                      ))}
-                    </TextField>
-                  )}
+                  render={({ field }) => {
+                    const selectedValue = useMemo(() => {
+                      let rawIds: number[] = [];
+                      if (Array.isArray(field.value)) {
+                        rawIds = field.value.map(Number);
+                      } else if (typeof field.value === "string" && field.value) {
+                        rawIds = field.value.split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+                      } else if (watch("process_id")) {
+                        rawIds = [Number(watch("process_id"))];
+                      }
+                      return processes.filter((p: any) => rawIds.includes(Number(p.id)));
+                    }, [field.value, watch("process_id"), processes]);
+
+                    return (
+                      <Autocomplete
+                        multiple
+                        size="small"
+                        options={processes}
+                        getOptionLabel={(option: any) => option.name || ""}
+                        value={selectedValue}
+                        onChange={(_, val) => {
+                          const ids = val.map((item: any) => item.id).join(",");
+                          field.onChange(ids);
+                          if (val.length > 0) {
+                            setValue("process_id", val[0].id);
+                          } else {
+                            setValue("process_id", null);
+                          }
+                        }}
+                        renderInput={(params) => <TextField {...params} label="Processes" placeholder="Select processes..." slotProps={{ inputLabel: { shrink: true } }} />}
+                      />
+                    );
+                  }}
                 />
               </Grid>
               

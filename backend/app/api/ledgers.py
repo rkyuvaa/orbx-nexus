@@ -52,6 +52,7 @@ class LedgerOut(BaseModel):
     join_date: str | None = None
     photo: str | None = None
     process_id: int | None = None
+    process_ids: str | None = None
     is_active: bool
 
 
@@ -79,6 +80,7 @@ class LedgerCreate(BaseModel):
     join_date: str | None = None
     photo: str | None = None
     process_id: int | None = None
+    process_ids: str | None = None
 
 
 class LedgerUpdate(LedgerCreate):
