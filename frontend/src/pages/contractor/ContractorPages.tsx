@@ -148,11 +148,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [selectedOutwardIds, outwardVouchers, products]);
 
   // Sum of previously registered quantities for these inward vouchers and process in other register entries
-  const getRawBalanceQtyForProcess = (processId?: number | string, productId?: number | string) => {
-    if ((!productId && !processId) || selectedOutwardIds.length === 0) return 0;
+  const getRawBalanceQtyForProcess = (processId?: number | string, productId?: number | string, overrideOids?: number[]) => {
+    const oids = overrideOids !== undefined ? overrideOids : selectedOutwardIds;
+    if ((!productId && !processId) || oids.length === 0) return 0;
     
     let totalDispatched = 0;
-    selectedOutwardIds.forEach((id: number) => {
+    oids.forEach((id: number) => {
       const v = outwardVouchers.find((inv: any) => inv.id === id);
       if (v) {
         if (v.items && Array.isArray(v.items) && v.items.length > 0) {
@@ -183,7 +184,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
             const matchProd = !productId || !it.product_id || Number(it.product_id) === Number(productId);
             if (matchProd) {
               const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
-              const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
+              const intersects = entryOids.some((id: number) => oids.includes(id));
               if (intersects) {
                 totalCompleted += Number(it.quantity) || 0;
               }
@@ -191,7 +192,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
           });
         } else if (!productId || !entry.product_id || Number(entry.product_id) === Number(productId)) {
           const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
-          const intersects = entryOids.some((id: number) => selectedOutwardIds.includes(id));
+          const intersects = entryOids.some((id: number) => oids.includes(id));
           if (intersects) {
             totalCompleted += Number(entry.quantity) || 0;
           }
@@ -217,13 +218,14 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return Math.max(0, rawBal - usedInOtherRows);
   };
 
-  const recomputeLineItems = (items: any[]) => {
+  const recomputeLineItems = (items: any[], overrideOids?: number[]) => {
+    const oids = overrideOids !== undefined ? overrideOids : selectedOutwardIds;
     return items.map((item, idx) => {
       if (!item.process_id && !item.product_id) return item;
       const proc = processes.find((p: any) => p.id === Number(item.process_id));
       const rate = item.rate !== undefined && item.rate !== "" ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
       
-      const rawBal = getRawBalanceQtyForProcess(item.process_id, item.product_id);
+      const rawBal = getRawBalanceQtyForProcess(item.process_id, item.product_id, oids);
       
       const otherRowsUsed = items.reduce((sum, other, oi) => {
         if (oi !== idx) {
@@ -235,10 +237,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         return sum;
       }, 0);
       
-      const remainingBal = selectedOutwardIds.length > 0 ? Math.max(0, rawBal - otherRowsUsed) : rawBal;
+      const remainingBal = oids.length > 0 ? Math.max(0, rawBal - otherRowsUsed) : rawBal;
       
       let qty = item.quantity;
-      if (selectedOutwardIds.length > 0 && (typeof qty === "number" || (typeof qty === "string" && qty !== ""))) {
+      if (oids.length > 0 && (typeof qty === "number" || (typeof qty === "string" && qty !== ""))) {
         const numQty = Number(qty) || 0;
         if (numQty > remainingBal) {
           qty = remainingBal;
@@ -554,11 +556,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                         onChange={(_, v) => {
                           const ids = v ? (v as any[]).map((x) => x.id) : [];
                           field.onChange(ids);
-                          setValue("process_id", "");
-                          setValue("quantity", 0);
-                          setValue("rate", 0);
-                          setValue("amount", 0);
-                          setLineItems([{ process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
+                          setLineItems((prev) => recomputeLineItems(prev, ids));
                         }}
                         renderInput={(params) => <TextField {...params} label="Inward Vouchers / Receipts *" required={field.value?.length === 0} />}
                       />
