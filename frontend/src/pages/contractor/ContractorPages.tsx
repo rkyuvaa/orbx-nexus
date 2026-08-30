@@ -213,6 +213,27 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return processes.filter((p: any) => resolvedIds.has(p.id));
   }, [selectedOutwardIds, outwardVouchers, processes]);
 
+  const selectedContractor = useMemo(() => {
+    if (!selectedLedgerId) return null;
+    return ledgers.find((l: any) => l.id === Number(selectedLedgerId));
+  }, [ledgers, selectedLedgerId]);
+
+  const contractorProcessIds = useMemo(() => {
+    if (!selectedContractor) return [];
+    const raw = selectedContractor.process_ids || (selectedContractor.process_id ? String(selectedContractor.process_id) : "");
+    if (!raw) return [];
+    return String(raw).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+  }, [selectedContractor]);
+
+  const availableProcesses = useMemo(() => {
+    const baseList = selectedOutwardIds.length > 0 ? outwardProcesses : processes;
+    if (contractorProcessIds.length > 0) {
+      const filtered = baseList.filter((p: any) => contractorProcessIds.includes(Number(p.id)));
+      return filtered.length > 0 ? filtered : baseList;
+    }
+    return baseList;
+  }, [selectedOutwardIds, outwardProcesses, processes, contractorProcessIds]);
+
   // We do not auto-fill lineItems with processes, the user selects them manually
 
   const handleLineChange = (index: number, field: string, val: any) => {
@@ -522,7 +543,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 displayEmpty
                               >
                                 <MenuItem value=""><em>Select Process</em></MenuItem>
-                                {(selectedOutwardIds.length > 0 ? outwardProcesses : processes)
+                                {availableProcesses
                                   .filter((p: any) => lineItems.every((other: any, oi: number) => oi === idx || Number(other.process_id) !== Number(p.id)))
                                   .map((p: any) => (
                                     <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
