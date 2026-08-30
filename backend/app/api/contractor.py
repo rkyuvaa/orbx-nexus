@@ -130,6 +130,19 @@ async def list_pending_registers(
     return [dict(r) for r in result.mappings().all()]
 
 
+def parse_date_iso(date_str: str | None) -> str:
+    if not date_str:
+        return str(date.today())
+    date_str = date_str.strip()
+    if len(date_str) == 10 and date_str[2] == "-" and date_str[5] == "-":
+        parts = date_str.split("-")
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    if len(date_str) == 10 and date_str[2] == "/" and date_str[5] == "/":
+        parts = date_str.split("/")
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"
+    return date_str
+
+
 @router.post("/", status_code=201)
 async def create_job_work(
     body: JobWorkIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
@@ -152,6 +165,7 @@ async def create_job_work(
     first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
     items_json = json.dumps(body.items) if body.items else "[]"
     rids_json = json.dumps(body.register_ids) if body.register_ids else "[]"
+    edate = parse_date_iso(body.entry_date)
 
     result = await db.execute(
         text(
@@ -160,7 +174,7 @@ async def create_job_work(
             f"VALUES (:eno, :edate, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
         ),
         {
-            "eno": entry_no, "edate": body.entry_date, "lid": body.ledger_id,
+            "eno": entry_no, "edate": edate, "lid": body.ledger_id,
             "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "cby": current_user.id
@@ -207,6 +221,7 @@ async def update_job_work(
                 {"rids": prev_rids}
             )
 
+    edate = parse_date_iso(body.entry_date)
     await db.execute(
         text(
             f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
@@ -214,7 +229,7 @@ async def update_job_work(
             f"entry_type=:et, narration=:narr, items=:items::jsonb, register_ids=:rids::jsonb, updated_at=NOW() WHERE id=:id"
         ),
         {
-            "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
+            "eno": body.entry_no, "edate": edate, "lid": body.ledger_id,
             "oid": first_oid, "oids": oids_json, "pid": body.product_id, "prid": body.process_id, "rid": body.rate_id,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "et": body.entry_type, "narr": body.narration, "items": items_json, "rids": rids_json, "id": entry_id
