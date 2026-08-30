@@ -51,6 +51,7 @@ class LedgerOut(BaseModel):
     basic_salary: float | None = None
     join_date: str | None = None
     photo: str | None = None
+    process_id: int | None = None
     is_active: bool
 
 
@@ -77,6 +78,7 @@ class LedgerCreate(BaseModel):
     basic_salary: float | None = None
     join_date: str | None = None
     photo: str | None = None
+    process_id: int | None = None
 
 
 class LedgerUpdate(LedgerCreate):

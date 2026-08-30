@@ -18,6 +18,7 @@ import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { formatAmount } from "../../utils/format";
+
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
   ledger_code: z.string().nullish(),
@@ -26,6 +27,7 @@ const schema = z.object({
   balance_type: z.string(),
   phone: z.string().nullish(),
   mobile: z.string().nullish(),
+  process_id: z.coerce.number().nullish(),
   address: z.string().nullish(),
   city: z.string().nullish(),
   pincode: z.string().nullish(),
@@ -64,6 +66,11 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   const { data: ledgers = [], isLoading, refetch } = useQuery({
     queryKey: ["ledgers", ledgerType],
     queryFn: async () => (await api.get(`/ledgers/?ledger_type=${ledgerType}&is_active=true`)).data,
+  });
+
+  const { data: processes = [] } = useQuery({
+    queryKey: ["processes"],
+    queryFn: async () => (await api.get("/products/processes/all")).data,
   });
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<any>({
@@ -167,6 +174,15 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     { field: "balance_type", headerName: "Type", width: 80,
       cellRenderer: (p: any) => <Chip label={p.value} size="small" color={p.value === "Dr" ? "info" : "warning"} sx={{ fontSize: "0.7rem" }} /> },
     { field: "mobile", headerName: "Mobile", width: 130 },
+    {
+      field: "process_id",
+      headerName: "Process",
+      width: 140,
+      valueGetter: (p: any) => {
+        const proc = processes.find((item: any) => item.id === Number(p.value));
+        return proc ? proc.name : "-";
+      }
+    },
     ...(ledgerType === "Staff" ? [{ field: "basic_salary", headerName: "Basic Salary", width: 130,
         valueFormatter: (p: any) => p.value ? `₹${formatAmount(p.value)}` : "-" }] : []),
     {
@@ -213,8 +229,30 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                   </TextField>
                 )} />
               </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("phone")} label="Phone" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("mobile")} label="Mobile" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("phone")} label="Phone" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("mobile")} label="Mobile" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="process_id"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      select
+                      label="Process"
+                      fullWidth
+                      value={field.value || ""}
+                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value=""><em>None / Select Process</em></MenuItem>
+                      {processes.map((p: any) => (
+                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Grid>
               
               {isStaffOrContractor ? (
                 <>
