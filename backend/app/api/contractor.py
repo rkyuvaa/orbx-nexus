@@ -187,7 +187,7 @@ async def create_job_work(
             text(
                 f"INSERT INTO {schema}.job_work_entries "
                 f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, register_ids, created_by) "
-                f"VALUES (:eno, :edate::date, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
+                f"VALUES (:eno, CAST(:edate AS DATE), :lid, :oid, CAST(:oids AS JSONB), :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, CAST(:items AS JSONB), CAST(:rids AS JSONB), :cby) RETURNING id"
             ),
             {
                 "eno": entry_no, "edate": edate, "lid": body.ledger_id,
@@ -201,7 +201,7 @@ async def create_job_work(
             await db.execute(
                 text(
                     f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
-                    f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                    f"WHERE id = ANY(CAST(:rids AS INT[])) AND entry_type = 'Register'"
                 ),
                 {"rids": body.register_ids}
             )
@@ -237,7 +237,7 @@ async def update_job_work(
                 await db.execute(
                     text(
                         f"UPDATE {schema}.job_work_entries SET is_paid = FALSE "
-                        f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                        f"WHERE id = ANY(CAST(:rids AS INT[])) AND entry_type = 'Register'"
                     ),
                     {"rids": prev_rids}
                 )
@@ -251,9 +251,9 @@ async def update_job_work(
 
         await db.execute(
             text(
-                f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate::date, ledger_id=:lid, "
-                f"outward_id=:oid, outward_ids=:oids::jsonb, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
-                f"entry_type=:et, narration=:narr, items=:items::jsonb, register_ids=:rids::jsonb, updated_at=NOW() WHERE id=:id"
+                f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=CAST(:edate AS DATE), ledger_id=:lid, "
+                f"outward_id=:oid, outward_ids=CAST(:oids AS JSONB), product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
+                f"entry_type=:et, narration=:narr, items=CAST(:items AS JSONB), register_ids=CAST(:rids AS JSONB), updated_at=NOW() WHERE id=:id"
             ),
             {
                 "eno": body.entry_no, "edate": edate, "lid": body.ledger_id,
@@ -267,7 +267,7 @@ async def update_job_work(
             await db.execute(
                 text(
                     f"UPDATE {schema}.job_work_entries SET is_paid = TRUE "
-                    f"WHERE id = ANY(:rids::int[]) AND entry_type = 'Register'"
+                    f"WHERE id = ANY(CAST(:rids AS INT[])) AND entry_type = 'Register'"
                 ),
                 {"rids": body.register_ids}
             )
