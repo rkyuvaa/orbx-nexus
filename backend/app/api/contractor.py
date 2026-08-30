@@ -161,6 +161,15 @@ async def create_job_work(
         from app.services.sequences import generate_and_increment_sequence
         entry_no = await generate_and_increment_sequence(db, seq_type)
         
+        while True:
+            check_dup = await db.execute(
+                text(f"SELECT id FROM {schema}.job_work_entries WHERE entry_no = :eno"),
+                {"eno": entry_no}
+            )
+            if not check_dup.scalar_one_or_none():
+                break
+            entry_no = await generate_and_increment_sequence(db, seq_type)
+        
         import json
         oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
         first_oid = body.outward_ids[0] if body.outward_ids else body.outward_id
