@@ -119,14 +119,31 @@ async def create_advance(
     body: AdvancePaymentIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    vno = body.voucher_no
+    ltype = (body.ledger_type or "staff").lower()
+    ptype = (body.payment_type or "payment").lower()
+    seq_type = f"job_work_advance_{ptype}" if ltype == "contractor" else f"staff_advance_{ptype}"
+
+    from app.services.sequences import generate_and_increment_sequence
+    if not vno:
+        vno = await generate_and_increment_sequence(db, seq_type)
+    else:
+        await generate_and_increment_sequence(db, seq_type)
+
+    while True:
+        chk = await db.execute(text(f"SELECT id FROM {schema}.advance_payments WHERE voucher_no = :vno"), {"vno": vno})
+        if not chk.scalar_one_or_none():
+            break
+        vno = await generate_and_increment_sequence(db, seq_type)
+
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.advance_payments "
             f"(voucher_no, voucher_date, ledger_id, payment_type, ledger_type, amount, narration, created_by) "
-            f"VALUES (:vno, :vdate, :lid, :pt, :lt, :amt, :narr, :cby) RETURNING id"
+            f"VALUES (:vno, CAST(:vdate AS DATE), :lid, :pt, :lt, :amt, :narr, :cby) RETURNING id"
         ),
         {
-            "vno": body.voucher_no, "vdate": body.voucher_date, "lid": body.ledger_id,
+            "vno": vno, "vdate": body.voucher_date, "lid": body.ledger_id,
             "pt": body.payment_type, "lt": body.ledger_type, "amt": body.amount,
             "narr": body.narration, "cby": current_user.id
         }

@@ -85,7 +85,7 @@ function VoucherModule({
           try {
             const ltype = ledgerType.toLowerCase();
             const ptype = paymentType.toLowerCase();
-            const seqType = `${ltype}_advance_${ptype}`;
+            const seqType = ltype === "contractor" ? `job_work_advance_${ptype}` : `${ltype}_advance_${ptype}`;
             const res = await api.get(`/sequences/preview/${seqType}`);
             nextNo = res.data.next_no;
           } catch (e) {
