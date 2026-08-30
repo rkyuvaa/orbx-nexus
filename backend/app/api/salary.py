@@ -151,8 +151,29 @@ async def create_advance(
     return {"id": result.scalar_one(), "message": "Advance entry created"}
 
 
+@router.put("/advances/{vid}")
+async def update_advance(
+    vid: int, body: AdvancePaymentIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await db.execute(
+        text(
+            f"UPDATE {schema}.advance_payments "
+            f"SET voucher_date = CAST(:vdate AS DATE), ledger_id = :lid, "
+            f"amount = :amt, narration = :narr "
+            f"WHERE id = :id"
+        ),
+        {
+            "vdate": body.voucher_date, "lid": body.ledger_id,
+            "amt": body.amount, "narr": body.narration, "id": vid
+        }
+    )
+    return {"message": "Advance entry updated"}
+
+
 @router.delete("/advances/{vid}", status_code=204)
 async def delete_advance(
     vid: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     await db.execute(text(f"DELETE FROM {s(fy)}.advance_payments WHERE id = :id"), {"id": vid})
+

@@ -4,6 +4,7 @@ import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Grid, IconButton, Tooltip,
 } from "@mui/material";
+import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
@@ -28,6 +29,7 @@ function VoucherModule({
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
 
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: [queryKey, activeFY],
@@ -44,8 +46,18 @@ function VoucherModule({
   });
 
   const saveMutation = useMutation({
-    mutationFn: (data: any) => api.post(`${endpoint}?fy=${activeFY}`, { ...data, payment_type: paymentType, ledger_type: ledgerType }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [queryKey] }); setOpen(false); },
+    mutationFn: (data: any) => {
+      const payload = { ...data, payment_type: paymentType, ledger_type: ledgerType };
+      if (editing) {
+        return api.put(`${endpoint}/${editing.id}?fy=${activeFY}`, payload);
+      }
+      return api.post(`${endpoint}?fy=${activeFY}`, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [queryKey] });
+      setOpen(false);
+      setEditing(null);
+    },
     onError: (err: any) => alert(`Failed to save. ${err?.response?.data?.detail || err.message || ""}`),
   });
 
@@ -61,15 +73,54 @@ function VoucherModule({
     }
   };
 
+  const handleEditRow = (row: any) => {
+    setEditing(row);
+    reset({
+      voucher_no: row.voucher_no || "",
+      voucher_date: row.voucher_date || today,
+      ledger_id: row.ledger_id || "",
+      payment_type: paymentType,
+      ledger_type: ledgerType,
+      amount: row.amount || 0,
+      narration: row.narration || "",
+    });
+    setOpen(true);
+  };
+
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 140 },
     { field: "voucher_date", headerName: "Date", width: 100 },
-    { field: "ledger_id", headerName: ledgerType, width: 200 },
+    {
+      field: "ledger_id",
+      headerName: ledgerType,
+      width: 200,
+      valueFormatter: (p: any) => {
+        const l = ledgers.find((item: any) => item.id === p.value || item.id === Number(p.value));
+        return l ? `${l.code ? l.code + ' - ' : ''}${l.name}` : p.value;
+      }
+    },
     { field: "amount", headerName: "Amount", width: 120, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
     { field: "narration", headerName: "Narration", flex: 1 },
-    { headerName: "Actions", width: 90, sortable: false, filter: false, cellRenderer: (p: any) => (
-      <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDeleteRow(p.data.id)}><Delete fontSize="small" /></IconButton></Tooltip>
-    )},
+    {
+      headerName: "Actions",
+      width: 110,
+      sortable: false,
+      filter: false,
+      cellRenderer: (p: any) => (
+        <Box sx={{ display: "flex", gap: 0.5 }}>
+          <Tooltip title="Edit">
+            <IconButton size="small" color="primary" onClick={() => handleEditRow(p.data)}>
+              <Edit fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton size="small" color="error" onClick={() => handleDeleteRow(p.data.id)}>
+              <Delete fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
+    },
   ];
 
   return (
@@ -81,6 +132,7 @@ function VoucherModule({
         loading={isLoading}
         onRefresh={refetch}
         onAdd={async () => {
+          setEditing(null);
           let nextNo = "";
           try {
             const ltype = ledgerType.toLowerCase();
@@ -104,9 +156,9 @@ function VoucherModule({
         }}
         addLabel="New Entry"
       />
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={() => { setOpen(false); setEditing(null); }} maxWidth="sm" fullWidth>
         <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))}>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{editing ? `Edit ${title}` : title}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} /></Grid>
@@ -119,7 +171,7 @@ function VoucherModule({
             </Grid>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-            <Button onClick={() => setOpen(false)} variant="outlined">Cancel</Button>
+            <Button onClick={() => { setOpen(false); setEditing(null); }} variant="outlined">Cancel</Button>
             <Button type="submit" variant="contained" disabled={saveMutation.isPending}>Save</Button>
           </DialogActions>
         </form>
