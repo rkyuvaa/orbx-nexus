@@ -157,7 +157,7 @@ async def create_job_work(
         text(
             f"INSERT INTO {schema}.job_work_entries "
             f"(entry_no, entry_date, ledger_id, outward_id, outward_ids, product_id, process_id, rate_id, quantity, rate, amount, entry_type, narration, items, register_ids, created_by) "
-            f"VALUES (:eno, :edate, :lid, :oid, :oids, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items, :rids, :cby) RETURNING id"
+            f"VALUES (:eno, :edate, :lid, :oid, :oids::jsonb, :pid, :prid, :rid, :qty, :rate, :amt, :et, :narr, :items::jsonb, :rids::jsonb, :cby) RETURNING id"
         ),
         {
             "eno": entry_no, "edate": body.entry_date, "lid": body.ledger_id,
@@ -210,8 +210,8 @@ async def update_job_work(
     await db.execute(
         text(
             f"UPDATE {schema}.job_work_entries SET entry_no=:eno, entry_date=:edate, ledger_id=:lid, "
-            f"outward_id=:oid, outward_ids=:oids, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
-            f"entry_type=:et, narration=:narr, items=:items, register_ids=:rids, updated_at=NOW() WHERE id=:id"
+            f"outward_id=:oid, outward_ids=:oids::jsonb, product_id=:pid, process_id=:prid, rate_id=:rid, quantity=:qty, rate=:rate, amount=:amt, "
+            f"entry_type=:et, narration=:narr, items=:items::jsonb, register_ids=:rids::jsonb, updated_at=NOW() WHERE id=:id"
         ),
         {
             "eno": body.entry_no, "edate": body.entry_date, "lid": body.ledger_id,
