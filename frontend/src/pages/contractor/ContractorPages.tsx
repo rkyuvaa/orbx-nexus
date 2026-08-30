@@ -135,12 +135,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       if (v) {
         if (v.items && Array.isArray(v.items) && v.items.length > 0) {
           v.items.forEach((item: any) => {
-            if (dispatchCoversProcess(item.process_id, processId, processes)) {
+            if (!item.process_id || dispatchCoversProcess(item.process_id, processId, processes)) {
               totalDispatched += Number(item.quantity) || 0;
             }
           });
-        } else if (v.process_id && dispatchCoversProcess(v.process_id, processId, processes)) {
-          totalDispatched += Number(v.quantity) || 0;
+        } else if (!v.process_id || dispatchCoversProcess(v.process_id, processId, processes)) {
+          totalDispatched += Number(v.quantity) || Number(v.total_weight) || 0;
         }
       }
     });
@@ -226,12 +226,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [selectedContractor]);
 
   const availableProcesses = useMemo(() => {
-    const baseList = selectedOutwardIds.length > 0 ? outwardProcesses : processes;
     if (contractorProcessIds.length > 0) {
-      const filtered = baseList.filter((p: any) => contractorProcessIds.includes(Number(p.id)));
-      return filtered.length > 0 ? filtered : baseList;
+      const contractorProcs = processes.filter((p: any) => contractorProcessIds.includes(Number(p.id)));
+      if (contractorProcs.length > 0) return contractorProcs;
     }
-    return baseList;
+    return selectedOutwardIds.length > 0 && outwardProcesses.length > 0 ? outwardProcesses : processes;
   }, [selectedOutwardIds, outwardProcesses, processes, contractorProcessIds]);
 
   // We do not auto-fill lineItems with processes, the user selects them manually
