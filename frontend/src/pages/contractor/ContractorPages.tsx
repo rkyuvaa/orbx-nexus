@@ -57,7 +57,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   });
 
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
-  const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/all")).data });
+  const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
 
   const { data: outwardVouchers = [] } = useQuery<any>({
