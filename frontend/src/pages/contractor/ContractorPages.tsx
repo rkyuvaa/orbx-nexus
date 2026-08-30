@@ -148,8 +148,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [selectedOutwardIds, outwardVouchers, products]);
 
   // Sum of previously registered quantities for these inward vouchers and process in other register entries
-  const getRawBalanceQtyForProcess = (processId: number | string, productId?: number | string) => {
-    if (!processId || selectedOutwardIds.length === 0) return 0;
+  const getRawBalanceQtyForProcess = (processId?: number | string, productId?: number | string) => {
+    if ((!productId && !processId) || selectedOutwardIds.length === 0) return 0;
     
     let totalDispatched = 0;
     selectedOutwardIds.forEach((id: number) => {
@@ -158,12 +158,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         if (v.items && Array.isArray(v.items) && v.items.length > 0) {
           v.items.forEach((item: any) => {
             const matchProd = !productId || !item.product_id || Number(item.product_id) === Number(productId);
-            const matchProc = !item.process_id || dispatchCoversProcess(item.process_id, processId, processes);
+            const matchProc = !processId || !item.process_id || dispatchCoversProcess(item.process_id, processId, processes);
             if (matchProd && matchProc) {
               totalDispatched += Number(item.quantity) || 0;
             }
           });
-        } else if ((!v.product_id || !productId || Number(v.product_id) === Number(productId)) && (!v.process_id || dispatchCoversProcess(v.process_id, processId, processes))) {
+        } else if ((!v.product_id || !productId || Number(v.product_id) === Number(productId)) && (!v.process_id || !processId || dispatchCoversProcess(v.process_id, processId, processes))) {
           totalDispatched += Number(v.quantity) || Number(v.total_weight) || 0;
         }
       }
@@ -181,7 +181,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         }
         if (entryItems && entryItems.length > 0) {
           entryItems.forEach((it: any) => {
-            const matchProc = Number(it.process_id) === Number(processId);
+            const matchProc = !processId || Number(it.process_id) === Number(processId);
             const matchProd = !productId || !it.product_id || Number(it.product_id) === Number(productId);
             if (matchProc && matchProd) {
               const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
