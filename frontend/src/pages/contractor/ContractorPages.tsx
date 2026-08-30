@@ -198,9 +198,63 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return Math.max(0, totalDispatched - totalCompleted);
   };
 
+  const getProductRemainingBalance = (productId: number | string, currentRowIdx?: number) => {
+    if (!productId || selectedOutwardIds.length === 0) return 999999;
+    
+    let totalInwardQty = 0;
+    selectedOutwardIds.forEach((id: number) => {
+      const v = outwardVouchers.find((inv: any) => inv.id === id);
+      if (v) {
+        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
+          v.items.forEach((item: any) => {
+            if (!item.product_id || Number(item.product_id) === Number(productId)) {
+              totalInwardQty += Number(item.quantity) || 0;
+            }
+          });
+        } else if (!v.product_id || Number(v.product_id) === Number(productId)) {
+          totalInwardQty += Number(v.quantity) || Number(v.total_weight) || 0;
+        }
+      }
+    });
+
+    let totalCompletedInDB = 0;
+    data.forEach((entry: any) => {
+      if (editing && entry.id === editing.id) return;
+      if (entry.entry_type === "Register") {
+        let entryItems: any[] = [];
+        if (entry.items) {
+          try {
+            entryItems = typeof entry.items === "string" ? JSON.parse(entry.items) : entry.items;
+          } catch (e) {}
+        }
+        if (entryItems && entryItems.length > 0) {
+          entryItems.forEach((it: any) => {
+            if (!it.product_id || Number(it.product_id) === Number(productId)) {
+              const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
+              if (entryOids.some((id: number) => selectedOutwardIds.includes(id))) {
+                totalCompletedInDB += Number(it.quantity) || 0;
+              }
+            }
+          });
+        }
+      }
+    });
+
+    const netAvailableInward = Math.max(0, totalInwardQty - totalCompletedInDB);
+
+    const usedInOtherRows = lineItems.reduce((sum, item, oi) => {
+      if (oi !== currentRowIdx && Number(item.product_id) === Number(productId)) {
+        return sum + (Number(item.quantity) || 0);
+      }
+      return sum;
+    }, 0);
+
+    return Math.max(0, netAvailableInward - usedInOtherRows);
+  };
+
   const recomputeLineItems = (items: any[]) => {
     return items.map((item, idx) => {
-      if (!item.process_id) return item;
+      if (!item.process_id && !item.product_id) return item;
       const proc = processes.find((p: any) => p.id === Number(item.process_id));
       const rate = item.rate !== undefined && item.rate !== "" ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
       
@@ -219,8 +273,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       const remainingBal = selectedOutwardIds.length > 0 ? Math.max(0, rawBal - otherRowsUsed) : rawBal;
       
       let qty = item.quantity;
-      if (selectedOutwardIds.length > 0 && typeof qty === "number" && qty > remainingBal) {
-        qty = remainingBal;
+      if (selectedOutwardIds.length > 0 && (typeof qty === "number" || (typeof qty === "string" && qty !== ""))) {
+        const numQty = Number(qty) || 0;
+        if (numQty > remainingBal) {
+          qty = remainingBal;
+        }
       }
       const amount = Number(((Number(qty) || 0) * (Number(rate) || 0)).toFixed(2));
       
@@ -584,9 +641,14 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 displayEmpty
                               >
                                 <MenuItem value=""><em>Select Product</em></MenuItem>
-                                {inwardProducts.map((p: any) => (
-                                  <MenuItem key={p.id} value={p.id}>{p.name} {p.product_code ? `(${p.product_code})` : ""}</MenuItem>
-                                ))}
+                                {inwardProducts
+                                  .filter((p: any) => {
+                                    if (Number(p.id) === Number(item.product_id)) return true;
+                                    return getProductRemainingBalance(p.id, idx) > 0;
+                                  })
+                                  .map((p: any) => (
+                                    <MenuItem key={p.id} value={p.id}>{p.name} {p.product_code ? `(${p.product_code})` : ""}</MenuItem>
+                                  ))}
                               </Select>
                             </TableCell>
                             <TableCell sx={{ py: 0.75, px: 1 }}>
