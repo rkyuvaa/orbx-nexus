@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional
