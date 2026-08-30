@@ -8,8 +8,10 @@ import LedgerPage from "../pages/accounts/LedgerPage";
 import { ProductRegisterPage, ProcessRegisterPage, ProcessGroupsPage, RateRegisterPage, UoMPage } from "../pages/process/ProcessInfoPages";
 import { InwardVoucherPage, OutwardVoucherPage } from "../pages/process-voucher/ProcessVoucherPages";
 import LabourBillPage from "../pages/labour-bill/LabourBillPage";
-import { SalaryVoucherPage } from "../pages/payroll/PayrollPages";
-import ContractorAdvancePayment from "../pages/contractor/ContractorAdvancePayment";
+import {
+  ContractorAdvancePaymentPage, ContractorAdvanceReceiptPage,
+  SalaryVoucherPage
+} from "../pages/payroll/PayrollPages";
 import {
   PaymentVoucherPage, ReceiptVoucherPage, ContraVoucherPage,
   JournalVoucherPage, PurchaseVoucherPage, MiscExpensesPage
@@ -98,8 +100,8 @@ export const router = createBrowserRouter([
       // Contractor Voucher
       { path: "contractor/rates", element: <ContractorPages type="rates" /> },
       { path: "contractor/job-work", element: <ContractorPages type="job-work" /> },
-      { path: "contractor/advance-payment", element: <ContractorAdvancePayment /> },
-      { path: "contractor/advance-receipt", element: <ContractorAdvancePayment /> },
+      { path: "contractor/advance-payment", element: <ContractorAdvancePaymentPage /> },
+      { path: "contractor/advance-receipt", element: <ContractorAdvanceReceiptPage /> },
       { path: "contractor/payment", element: <ContractorPages type="payment" /> },
 
       // Accounts Voucher
