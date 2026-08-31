@@ -52,13 +52,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     queryKey: ["contractor", type, activeFY],
     queryFn: async () => {
       if (type === "rates") return (await api.get("/products/rates/all")).data;
-      return (await api.get(`/contractor/?fy=${activeFY}&entry_type=${type === "payment" ? "Payment" : "Register"}`)).data;
+      return (await api.get(`/contractor/?fy=${activeFY}`)).data;
     },
-  });
-
-  const { data: allContractorEntries = [] } = useQuery<any[]>({
-    queryKey: ["contractor-all-entries", activeFY],
-    queryFn: async () => (await api.get(`/contractor/?fy=${activeFY}`)).data,
   });
 
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
@@ -508,73 +503,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     )},
   ];
 
-  const contractorSummary = useMemo(() => {
-    const map: Record<string, { contractor_name: string; total_registered: number; total_paid: number; pending_balance: number; total_qty: number; reg_count: number; pay_count: number }> = {};
-    
-    allContractorEntries.forEach((row: any) => {
-      const name = row.contractor_name || "General";
-      if (!map[name]) {
-        map[name] = { contractor_name: name, total_registered: 0, total_paid: 0, pending_balance: 0, total_qty: 0, reg_count: 0, pay_count: 0 };
-      }
-      const amt = Number(row.amount || 0);
-      const qty = Number(row.quantity || 0);
-      if (row.entry_type === "Register") {
-        map[name].total_registered += amt;
-        map[name].total_qty += qty;
-        map[name].reg_count += 1;
-      } else if (row.entry_type === "Payment" || row.entry_type === "Advance Payment") {
-        map[name].total_paid += amt;
-        map[name].pay_count += 1;
-      }
-    });
-
-    Object.values(map).forEach((item) => {
-      item.pending_balance = item.total_registered - item.total_paid;
-    });
-
-    return Object.values(map);
-  }, [allContractorEntries]);
-
   return (
     <Box>
       <PageHeader title={TITLES[type]} breadcrumbs={[{ label: "Contractor Voucher" }, { label: BREADCRUMBS[type] }]} />
-      {contractorSummary.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: "#f8fafc" }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#0f5132", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Contractor Summary (Total Value by Contractor Name)</span>
-            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 400 }}>
-              Total Contractors: {contractorSummary.length}
-            </Typography>
-          </Typography>
-          <Grid container spacing={2}>
-            {contractorSummary.map((c) => (
-              <Grid key={c.contractor_name} size={{ xs: 12, sm: 6, md: 4 }}>
-                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "#ffffff", borderLeft: "4px solid #0f5132", borderRadius: 1.5 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1e293b", mb: 0.75 }}>
-                    {c.contractor_name}
-                  </Typography>
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                    <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                      <Typography variant="caption" color="text.secondary">Total Job Work ({c.reg_count} entries):</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>₹{formatAmount(c.total_registered)}</Typography>
-                    </Box>
-                    <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                      <Typography variant="caption" color="text.secondary">Total Paid ({c.pay_count} payments):</Typography>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: "#2e7d32" }}>₹{formatAmount(c.total_paid)}</Typography>
-                    </Box>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", borderTop: "1px dashed #cbd5e1", pt: 0.5, mt: 0.5 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#1e293b" }}>Balance Payable:</Typography>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: c.pending_balance > 0 ? "#d32f2f" : "#0f5132" }}>
-                        ₹{formatAmount(c.pending_balance)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
-      )}
       <OrbxGrid
         rowData={data}
         columnDefs={colDefs}

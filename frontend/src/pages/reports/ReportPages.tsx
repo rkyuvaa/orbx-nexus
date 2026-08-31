@@ -861,35 +861,6 @@ export function LabourBillRegisterReport() {
           )}
         </FilterRow>
       </Box>
-      {contractorSummary.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: "#f8fafc" }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#0f5132", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Contractor Summary (Total Value by Contractor Name)</span>
-            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 400 }}>
-              Total Contractors: {contractorSummary.length}
-            </Typography>
-          </Typography>
-          <Grid container spacing={2}>
-            {contractorSummary.map((c) => (
-              <Grid key={c.contractor_name} size={{ xs: 12, sm: 6, md: 4 }}>
-                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "#ffffff", borderLeft: "4px solid #0f5132", borderRadius: 1.5 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1e293b" }}>
-                    {c.contractor_name}
-                  </Typography>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      {c.count} {c.count === 1 ? "bill" : "bills"} | Qty: {formatQty(c.total_qty)}
-                    </Typography>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132" }}>
-                      ₹{formatAmount(c.total_amount)}
-                    </Typography>
-                  </Box>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
-      )}
       {data.length > 0 && (
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <PrintTable
