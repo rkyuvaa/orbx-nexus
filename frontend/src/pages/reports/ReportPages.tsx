@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Box, Button, TextField, Paper, Typography,
+  Box, Button, TextField, Paper, Typography, Grid,
   Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, MenuItem, Autocomplete
 } from "@mui/material";
 import Print from "@mui/icons-material/Print";
@@ -207,7 +207,7 @@ export function DayBookReport() {
   const { activeFY } = useAuthStore();
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(today);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   const { data = [] } = useQuery({
     queryKey: ["report-daybook", activeFY, fromDate, toDate, enabled],
@@ -367,7 +367,7 @@ export function InwardRegisterReport() {
   const { activeFY } = useAuthStore();
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(today);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   const { data = [] } = useQuery({
     queryKey: ["report-inward-reg", activeFY, fromDate, toDate, enabled],
@@ -535,7 +535,7 @@ export function OutwardRegisterReport() {
   const { activeFY } = useAuthStore();
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(today);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   const { data = [] } = useQuery({
     queryKey: ["report-outward-reg", activeFY, fromDate, toDate, enabled],
@@ -699,7 +699,7 @@ export function LabourBillRegisterReport() {
   const { activeFY } = useAuthStore();
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(today);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   const { data = [] } = useQuery({
     queryKey: ["report-lb-reg", activeFY, fromDate, toDate, enabled],
@@ -714,6 +714,20 @@ export function LabourBillRegisterReport() {
 
   const totalAmt = data.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
   const totalEntries = data.length;
+
+  const contractorSummary = useMemo(() => {
+    const map: Record<string, { contractor_name: string; total_qty: number; total_amount: number; count: number }> = {};
+    data.forEach((row: any) => {
+      const name = row.ledger || "General";
+      if (!map[name]) {
+        map[name] = { contractor_name: name, total_qty: 0, total_amount: 0, count: 0 };
+      }
+      map[name].total_qty += Number(row.quantity || 0);
+      map[name].total_amount += Number(row.total_amount || row.amount || 0);
+      map[name].count += 1;
+    });
+    return Object.values(map);
+  }, [data]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -847,6 +861,35 @@ export function LabourBillRegisterReport() {
           )}
         </FilterRow>
       </Box>
+      {contractorSummary.length > 0 && (
+        <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: "#f8fafc" }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, color: "#0f5132", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Contractor Summary (Total Value by Contractor Name)</span>
+            <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 400 }}>
+              Total Contractors: {contractorSummary.length}
+            </Typography>
+          </Typography>
+          <Grid container spacing={2}>
+            {contractorSummary.map((c) => (
+              <Grid key={c.contractor_name} size={{ xs: 12, sm: 6, md: 4 }}>
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "#ffffff", borderLeft: "4px solid #0f5132", borderRadius: 1.5 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1e293b" }}>
+                    {c.contractor_name}
+                  </Typography>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {c.count} {c.count === 1 ? "bill" : "bills"} | Qty: {formatQty(c.total_qty)}
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                      ₹{formatAmount(c.total_amount)}
+                    </Typography>
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+      )}
       {data.length > 0 && (
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <PrintTable
@@ -870,7 +913,7 @@ export function LabourBillRegisterReport() {
 export function TrialBalanceReport() {
   const { activeFY } = useAuthStore();
   const [asOfDate, setAsOfDate] = useState(today);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   const { data = [] } = useQuery({
     queryKey: ["report-trial", activeFY, asOfDate, enabled],
@@ -1882,7 +1925,7 @@ export function StockSummaryReport() {
   const { activeFY } = useAuthStore();
   const [fromDate, setFromDate] = useState(firstOfMonth);
   const [toDate, setToDate] = useState(today);
-  const [enabled, setEnabled] = useState(false);
+  const [enabled, setEnabled] = useState(true);
 
   const { data = [] } = useQuery<any>({
     queryKey: ["report-stock-summary", activeFY, fromDate, toDate, enabled],
