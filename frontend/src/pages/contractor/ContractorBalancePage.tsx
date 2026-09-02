@@ -221,7 +221,7 @@ export default function ContractorBalancePage() {
                       <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Doc / Entry No.</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Transaction Type</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Product / Process</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Process</TableCell>
                       <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: "#b02a37" }} align="right">Debit (Dr)</TableCell>
                       <TableCell sx={{ fontWeight: 700, color: "#0a7a50" }} align="right">Credit (Cr)</TableCell>
@@ -268,10 +268,9 @@ export default function ContractorBalancePage() {
                             />
                           </TableCell>
                           <TableCell>
-                            {tx.product_name || tx.process_name
-                              ? `${tx.product_name || ""} ${tx.process_name ? `(${tx.process_name})` : ""}`
-                              : "-"}
+                            {tx.process_name || "-"}
                           </TableCell>
+
                           <TableCell align="right">{tx.quantity || "-"}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 600, color: isDr ? "#b02a37" : "text.secondary" }}>
                             {isDr ? `₹${formatAmount(tx.amount)}` : "-"}
