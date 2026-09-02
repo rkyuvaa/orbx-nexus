@@ -207,11 +207,20 @@ async def contractor_transactions(
 ):
     """
     Returns all transaction records (Job Work Register, Job Work Payment, Advance Payment, Advance Receipt)
-    for a given contractor to show in the transaction summary modal.
+    along with Opening Balance for a given contractor to show in the transaction summary modal.
     """
     schema = s(fy)
+
+    # 0. Fetch Ledger Opening Balance
+    l_res = await db.execute(
+        text("SELECT opening_balance, balance_type FROM master.ledgers WHERE id = :lid"),
+        {"lid": ledger_id}
+    )
+    l_row = l_res.first()
+    ob_val = float(l_row.opening_balance or 0) if l_row else 0.0
+    ob_type = l_row.balance_type if l_row else "Cr"
     
-    # 1. Fetch Job Work entries (Register, Payment)
+    # 1. Fetch Job Work entries (Register = Cr, Payment = Dr)
     jw_query = f"""
     SELECT 
         j.id,
@@ -229,12 +238,15 @@ async def contractor_transactions(
     WHERE j.ledger_id = :lid
     """
     jw_res = await db.execute(text(jw_query), {"lid": ledger_id})
-    jw_rows = [dict(r) for r in jw_res.mappings().all()]
-    for r in jw_rows:
-        r["amount"] = float(r["amount"] or 0)
-        r["type"] = "Job Work"
+    jw_rows = []
+    for r in jw_res.mappings().all():
+        row = dict(r)
+        row["amount"] = float(row["amount"] or 0)
+        # Register increases liability (Cr), Payment reduces liability (Dr)
+        row["dr_cr"] = "Cr" if row["category"] == "Register" else "Dr"
+        jw_rows.append(row)
 
-    # 2. Fetch Advance Payment entries (Payment, Receipt)
+    # 2. Fetch Advance Payment entries (Payment = Dr, Receipt = Cr)
     adv_query = f"""
     SELECT 
         a.id,
@@ -245,7 +257,8 @@ async def contractor_transactions(
         0 AS quantity,
         NULL AS product_name,
         NULL AS process_name,
-        a.narration
+        a.narration,
+        CASE WHEN a.payment_type = 'Payment' THEN 'Dr' ELSE 'Cr' END AS dr_cr
     FROM {schema}.advance_payments a
     WHERE a.ledger_id = :lid AND a.ledger_type = 'Contractor'
     """
@@ -253,11 +266,47 @@ async def contractor_transactions(
     adv_rows = [dict(r) for r in adv_res.mappings().all()]
     for r in adv_rows:
         r["amount"] = float(r["amount"] or 0)
-        r["type"] = "Advance"
 
-    # Combine and sort by date DESC
-    combined = sorted(jw_rows + adv_rows, key=lambda x: (x["date"], x["id"]), reverse=True)
-    return combined
+    # Combine chronologically ASC to compute running closing balance
+    all_txs = sorted(jw_rows + adv_rows, key=lambda x: (x["date"], x["id"]))
+
+    # Signed initial balance: Cr is positive liability, Dr is negative
+    running_bal = ob_val if ob_type == "Cr" else -ob_val
+
+    tx_list = []
+    # Add Opening Balance entry if ob_val > 0
+    if ob_val > 0:
+        tx_list.append({
+            "id": 0,
+            "date": "-",
+            "doc_no": "OPENING",
+            "category": "Opening Balance",
+            "amount": ob_val,
+            "dr_cr": ob_type,
+            "quantity": 0,
+            "product_name": None,
+            "process_name": None,
+            "running_balance": running_bal,
+            "bal_type": "Cr" if running_bal >= 0 else "Dr"
+        })
+
+    for tx in all_txs:
+        # Cr increases liability (+), Dr decreases liability (-)
+        if tx["dr_cr"] == "Cr":
+            running_bal += tx["amount"]
+        else:
+            running_bal -= tx["amount"]
+
+        tx_list.append({
+            **tx,
+            "running_balance": running_bal,
+            "bal_type": "Cr" if running_bal >= 0 else "Dr"
+        })
+
+    # Return DESC for display
+    tx_list.reverse()
+    return tx_list
+
 
 
 

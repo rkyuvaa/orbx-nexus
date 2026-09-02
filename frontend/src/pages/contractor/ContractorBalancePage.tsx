@@ -190,10 +190,10 @@ export default function ContractorBalancePage() {
       <Dialog
         open={!!selectedContractor}
         onClose={() => setSelectedContractor(null)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>
           Transaction Summary - {selectedContractor?.contractor_name}
         </DialogTitle>
         <DialogContent dividers>
@@ -216,41 +216,79 @@ export default function ContractorBalancePage() {
                     <TableCell sx={{ fontWeight: 700 }}>Product / Process</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Amount</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Dr / Cr</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Closing Balance</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {transactions.map((tx: any, idx: number) => (
-                    <TableRow key={idx} hover>
-                      <TableCell>{tx.date}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{tx.doc_no}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={tx.category}
-                          size="small"
-                          color={
-                            tx.category === "Register"
-                              ? "primary"
-                              : tx.category === "Payment"
-                              ? "success"
-                              : tx.category === "Advance Payment"
-                              ? "warning"
-                              : "info"
-                          }
-                          variant="outlined"
-                          sx={{ fontWeight: 600, fontSize: 11 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {tx.product_name || tx.process_name
-                          ? `${tx.product_name || ""} ${tx.process_name ? `(${tx.process_name})` : ""}`
-                          : "-"}
-                      </TableCell>
-                      <TableCell align="right">{tx.quantity || "-"}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        ₹{formatAmount(tx.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {transactions.map((tx: any, idx: number) => {
+                    const runBal = Math.abs(tx.running_balance ?? 0);
+                    const isPayable = (tx.running_balance ?? 0) >= 0;
+                    const balColor = isPayable ? "#0a7a50" : "#b02a37";
+                    const balBgColor = isPayable ? "rgba(22,196,127,0.12)" : "rgba(220,53,69,0.10)";
+
+                    return (
+                      <TableRow key={idx} hover>
+                        <TableCell>{tx.date}</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>{tx.doc_no}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={tx.category}
+                            size="small"
+                            color={
+                              tx.category === "Register"
+                                ? "primary"
+                                : tx.category === "Payment" || tx.category === "Job Work Payment"
+                                ? "success"
+                                : tx.category === "Advance Payment"
+                                ? "warning"
+                                : "info"
+                            }
+                            variant="outlined"
+                            sx={{ fontWeight: 600, fontSize: 11 }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {tx.product_name || tx.process_name
+                            ? `${tx.product_name || ""} ${tx.process_name ? `(${tx.process_name})` : ""}`
+                            : "-"}
+                        </TableCell>
+                        <TableCell align="right">{tx.quantity || "-"}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                          ₹{formatAmount(tx.amount)}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Chip
+                            label={tx.dr_cr || "Cr"}
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              bgcolor: tx.dr_cr === "Cr" ? "rgba(22,196,127,0.15)" : "rgba(220,53,69,0.12)",
+                              color: tx.dr_cr === "Cr" ? "#0a7a50" : "#b02a37",
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, color: balColor }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, justifyContent: "flex-end" }}>
+                            <span>₹{formatAmount(runBal)}</span>
+                            <Chip
+                              label={isPayable ? "Cr (Payable)" : "Dr (Receivable)"}
+                              size="small"
+                              sx={{
+                                height: 18,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                bgcolor: balBgColor,
+                                color: balColor,
+                              }}
+                            />
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Paper>
@@ -265,5 +303,6 @@ export default function ContractorBalancePage() {
     </Box>
   );
 }
+
 
 
