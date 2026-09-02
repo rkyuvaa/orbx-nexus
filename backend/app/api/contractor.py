@@ -226,6 +226,7 @@ async def contractor_transactions(
         j.id,
         j.entry_no AS doc_no,
         j.entry_date::text AS date,
+        j.created_at::text AS created_at,
         j.entry_type AS category,
         j.amount,
         j.quantity,
@@ -242,6 +243,7 @@ async def contractor_transactions(
     for r in jw_res.mappings().all():
         row = dict(r)
         row["amount"] = float(row["amount"] or 0)
+        row["created_at"] = row["created_at"] or ""
         # Register increases liability (Cr), Payment reduces liability (Dr)
         row["dr_cr"] = "Cr" if row["category"] == "Register" else "Dr"
         jw_rows.append(row)
@@ -252,6 +254,7 @@ async def contractor_transactions(
         a.id,
         a.voucher_no AS doc_no,
         a.voucher_date::text AS date,
+        a.created_at::text AS created_at,
         CASE WHEN a.payment_type = 'Payment' THEN 'Advance Payment' ELSE 'Advance Receipt' END AS category,
         a.amount,
         0 AS quantity,
@@ -263,12 +266,16 @@ async def contractor_transactions(
     WHERE a.ledger_id = :lid AND a.ledger_type = 'Contractor'
     """
     adv_res = await db.execute(text(adv_query), {"lid": ledger_id})
-    adv_rows = [dict(r) for r in adv_res.mappings().all()]
-    for r in adv_rows:
-        r["amount"] = float(r["amount"] or 0)
+    adv_rows = []
+    for r in adv_res.mappings().all():
+        row = dict(r)
+        row["amount"] = float(row["amount"] or 0)
+        row["created_at"] = row["created_at"] or ""
+        adv_rows.append(row)
 
-    # Combine chronologically ASC to compute running closing balance
-    all_txs = sorted(jw_rows + adv_rows, key=lambda x: (x["date"], x["id"]))
+    # Combine chronologically ASC by date, created_at timestamp, and id
+    all_txs = sorted(jw_rows + adv_rows, key=lambda x: (x["date"], x["created_at"], x["id"]))
+
 
     # Signed initial balance: Cr is positive liability, Dr is negative
     running_bal = ob_val if ob_type == "Cr" else -ob_val
