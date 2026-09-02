@@ -130,6 +130,77 @@ async def list_pending_registers(
     return [dict(r) for r in result.mappings().all()]
 
 
+@router.get("/balance-summary")
+async def contractor_balance_summary(
+    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
+):
+    """
+    Returns one consolidated row per active Contractor ledger with:
+      - opening_balance / balance_type
+      - advance_paid   (Advance Payment entries)
+      - advance_received (Advance Receipt entries)
+      - job_work_amount  (Job Work Register entries)
+      - job_work_paid    (Job Work Payment entries)
+      - current_balance  = signed_ob + job_work_amount - job_work_paid
+                           - advance_paid + advance_received
+
+    Signed opening balance:
+      Cr -> positive (company owes the contractor - payable)
+      Dr -> negative (contractor owes the company - receivable)
+    """
+    schema = s(fy)
+    query = f"""
+    SELECT
+        l.id                            AS ledger_id,
+        l.name                          AS contractor_name,
+        l.opening_balance,
+        l.balance_type,
+        COALESCE(jw.job_work_amount, 0) AS job_work_amount,
+        COALESCE(jw.job_work_paid,   0) AS job_work_paid,
+        COALESCE(ap.advance_paid,    0) AS advance_paid,
+        COALESCE(ap.advance_received,0) AS advance_received,
+        (
+            CASE
+                WHEN l.balance_type = 'Cr' THEN  l.opening_balance
+                ELSE                             -l.opening_balance
+            END
+            + COALESCE(jw.job_work_amount, 0)
+            - COALESCE(jw.job_work_paid,   0)
+            - COALESCE(ap.advance_paid,    0)
+            + COALESCE(ap.advance_received,0)
+        )                               AS current_balance
+    FROM master.ledgers l
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(CASE WHEN entry_type = 'Register' THEN amount ELSE 0 END) AS job_work_amount,
+            SUM(CASE WHEN entry_type = 'Payment'  THEN amount ELSE 0 END) AS job_work_paid
+        FROM {schema}.job_work_entries
+        WHERE ledger_id = l.id
+    ) jw ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(CASE WHEN payment_type = 'Payment' THEN amount ELSE 0 END) AS advance_paid,
+            SUM(CASE WHEN payment_type = 'Receipt' THEN amount ELSE 0 END) AS advance_received
+        FROM {schema}.advance_payments
+        WHERE ledger_id = l.id AND ledger_type = 'Contractor'
+    ) ap ON TRUE
+    WHERE l.ledger_type = 'Contractor' AND l.is_active = TRUE
+    ORDER BY l.name
+    """
+    result = await db.execute(text(query))
+    rows = []
+    for r in result.mappings().all():
+        row = dict(r)
+        row["opening_balance"]  = float(row["opening_balance"]  or 0)
+        row["job_work_amount"]  = float(row["job_work_amount"]  or 0)
+        row["job_work_paid"]    = float(row["job_work_paid"]    or 0)
+        row["advance_paid"]     = float(row["advance_paid"]     or 0)
+        row["advance_received"] = float(row["advance_received"] or 0)
+        row["current_balance"]  = float(row["current_balance"]  or 0)
+        rows.append(row)
+    return rows
+
+
 def parse_date_iso(date_str: str | None) -> str:
     if not date_str:
         return str(date.today())

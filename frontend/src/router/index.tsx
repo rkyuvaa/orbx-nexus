@@ -31,6 +31,7 @@ import CompanyPage from "../pages/master/CompanyPage";
 import StockTransferPage from "../pages/inventory/StockTransferPage";
 import DocumentNumberingPage from "../pages/settings/DocumentNumberingPage";
 import ContractorPages from "../pages/contractor/ContractorPages";
+import ContractorBalancePage from "../pages/contractor/ContractorBalancePage";
 import StockItemsPage from "../pages/inventory/StockItemsPage";
 import { InventoryInwardPage, InventoryOutwardPage } from "../pages/inventory/InventoryMovementPages";
 import LocationsPage from "../pages/inventory/LocationsPage";
@@ -98,6 +99,7 @@ export const router = createBrowserRouter([
       { path: "payroll/salary", element: <SalaryVoucherPage /> },
 
       // Contractor Voucher
+      { path: "contractor/balance", element: <ContractorBalancePage /> },
       { path: "contractor/rates", element: <ContractorPages type="rates" /> },
       { path: "contractor/job-work", element: <ContractorPages type="job-work" /> },
       { path: "contractor/advance-payment", element: <ContractorAdvancePaymentPage /> },

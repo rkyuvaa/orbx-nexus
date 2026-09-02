@@ -90,6 +90,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Contractor Work",
     icon: <Construction sx={{ fontSize: 20 }} />,
     children: [
+      { label: "Contractor Balance", path: "/contractor/balance", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Job Work Register", path: "/contractor/job-work", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Advance Payment", path: "/contractor/advance-payment", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Advance Receipt", path: "/contractor/advance-receipt", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
