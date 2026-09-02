@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box, Chip } from "@mui/material";
 import { ColDef } from "../../components/tables/OrbxGrid";
@@ -16,6 +17,18 @@ export default function ContractorBalancePage() {
       (await api.get(`/contractor/balance-summary?fy=${activeFY}`)).data,
   });
 
+  const filteredData = useMemo(() => {
+    return data.filter((row: any) => {
+      const ob = Math.abs(row.opening_balance || 0);
+      const advPaid = Math.abs(row.advance_paid || 0);
+      const advRec = Math.abs(row.advance_received || 0);
+      const jwAmt = Math.abs(row.job_work_amount || 0);
+      const jwPaid = Math.abs(row.job_work_paid || 0);
+      const curBal = Math.abs(row.current_balance || 0);
+      return ob !== 0 || advPaid !== 0 || advRec !== 0 || jwAmt !== 0 || jwPaid !== 0 || curBal !== 0;
+    });
+  }, [data]);
+
   const colDefs: ColDef[] = [
     {
       field: "contractor_name",
@@ -33,7 +46,7 @@ export default function ContractorBalancePage() {
         const bt: string = p.data?.balance_type ?? "Cr";
         return (
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, justifyContent: "flex-end", height: "100%" }}>
-            <span>&#8377;{formatAmount(Math.abs(val))}</span>
+            <span>₹{formatAmount(Math.abs(val))}</span>
             <Chip
               label={bt}
               size="small"
@@ -54,28 +67,28 @@ export default function ContractorBalancePage() {
       headerName: "Advance Paid",
       width: 140,
       type: "numericColumn",
-      valueFormatter: (p) => `\u20b9${formatAmount(p.value)}`,
+      valueFormatter: (p) => `₹${formatAmount(p.value)}`,
     },
     {
       field: "advance_received",
       headerName: "Advance Received",
       width: 155,
       type: "numericColumn",
-      valueFormatter: (p) => `\u20b9${formatAmount(p.value)}`,
+      valueFormatter: (p) => `₹${formatAmount(p.value)}`,
     },
     {
       field: "job_work_amount",
       headerName: "Job Work",
       width: 130,
       type: "numericColumn",
-      valueFormatter: (p) => `\u20b9${formatAmount(p.value)}`,
+      valueFormatter: (p) => `₹${formatAmount(p.value)}`,
     },
     {
       field: "job_work_paid",
       headerName: "Job Work Paid",
       width: 140,
       type: "numericColumn",
-      valueFormatter: (p) => `\u20b9${formatAmount(p.value)}`,
+      valueFormatter: (p) => `₹${formatAmount(p.value)}`,
     },
     {
       field: "current_balance",
@@ -101,7 +114,7 @@ export default function ContractorBalancePage() {
               color,
             }}
           >
-            <span>\u20b9{formatAmount(Math.abs(val))}</span>
+            <span>₹{formatAmount(Math.abs(val))}</span>
             <Chip
               label={label}
               size="small"
@@ -126,7 +139,7 @@ export default function ContractorBalancePage() {
         breadcrumbs={[{ label: "Contractor Voucher" }, { label: "Contractor Balance" }]}
       />
       <OrbxGrid
-        rowData={data}
+        rowData={filteredData}
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
@@ -134,3 +147,4 @@ export default function ContractorBalancePage() {
     </Box>
   );
 }
+
