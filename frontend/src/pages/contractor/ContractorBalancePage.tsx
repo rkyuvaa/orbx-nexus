@@ -215,8 +215,8 @@ export default function ContractorBalancePage() {
                     <TableCell sx={{ fontWeight: 700 }}>Transaction Type</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Product / Process</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Amount</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Dr / Cr</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: "#b02a37" }} align="right">Debit (Dr)</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: "#0a7a50" }} align="right">Credit (Cr)</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Closing Balance</TableCell>
                   </TableRow>
                 </TableHead>
@@ -226,6 +226,7 @@ export default function ContractorBalancePage() {
                     const isPayable = (tx.running_balance ?? 0) >= 0;
                     const balColor = isPayable ? "#0a7a50" : "#b02a37";
                     const balBgColor = isPayable ? "rgba(22,196,127,0.12)" : "rgba(220,53,69,0.10)";
+                    const isDr = tx.dr_cr === "Dr";
 
                     return (
                       <TableRow key={idx} hover>
@@ -254,21 +255,11 @@ export default function ContractorBalancePage() {
                             : "-"}
                         </TableCell>
                         <TableCell align="right">{tx.quantity || "-"}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          ₹{formatAmount(tx.amount)}
+                        <TableCell align="right" sx={{ fontWeight: 600, color: isDr ? "#b02a37" : "text.secondary" }}>
+                          {isDr ? `₹${formatAmount(tx.amount)}` : "-"}
                         </TableCell>
-                        <TableCell align="right">
-                          <Chip
-                            label={tx.dr_cr || "Cr"}
-                            size="small"
-                            sx={{
-                              height: 18,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              bgcolor: tx.dr_cr === "Cr" ? "rgba(22,196,127,0.15)" : "rgba(220,53,69,0.12)",
-                              color: tx.dr_cr === "Cr" ? "#0a7a50" : "#b02a37",
-                            }}
-                          />
+                        <TableCell align="right" sx={{ fontWeight: 600, color: !isDr ? "#0a7a50" : "text.secondary" }}>
+                          {!isDr ? `₹${formatAmount(tx.amount)}` : "-"}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700, color: balColor }}>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, justifyContent: "flex-end" }}>
@@ -290,6 +281,7 @@ export default function ContractorBalancePage() {
                     );
                   })}
                 </TableBody>
+
               </Table>
             </Paper>
           )}
