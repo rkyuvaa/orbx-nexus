@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Chip,
@@ -16,7 +16,11 @@ import {
   TableCell,
   TableBody,
   Typography,
-  Paper
+  Paper,
+  TextField,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import { ColDef } from "../../components/tables/OrbxGrid";
@@ -26,9 +30,16 @@ import api from "../../api/client";
 import { useAuthStore } from "../../store";
 import { formatAmount } from "../../utils/format";
 
+const todayStr = () => new Date().toISOString().split("T")[0];
+
+
 export default function ContractorBalancePage() {
   const { activeFY } = useAuthStore();
+  const qc = useQueryClient();
   const [selectedContractor, setSelectedContractor] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payNarration, setPayNarration] = useState("");
+  const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({ open: false, msg: "", severity: "success" });
 
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ["contractor-balance-summary", activeFY],
@@ -44,6 +55,42 @@ export default function ContractorBalancePage() {
     },
     enabled: !!selectedContractor?.ledger_id,
   });
+
+  const payMutation = useMutation({
+    mutationFn: async (payload: { amount: number; narration: string }) => {
+      return (await api.post(`/contractor/?fy=${activeFY}`, {
+        entry_no: "",
+        entry_date: todayStr(),
+        ledger_id: selectedContractor.ledger_id,
+        entry_type: "Payment",
+        amount: payload.amount,
+        quantity: 0,
+        rate: 0,
+        narration: payload.narration || "Payment from Balance Summary",
+        register_ids: [],
+      })).data;
+    },
+    onSuccess: () => {
+      setSnack({ open: true, msg: "Payment recorded successfully as Job Work Payment", severity: "success" });
+      setPayAmount("");
+      setPayNarration("");
+      // Refresh both transaction list and balance summary
+      qc.invalidateQueries({ queryKey: ["contractor-transactions", selectedContractor?.ledger_id, activeFY] });
+      qc.invalidateQueries({ queryKey: ["contractor-balance-summary", activeFY] });
+    },
+    onError: (err: any) => {
+      setSnack({ open: true, msg: err?.response?.data?.detail || "Payment failed. Please try again.", severity: "error" });
+    },
+  });
+
+  const handlePay = () => {
+    const amt = parseFloat(payAmount);
+    if (!amt || amt <= 0) {
+      setSnack({ open: true, msg: "Please enter a valid amount greater than 0", severity: "error" });
+      return;
+    }
+    payMutation.mutate({ amount: amt, narration: payNarration });
+  };
 
   const filteredData = useMemo(() => {
     return data.filter((row: any) => {
@@ -334,19 +381,86 @@ export default function ContractorBalancePage() {
                 </Box>
               </Paper>
 
+              {/* Quick Payment Section */}
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  mt: 2,
+                  borderRadius: "10px",
+                  borderColor: "rgba(22,196,127,0.3)",
+                  bgcolor: "rgba(22,196,127,0.04)",
+                }}
+              >
+                <Typography variant="overline" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: 1, display: "block", mb: 1.5 }}>
+                  Record Payment
+                </Typography>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <TextField
+                    label="Pay Amount *"
+                    type="number"
+                    size="small"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    placeholder="0.00"
+                    sx={{ width: 180 }}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <TextField
+                    label="Narration"
+                    size="small"
+                    value={payNarration}
+                    onChange={(e) => setPayNarration(e.target.value)}
+                    placeholder="e.g. Payment for August work"
+                    sx={{ flex: 1, minWidth: 220 }}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={handlePay}
+                    disabled={payMutation.isPending || !payAmount}
+                    sx={{
+                      bgcolor: "#16a34a",
+                      color: "#fff",
+                      fontWeight: 700,
+                      px: 3,
+                      height: 40,
+                      "&:hover": { bgcolor: "#15803d" },
+                      "&:disabled": { bgcolor: "rgba(22,163,74,0.4)", color: "#fff" },
+                    }}
+                  >
+                    {payMutation.isPending ? (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <CircularProgress size={16} sx={{ color: "#fff" }} />
+                        Saving...
+                      </Box>
+                    ) : (
+                      "Pay"
+                    )}
+                  </Button>
+                </Box>
+              </Paper>
+
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSelectedContractor(null)} variant="outlined">
+          <Button onClick={() => { setSelectedContractor(null); setPayAmount(""); setPayNarration(""); }} variant="outlined">
             Close
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={() => setSnack((s) => ({ ...s, open: false }))} severity={snack.severity} variant="filled">
+          {snack.msg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
-
-
-
-
