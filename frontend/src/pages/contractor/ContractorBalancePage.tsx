@@ -318,7 +318,7 @@ export default function ContractorBalancePage() {
                   borderColor: finalBorderColor,
                   borderRadius: "10px",
                   display: "flex",
-                  justify: "space-between",
+                  justifyContent: "space-between",
                   alignItems: "center",
                 }}
               >
@@ -333,16 +333,8 @@ export default function ContractorBalancePage() {
                     </span>
                   </Typography>
                 </Box>
-                <Chip
-                  label={isFinalPayable ? "Company owes Contractor" : "Contractor owes Company"}
-                  sx={{
-                    fontWeight: 700,
-                    bgcolor: finalColor,
-                    color: "#fff",
-                    px: 1,
-                  }}
-                />
               </Paper>
+
             </>
           )}
         </DialogContent>
