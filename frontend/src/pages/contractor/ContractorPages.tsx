@@ -52,7 +52,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     queryKey: ["contractor", type, activeFY],
     queryFn: async () => {
       if (type === "rates") return (await api.get("/products/rates/all")).data;
-      return (await api.get(`/contractor/?fy=${activeFY}`)).data;
+      const entryType = type === "payment" ? "Payment" : "Register";
+      return (await api.get(`/contractor/?fy=${activeFY}&entry_type=${entryType}`)).data;
     },
   });
 
