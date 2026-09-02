@@ -201,6 +201,66 @@ async def contractor_balance_summary(
     return rows
 
 
+@router.get("/transactions")
+async def contractor_transactions(
+    current_user: CurrentUser, db: DBSession, ledger_id: int = Query(...), fy: str = Query(default="2026_2027")
+):
+    """
+    Returns all transaction records (Job Work Register, Job Work Payment, Advance Payment, Advance Receipt)
+    for a given contractor to show in the transaction summary modal.
+    """
+    schema = s(fy)
+    
+    # 1. Fetch Job Work entries (Register, Payment)
+    jw_query = f"""
+    SELECT 
+        j.id,
+        j.entry_no AS doc_no,
+        j.entry_date::text AS date,
+        j.entry_type AS category,
+        j.amount,
+        j.quantity,
+        p.name AS product_name,
+        pr.name AS process_name,
+        j.narration
+    FROM {schema}.job_work_entries j
+    LEFT JOIN master.products p ON p.id = j.product_id
+    LEFT JOIN master.processes pr ON pr.id = j.process_id
+    WHERE j.ledger_id = :lid
+    """
+    jw_res = await db.execute(text(jw_query), {"lid": ledger_id})
+    jw_rows = [dict(r) for r in jw_res.mappings().all()]
+    for r in jw_rows:
+        r["amount"] = float(r["amount"] or 0)
+        r["type"] = "Job Work"
+
+    # 2. Fetch Advance Payment entries (Payment, Receipt)
+    adv_query = f"""
+    SELECT 
+        a.id,
+        a.voucher_no AS doc_no,
+        a.voucher_date::text AS date,
+        CASE WHEN a.payment_type = 'Payment' THEN 'Advance Payment' ELSE 'Advance Receipt' END AS category,
+        a.amount,
+        0 AS quantity,
+        NULL AS product_name,
+        NULL AS process_name,
+        a.narration
+    FROM {schema}.advance_payments a
+    WHERE a.ledger_id = :lid AND a.ledger_type = 'Contractor'
+    """
+    adv_res = await db.execute(text(adv_query), {"lid": ledger_id})
+    adv_rows = [dict(r) for r in adv_res.mappings().all()]
+    for r in adv_rows:
+        r["amount"] = float(r["amount"] or 0)
+        r["type"] = "Advance"
+
+    # Combine and sort by date DESC
+    combined = sorted(jw_rows + adv_rows, key=lambda x: (x["date"], x["id"]), reverse=True)
+    return combined
+
+
+
 def parse_date_iso(date_str: str | None) -> str:
     if not date_str:
         return str(date.today())

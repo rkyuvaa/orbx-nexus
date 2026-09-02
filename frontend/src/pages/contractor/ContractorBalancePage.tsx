@@ -1,6 +1,24 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Box, Chip } from "@mui/material";
+import {
+  Box,
+  Chip,
+  IconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Typography,
+  Paper
+} from "@mui/material";
+import Visibility from "@mui/icons-material/Visibility";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import PageHeader from "../../components/PageHeader";
@@ -10,11 +28,21 @@ import { formatAmount } from "../../utils/format";
 
 export default function ContractorBalancePage() {
   const { activeFY } = useAuthStore();
+  const [selectedContractor, setSelectedContractor] = useState<any>(null);
 
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ["contractor-balance-summary", activeFY],
     queryFn: async () =>
       (await api.get(`/contractor/balance-summary?fy=${activeFY}`)).data,
+  });
+
+  const { data: transactions = [], isLoading: isTxLoading } = useQuery({
+    queryKey: ["contractor-transactions", selectedContractor?.ledger_id, activeFY],
+    queryFn: async () => {
+      if (!selectedContractor?.ledger_id) return [];
+      return (await api.get(`/contractor/transactions?ledger_id=${selectedContractor.ledger_id}&fy=${activeFY}`)).data;
+    },
+    enabled: !!selectedContractor?.ledger_id,
   });
 
   const filteredData = useMemo(() => {
@@ -97,7 +125,6 @@ export default function ContractorBalancePage() {
       type: "numericColumn",
       cellRenderer: (p: any) => {
         const val: number = p.value ?? 0;
-        // Positive = payable (company owes contractor); Negative = receivable (contractor owes company)
         const isPayable = val >= 0;
         const label = isPayable ? "Payable" : "Receivable";
         const color = isPayable ? "#0a7a50" : "#b02a37";
@@ -130,6 +157,21 @@ export default function ContractorBalancePage() {
         );
       },
     },
+    {
+      headerName: "Actions",
+      width: 80,
+      sortable: false,
+      filter: false,
+      cellRenderer: (p: any) => (
+        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+          <Tooltip title="View Transactions Summary">
+            <IconButton size="small" onClick={() => setSelectedContractor(p.data)}>
+              <Visibility fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
+    },
   ];
 
   return (
@@ -144,7 +186,84 @@ export default function ContractorBalancePage() {
         loading={isLoading}
         onRefresh={refetch}
       />
+
+      <Dialog
+        open={!!selectedContractor}
+        onClose={() => setSelectedContractor(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Transaction Summary - {selectedContractor?.contractor_name}
+        </DialogTitle>
+        <DialogContent dividers>
+          {isTxLoading ? (
+            <Typography variant="body2" sx={{ py: 3, textAlign: "center" }}>
+              Loading transaction history...
+            </Typography>
+          ) : transactions.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
+              No transactions found for this contractor.
+            </Typography>
+          ) : (
+            <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Doc / Entry No.</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Transaction Type</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Product / Process</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Amount</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {transactions.map((tx: any, idx: number) => (
+                    <TableRow key={idx} hover>
+                      <TableCell>{tx.date}</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{tx.doc_no}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={tx.category}
+                          size="small"
+                          color={
+                            tx.category === "Register"
+                              ? "primary"
+                              : tx.category === "Payment"
+                              ? "success"
+                              : tx.category === "Advance Payment"
+                              ? "warning"
+                              : "info"
+                          }
+                          variant="outlined"
+                          sx={{ fontWeight: 600, fontSize: 11 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {tx.product_name || tx.process_name
+                          ? `${tx.product_name || ""} ${tx.process_name ? `(${tx.process_name})` : ""}`
+                          : "-"}
+                      </TableCell>
+                      <TableCell align="right">{tx.quantity || "-"}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>
+                        ₹{formatAmount(tx.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedContractor(null)} variant="outlined">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
+
 
