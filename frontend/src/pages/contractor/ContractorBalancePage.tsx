@@ -174,6 +174,13 @@ export default function ContractorBalancePage() {
     },
   ];
 
+  const finalTx = transactions.length > 0 ? transactions[transactions.length - 1] : null;
+  const finalBalVal = finalTx ? Math.abs(finalTx.running_balance ?? 0) : Math.abs(selectedContractor?.current_balance ?? 0);
+  const isFinalPayable = finalTx ? (finalTx.running_balance ?? 0) >= 0 : (selectedContractor?.current_balance ?? 0) >= 0;
+  const finalColor = isFinalPayable ? "#0a7a50" : "#b02a37";
+  const finalBgColor = isFinalPayable ? "rgba(22,196,127,0.12)" : "rgba(220,53,69,0.10)";
+  const finalBorderColor = isFinalPayable ? "rgba(22,196,127,0.3)" : "rgba(220,53,69,0.3)";
+
   return (
     <Box>
       <PageHeader
@@ -206,84 +213,137 @@ export default function ContractorBalancePage() {
               No transactions found for this contractor.
             </Typography>
           ) : (
-            <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
-              <Table size="small">
-                <TableHead sx={{ bgcolor: "#f4f9f6" }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Doc / Entry No.</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Transaction Type</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Product / Process</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: "#b02a37" }} align="right">Debit (Dr)</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: "#0a7a50" }} align="right">Credit (Cr)</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Closing Balance</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {transactions.map((tx: any, idx: number) => {
-                    const runBal = Math.abs(tx.running_balance ?? 0);
-                    const isPayable = (tx.running_balance ?? 0) >= 0;
-                    const balColor = isPayable ? "#0a7a50" : "#b02a37";
-                    const balBgColor = isPayable ? "rgba(22,196,127,0.12)" : "rgba(220,53,69,0.10)";
-                    const isDr = tx.dr_cr === "Dr";
+            <>
+              <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden", mb: 3 }}>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Doc / Entry No.</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Transaction Type</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Product / Process</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">Qty</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: "#b02a37" }} align="right">Debit (Dr)</TableCell>
+                      <TableCell sx={{ fontWeight: 700, color: "#0a7a50" }} align="right">Credit (Cr)</TableCell>
+                      <TableCell
+                        sx={{
+                          fontWeight: 700,
+                          bgcolor: "rgba(2,48,32,0.06)",
+                          borderLeft: "2px solid #023020",
+                          color: "#023020",
+                        }}
+                        align="right"
+                      >
+                        Closing Balance
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {transactions.map((tx: any, idx: number) => {
+                      const runBal = Math.abs(tx.running_balance ?? 0);
+                      const isPayable = (tx.running_balance ?? 0) >= 0;
+                      const balColor = isPayable ? "#0a7a50" : "#b02a37";
+                      const balBgColor = isPayable ? "rgba(22,196,127,0.15)" : "rgba(220,53,69,0.12)";
+                      const isDr = tx.dr_cr === "Dr";
 
-                    return (
-                      <TableRow key={idx} hover>
-                        <TableCell>{tx.date}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{tx.doc_no}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={tx.category}
-                            size="small"
-                            color={
-                              tx.category === "Register"
-                                ? "primary"
-                                : tx.category === "Payment" || tx.category === "Job Work Payment"
-                                ? "success"
-                                : tx.category === "Advance Payment"
-                                ? "warning"
-                                : "info"
-                            }
-                            variant="outlined"
-                            sx={{ fontWeight: 600, fontSize: 11 }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {tx.product_name || tx.process_name
-                            ? `${tx.product_name || ""} ${tx.process_name ? `(${tx.process_name})` : ""}`
-                            : "-"}
-                        </TableCell>
-                        <TableCell align="right">{tx.quantity || "-"}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600, color: isDr ? "#b02a37" : "text.secondary" }}>
-                          {isDr ? `₹${formatAmount(tx.amount)}` : "-"}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600, color: !isDr ? "#0a7a50" : "text.secondary" }}>
-                          {!isDr ? `₹${formatAmount(tx.amount)}` : "-"}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 700, color: balColor }}>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, justifyContent: "flex-end" }}>
-                            <span>₹{formatAmount(runBal)}</span>
+                      return (
+                        <TableRow key={idx} hover>
+                          <TableCell>{tx.date}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{tx.doc_no}</TableCell>
+                          <TableCell>
                             <Chip
-                              label={isPayable ? "Cr (Payable)" : "Dr (Receivable)"}
+                              label={tx.category}
                               size="small"
-                              sx={{
-                                height: 18,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                bgcolor: balBgColor,
-                                color: balColor,
-                              }}
+                              color={
+                                tx.category === "Register"
+                                  ? "primary"
+                                  : tx.category === "Payment" || tx.category === "Job Work Payment"
+                                  ? "success"
+                                  : tx.category === "Advance Payment"
+                                  ? "warning"
+                                  : "info"
+                              }
+                              variant="outlined"
+                              sx={{ fontWeight: 600, fontSize: 11 }}
                             />
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
+                          </TableCell>
+                          <TableCell>
+                            {tx.product_name || tx.process_name
+                              ? `${tx.product_name || ""} ${tx.process_name ? `(${tx.process_name})` : ""}`
+                              : "-"}
+                          </TableCell>
+                          <TableCell align="right">{tx.quantity || "-"}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600, color: isDr ? "#b02a37" : "text.secondary" }}>
+                            {isDr ? `₹${formatAmount(tx.amount)}` : "-"}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600, color: !isDr ? "#0a7a50" : "text.secondary" }}>
+                            {!isDr ? `₹${formatAmount(tx.amount)}` : "-"}
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{
+                              fontWeight: 700,
+                              bgcolor: "rgba(2,48,32,0.03)",
+                              borderLeft: "2px solid rgba(2,48,32,0.2)",
+                            }}
+                          >
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, justifyContent: "flex-end" }}>
+                              <span style={{ fontWeight: 800, color: balColor }}>₹{formatAmount(runBal)}</span>
+                              <Chip
+                                label={isPayable ? "Cr (Payable)" : "Dr (Receivable)"}
+                                size="small"
+                                sx={{
+                                  height: 18,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  bgcolor: balBgColor,
+                                  color: balColor,
+                                }}
+                              />
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Paper>
 
-              </Table>
-            </Paper>
+              {/* Dedicated Final Closing Balance Summary Card */}
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  bgcolor: finalBgColor,
+                  borderColor: finalBorderColor,
+                  borderRadius: "10px",
+                  display: "flex",
+                  justify: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Box>
+                  <Typography variant="overline" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: 1 }}>
+                    Final Closing Balance
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 800, color: finalColor }}>
+                    ₹{formatAmount(finalBalVal)}{" "}
+                    <span style={{ fontSize: "1rem", fontWeight: 700 }}>
+                      {isFinalPayable ? "Cr — Payable" : "Dr — Receivable"}
+                    </span>
+                  </Typography>
+                </Box>
+                <Chip
+                  label={isFinalPayable ? "Company owes Contractor" : "Contractor owes Company"}
+                  sx={{
+                    fontWeight: 700,
+                    bgcolor: finalColor,
+                    color: "#fff",
+                    px: 1,
+                  }}
+                />
+              </Paper>
+            </>
           )}
         </DialogContent>
         <DialogActions>
@@ -295,6 +355,7 @@ export default function ContractorBalancePage() {
     </Box>
   );
 }
+
 
 
 

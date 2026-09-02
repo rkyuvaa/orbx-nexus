@@ -303,9 +303,9 @@ async def contractor_transactions(
             "bal_type": "Cr" if running_bal >= 0 else "Dr"
         })
 
-    # Return DESC for display
-    tx_list.reverse()
+    # Return ASC (chronological progression from initial to final balance)
     return tx_list
+
 
 
 
