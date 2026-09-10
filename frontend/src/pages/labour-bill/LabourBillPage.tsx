@@ -32,6 +32,8 @@ import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
 
+const AutocompleteAny = Autocomplete as any;
+
 
 
 export default function LabourBillPage() {
@@ -1686,21 +1688,21 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
               {/* Multi Inward Number Selection with Checkboxes */}
               {selectedLedger && (
                 <Grid size={{ xs: 12 }}>
-                  {(Autocomplete as any)({
-                    multiple: true,
-                    disableCloseOnSelect: true,
-                    size: "small",
-                    fullWidth: true,
-                    value: selectedInwards,
-                    onChange: (_: any, val: any) => handleInwardSelectionChange(val || []),
-                    options: eligibleInwardNumbers,
-                    getOptionLabel: (option: any) => {
+                  <AutocompleteAny
+                    multiple
+                    disableCloseOnSelect
+                    size="small"
+                    fullWidth
+                    value={selectedInwards}
+                    onChange={(_: any, val: any) => handleInwardSelectionChange(val || [])}
+                    options={eligibleInwardNumbers}
+                    getOptionLabel={(option: any) => {
                       if (!option) return "";
                       const sNo = option.serial_no || option.ref_no;
                       return `${option.inward_no}${sNo ? ` (${sNo})` : ""}`;
-                    },
-                    isOptionEqualToValue: (option: any, val: any) => option.id === val.id,
-                    renderOption: (props: any, option: any, { selected }: any) => {
+                    }}
+                    isOptionEqualToValue={(option: any, val: any) => option.id === val.id}
+                    renderOption={(props: any, option: any, { selected }: any) => {
                       const sNo = option.serial_no || option.ref_no;
                       const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
                       return (
@@ -1727,8 +1729,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                           />
                         </Box>
                       );
-                    },
-                    renderTags: (value: any[], getTagProps: any) =>
+                    }}
+                    renderTags={(value: any[], getTagProps: any) =>
                       value.map((option: any, index: number) => {
                         const { key, ...tagProps } = getTagProps({ index });
                         const sNo = option.serial_no || option.ref_no;
@@ -1748,17 +1750,18 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                             }}
                           />
                         );
-                      }),
-                    noOptionsText: "No pending outward-completed inwards for this supplier",
-                    renderInput: (params: any) => (
+                      })
+                    }
+                    noOptionsText="No pending outward-completed inwards for this supplier"
+                    renderInput={(params: any) => (
                       <TextField
                         {...params}
                         label="Select Inward Number(s) *"
                         placeholder="Tick checkboxes to select inward numbers..."
                         helperText={`${eligibleInwardNumbers.length} eligible inward record(s) available — tick checkboxes to select multiple`}
                       />
-                    )
-                  })}
+                    )}
+                  />
                 </Grid>
               )}
 
