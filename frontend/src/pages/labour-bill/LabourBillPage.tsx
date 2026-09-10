@@ -1180,152 +1180,12 @@ interface LabourBillDialogProps {
   editing: any;
 }
 
-// Secondary Dialog: OutwardPicker
-interface OutwardPickerProps {
-  open: boolean;
-  onClose: () => void;
-  pendingOutwards: any[];
-  selectedOutwards: any[];
-  onSelect: (voucher: any) => void;
-  inwardMap: Record<number, any>;
-}
 
-const getInwardDetails = (out: any, inwardMap: Record<number, any>) => {
-  const inNos: string[] = [];
-  const inSerials: string[] = [];
-
-  const addInward = (invId: number | string) => {
-    const inv = inwardMap[Number(invId)];
-    if (inv) {
-      if (inv.inward_no && !inNos.includes(inv.inward_no)) {
-        inNos.push(inv.inward_no);
-      }
-      const sNo = inv.serial_no || inv.ref_no;
-      if (sNo && !inSerials.includes(sNo)) {
-        inSerials.push(sNo);
-      }
-    }
-  };
-
-  if (out.inward_id) {
-    addInward(out.inward_id);
-  }
-  if (Array.isArray(out.inward_ids)) {
-    out.inward_ids.forEach((id: any) => addInward(id));
-  }
-  if (Array.isArray(out.items)) {
-    out.items.forEach((item: any) => {
-      if (item.inward_id) {
-        addInward(item.inward_id);
-      }
-      if (item.serial_no && !inSerials.includes(item.serial_no)) {
-        inSerials.push(item.serial_no);
-      }
-    });
-  }
-
-  if (inSerials.length === 0) {
-    if (out.serial_no) inSerials.push(out.serial_no);
-    else if (out.ref_no) inSerials.push(out.ref_no);
-  }
-
-  return {
-    inwardNo: inNos.length > 0 ? inNos.join(", ") : "-",
-    serialNo: inSerials.length > 0 ? inSerials.join(", ") : "-",
-  };
-};
-
-const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect, inwardMap }: OutwardPickerProps) {
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#023020", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Box>
-          Select Pending Outward Voucher
-          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.25 }}>
-            Click a row to add its items · highlighted rows already added
-          </Typography>
-        </Box>
-        <Button size="small" variant="contained"
-          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none" }}
-          onClick={onClose}>Done</Button>
-      </DialogTitle>
-      <DialogContent dividers sx={{ p: 0, overflowX: "auto" }}>
-        {pendingOutwards.length === 0 ? (
-          <Box sx={{ py: 6, textAlign: "center" }}>
-            <Typography color="text.secondary">No pending outward vouchers found for this supplier.</Typography>
-            <Button sx={{ mt: 2 }} variant="outlined" onClick={onClose}>Continue without selecting</Button>
-          </Box>
-        ) : (
-          <Table size="small" sx={{ minWidth: 800 }}>
-            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap", width: 140 }}>Outward No</TableCell>
-                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap", width: 120 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Inward No</TableCell>
-                <TableCell sx={{ fontWeight: 700, minWidth: 220 }}>Inward Serial No</TableCell>
-                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap", width: 130 }} align="right">Weight (kg)</TableCell>
-                <TableCell sx={{ width: 100, whiteSpace: "nowrap" }} align="center" />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {pendingOutwards.map((out: any) => {
-                const alreadySelected = selectedOutwards.some((s) => s.id === out.id);
-                const { inwardNo, serialNo } = getInwardDetails(out, inwardMap);
-                return (
-                  <TableRow key={out.id} hover
-                    sx={{ cursor: alreadySelected ? "default" : "pointer", bgcolor: alreadySelected ? "#e8f5e9" : "inherit" }}
-                    onClick={() => !alreadySelected && onSelect(out)}>
-                    <TableCell sx={{ whiteSpace: "nowrap" }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>{out.outward_no}</Typography>
-                    </TableCell>
-                    <TableCell sx={{ whiteSpace: "nowrap" }}>
-                      <Typography variant="body2">
-                        {out.outward_date ? new Date(out.outward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ wordBreak: "break-word" }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {inwardNo}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ wordBreak: "break-word" }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {serialNo}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {formatWeight(out.total_weight || out.weight || 0)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
-                      {alreadySelected ? (
-                        <Typography variant="caption" sx={{ color: "#023020", fontWeight: 700 }}>✓ Added</Typography>
-                      ) : (
-                        <Button size="small" variant="contained"
-                          sx={{ textTransform: "none", fontWeight: 600, bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" } }}
-                          onClick={(e) => { e.stopPropagation(); onSelect(out); }}>
-                          Add
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-});
 
 function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
-  const [selectedInward, setSelectedInward] = useState<any | null>(null);
-  const [selectedOutwards, setSelectedOutwards] = useState<any[]>([]);
-  const [outwardPickerOpen, setOutwardPickerOpen] = useState(false);
+  const [selectedInwards, setSelectedInwards] = useState<any[]>([]);
   const [lineItems, setLineItems] = useState<any[]>([
     { product_id: "", process_id: "", quantity: "", rate: "", amount: "" }
   ]);
@@ -1410,13 +1270,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return outwardVouchers.filter((v: any) => v.ledger_id === Number(selectedLedger));
   }, [outwardVouchers, selectedLedger]);
 
-  const pendingSupplierOutwardVouchers = useMemo(() => {
-    return supplierOutwardVouchers.filter((v: any) => !billedOutwardIdsSet.has(v.id));
-  }, [supplierOutwardVouchers, billedOutwardIdsSet]);
-
   const eligibleInwardNumbers = useMemo(() => {
     if (!selectedLedger) return [];
     const supplierInwards = inwardVouchers.filter((inv: any) => inv.ledger_id === Number(selectedLedger));
+    const selectedInwardIds = new Set(selectedInwards.map((i: any) => i.id));
 
     const isLinked = (out: any, inwId: number) => {
       if (Number(out.inward_id) === inwId) return true;
@@ -1453,8 +1310,19 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           hasUnbilledOutward: unbilledOutwardCount > 0,
         };
       })
-      .filter((inv: any) => inv.isOutwardCompleted && inv.hasUnbilledOutward);
-  }, [inwardVouchers, selectedLedger, supplierOutwardVouchers, billedOutwardIdsSet, inwardMap]);
+      .filter((inv: any) => inv.isOutwardCompleted && inv.hasUnbilledOutward && !selectedInwardIds.has(inv.id));
+  }, [inwardVouchers, selectedLedger, supplierOutwardVouchers, billedOutwardIdsSet, inwardMap, selectedInwards]);
+
+  // Derive selectedOutwards from selectedInwards
+  const selectedOutwards = useMemo(() => {
+    const all: any[] = [];
+    selectedInwards.forEach((inw: any) => {
+      (inw.unbilledOutwards || []).forEach((out: any) => {
+        if (!all.find((o) => o.id === out.id)) all.push(out);
+      });
+    });
+    return all;
+  }, [selectedInwards]);
 
   const [enableRoundOff, setEnableRoundOff] = useState(true);
 
@@ -1472,40 +1340,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return Number(shotItem?.quantity) || 0;
   };
 
-  const handleFreightChange = (field: string, value: any) => {
-    setFreightItem((prev: any) => {
-      const updated = { ...prev, [field]: value };
-      if (field === "process_id") {
-        updated.quantity = getShotBlastingWeight().toFixed(3);
-        updated.rate = getCompanyRate(undefined, value);
-      }
-      if (field === "process_id" || field === "quantity" || field === "rate") {
-        updated.amount = Number((Number(updated.quantity || 0) * Number(updated.rate || 0)).toFixed(2));
-      }
-      return updated;
-    });
-  };
-
-  const handleToggleFreight = () => {
-    if (freightOpen) {
-      setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
-    }
-    setFreightOpen((prev) => !prev);
-  };
-
-  const handleInwardChange = (inw: any) => {
-    setSelectedInward(inw);
-    if (!inw) {
-      setSelectedOutwards([]);
-      setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
-      return;
-    }
-
-    const unbilledOuts = inw.unbilledOutwards || [];
-    setSelectedOutwards(unbilledOuts);
-
+  const computeLineItemsFromOutwards = (outs: any[]) => {
     const newItems: any[] = [];
-    unbilledOuts.forEach((out: any) => {
+    outs.forEach((out: any) => {
       let rawItems: any[] = [];
       if (out.items && Array.isArray(out.items) && out.items.length > 0) {
         rawItems = out.items;
@@ -1515,7 +1352,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
         } catch (e) {}
       }
-
       if (rawItems.length === 0) {
         rawItems = [{
           product_id: out.product_id || "",
@@ -1523,12 +1359,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           quantity: out.total_weight || out.weight || 0,
         }];
       }
-
       rawItems.forEach((item: any) => {
         const productId = item.product_id || out.product_id || "";
         const processIdStr = String(item.process_id || out.process_id || "");
-        const totalWeightVal = Number(item.total_weight || item.weight || (Number(item.quantity) * Number(item.weight)) || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
-
+        const totalWeightVal = Number(item.total_weight || item.weight || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
         const proc = processes.find((p: any) => p.id === Number(processIdStr));
         if (proc && proc.process_ids) {
           const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
@@ -1536,16 +1370,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             const childProc = processes.find((p: any) => p.id === Number(cid));
             if (childProc) {
               const rateVal = getCompanyRate(productId, childProc.id);
-              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
-                setValue("gst_percent", childProc.gst_percent);
-              }
-              newItems.push({
-                product_id: productId,
-                process_id: childProc.id,
-                quantity: totalWeightVal,
-                rate: rateVal,
-                amount: Number((totalWeightVal * rateVal).toFixed(2))
-              });
+              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) setValue("gst_percent", childProc.gst_percent);
+              newItems.push({ product_id: productId, process_id: childProc.id, quantity: totalWeightVal, rate: rateVal, amount: Number((totalWeightVal * rateVal).toFixed(2)) });
             }
           });
         } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
@@ -1554,30 +1380,14 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             const childProc = processes.find((p: any) => p.process_code === part);
             if (childProc) {
               const rateVal = getCompanyRate(productId, childProc.id);
-              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
-                setValue("gst_percent", childProc.gst_percent);
-              }
-              newItems.push({
-                product_id: productId,
-                process_id: childProc.id,
-                quantity: totalWeightVal,
-                rate: rateVal,
-                amount: Number((totalWeightVal * rateVal).toFixed(2))
-              });
+              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) setValue("gst_percent", childProc.gst_percent);
+              newItems.push({ product_id: productId, process_id: childProc.id, quantity: totalWeightVal, rate: rateVal, amount: Number((totalWeightVal * rateVal).toFixed(2)) });
             }
           });
         } else {
           const rateVal = getCompanyRate(productId, processIdStr);
-          if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
-            setValue("gst_percent", proc.gst_percent);
-          }
-          newItems.push({
-            product_id: productId,
-            process_id: processIdStr ? Number(processIdStr) : "",
-            quantity: totalWeightVal,
-            rate: rateVal,
-            amount: Number((totalWeightVal * rateVal).toFixed(2))
-          });
+          if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) setValue("gst_percent", proc.gst_percent);
+          newItems.push({ product_id: productId, process_id: processIdStr ? Number(processIdStr) : "", quantity: totalWeightVal, rate: rateVal, amount: Number((totalWeightVal * rateVal).toFixed(2)) });
         }
       });
     });
@@ -1585,8 +1395,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     const merged: Record<number | string, any> = {};
     newItems.forEach((item) => {
       if (!item.process_id) {
-        const tempKey = `temp_${Math.random()}`;
-        merged[tempKey] = { ...item };
+        merged[`temp_${Math.random()}`] = { ...item };
       } else {
         const key = Number(item.process_id);
         if (merged[key]) {
@@ -1598,131 +1407,33 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         }
       }
     });
+    const result = Object.values(merged);
+    return result.length > 0 ? result : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }];
+  };
 
-    const mergedList = Object.values(merged);
-    setLineItems(mergedList.length > 0 ? mergedList : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+  const handleInwardAdd = (inw: any) => {
+    if (!inw) return;
+    setSelectedInwards((prev) => {
+      const updated = [...prev, inw];
+      const allOuts = updated.flatMap((i: any) => i.unbilledOutwards || []);
+      setLineItems(computeLineItemsFromOutwards(allOuts));
+      return updated;
+    });
+  };
+
+  const handleInwardRemove = (inwId: number) => {
+    setSelectedInwards((prev) => {
+      const updated = prev.filter((i: any) => i.id !== inwId);
+      const allOuts = updated.flatMap((i: any) => i.unbilledOutwards || []);
+      setLineItems(computeLineItemsFromOutwards(allOuts));
+      return updated;
+    });
   };
 
   const handleSupplierChange = (val: any) => {
     setValue("ledger_id", val ? val.id : "");
-    setSelectedInward(null);
-    setSelectedOutwards([]);
+    setSelectedInwards([]);
     setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
-  };
-
-  const handleOutwardSelect = (out: any) => {
-    setSelectedOutwards((prev) => [...prev, out]);
-
-    let rawItems: any[] = [];
-    if (out.items && Array.isArray(out.items) && out.items.length > 0) {
-      rawItems = out.items;
-    } else if (typeof out.items === "string") {
-      try {
-        const parsed = JSON.parse(out.items);
-        if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
-      } catch (e) {}
-    }
-
-    if (rawItems.length === 0) {
-      rawItems = [{
-        product_id: out.product_id || "",
-        process_id: out.process_id || "",
-        quantity: out.total_weight || out.weight || 0,
-      }];
-    }
-
-    const newItems: any[] = [];
-    rawItems.forEach((item: any) => {
-      const productId = item.product_id || out.product_id || "";
-      const processIdStr = String(item.process_id || out.process_id || "");
-      const totalWeightVal = Number(item.total_weight || item.weight || (Number(item.quantity) * Number(item.weight)) || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
-
-      const proc = processes.find((p: any) => p.id === Number(processIdStr));
-      if (proc && proc.process_ids) {
-        const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
-        childIds.forEach((cid: string) => {
-          const childProc = processes.find((p: any) => p.id === Number(cid));
-          if (childProc) {
-            const rateVal = getCompanyRate(productId, childProc.id);
-            if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
-              setValue("gst_percent", childProc.gst_percent);
-            }
-            newItems.push({
-              product_id: productId,
-              process_id: childProc.id,
-              quantity: totalWeightVal,
-              rate: rateVal,
-              amount: Number((totalWeightVal * rateVal).toFixed(2))
-            });
-          }
-        });
-      } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
-        const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
-        parts.forEach((part: any) => {
-          const childProc = processes.find((p: any) => p.process_code === part);
-          if (childProc) {
-            const rateVal = getCompanyRate(productId, childProc.id);
-            if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
-              setValue("gst_percent", childProc.gst_percent);
-            }
-            newItems.push({
-              product_id: productId,
-              process_id: childProc.id,
-              quantity: totalWeightVal,
-              rate: rateVal,
-              amount: Number((totalWeightVal * rateVal).toFixed(2))
-            });
-          }
-        });
-      } else {
-        const rateVal = getCompanyRate(productId, processIdStr);
-        if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
-          setValue("gst_percent", proc.gst_percent);
-        }
-        newItems.push({
-          product_id: productId,
-          process_id: processIdStr ? Number(processIdStr) : "",
-          quantity: totalWeightVal,
-          rate: rateVal,
-          amount: Number((totalWeightVal * rateVal).toFixed(2))
-        });
-      }
-    });
-
-    const mergeProcessItems = (items: any[]) => {
-      const merged: Record<number | string, any> = {};
-      items.forEach((item) => {
-        if (!item.process_id) {
-          const tempKey = `temp_${Math.random()}`;
-          merged[tempKey] = { ...item };
-        } else {
-          const key = Number(item.process_id);
-          if (merged[key]) {
-            const sumQty = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
-            merged[key].quantity = sumQty.toFixed(3);
-            merged[key].amount = Number((sumQty * Number(merged[key].rate || 0)).toFixed(2));
-          } else {
-            merged[key] = { ...item, quantity: Number(item.quantity || 0).toFixed(3) };
-          }
-        }
-      });
-      return Object.values(merged);
-    };
-
-    setLineItems((prev) => {
-      let combined = [];
-      if (prev.length === 1 && !prev[0].product_id && !prev[0].process_id && !prev[0].quantity) {
-        combined = newItems;
-      } else {
-        combined = [...prev, ...newItems];
-      }
-      return mergeProcessItems(combined);
-    });
-  };
-
-  const handleRemoveSelectedOutward = (id: number) => {
-    const updated = selectedOutwards.filter((o) => o.id !== id);
-    setSelectedOutwards(updated);
   };
 
   const handleAddLineItem = () => {
@@ -1760,6 +1471,27 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     );
   };
 
+  const handleFreightChange = (field: string, value: any) => {
+    setFreightItem((prev: any) => {
+      const updated = { ...prev, [field]: value };
+      if (field === "process_id") {
+        updated.quantity = getShotBlastingWeight().toFixed(3);
+        updated.rate = getCompanyRate(undefined, value);
+      }
+      if (field === "process_id" || field === "quantity" || field === "rate") {
+        updated.amount = Number((Number(updated.quantity || 0) * Number(updated.rate || 0)).toFixed(2));
+      }
+      return updated;
+    });
+  };
+
+  const handleToggleFreight = () => {
+    if (freightOpen) {
+      setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
+    }
+    setFreightOpen((prev) => !prev);
+  };
+
   const gstPercent = Number(watch("gst_percent")) || 0;
   const cgstPercent = Number((gstPercent / 2).toFixed(2));
   const sgstPercent = Number((gstPercent / 2).toFixed(2));
@@ -1780,37 +1512,20 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   useEffect(() => {
     if (open) {
       if (editing) {
-        // Restore selected outwards
         const outwardIdList = (() => {
           const ids = editing.outward_ids || [];
           if (!Array.isArray(ids)) return [];
-          return ids.map((id: number) => {
-            const out = outwardVouchers.find((v: any) => v.id === id);
-            return {
-              id,
-              outward_no: out?.outward_no || `#${id}`,
-              outward_date: out?.outward_date || "",
-              ref_no: out?.ref_no || "",
-              process_id: out?.process_id || "",
-              quantity: out?.quantity || 0,
-              inward_id: out?.inward_id || null,
-              inward_ids: out?.inward_ids || null,
-              items: out?.items || null
-            };
-          });
+          return ids.map((id: number) => outwardVouchers.find((v: any) => v.id === id)).filter(Boolean);
         })();
-        setSelectedOutwards(outwardIdList);
 
-        if (outwardIdList.length > 0) {
-          const firstOutId = outwardIdList[0].id;
-          const fullOut = outwardVouchers.find((v: any) => v.id === firstOutId);
-          if (fullOut) {
-            const matchedInw = inwardVouchers.find((inv: any) => inv.id === fullOut.inward_id || inv.inward_no === fullOut.inward_no);
-            if (matchedInw) {
-              setSelectedInward(matchedInw);
-            }
-          }
-        }
+        const matchedInwardIds = new Set<number>();
+        if (editing.inward_id) matchedInwardIds.add(editing.inward_id);
+        outwardIdList.forEach((out: any) => {
+          if (out.inward_id) matchedInwardIds.add(out.inward_id);
+          if (Array.isArray(out.inward_ids)) out.inward_ids.forEach((id: number) => matchedInwardIds.add(id));
+        });
+        const matchedInws = inwardVouchers.filter((inv: any) => matchedInwardIds.has(inv.id));
+        setSelectedInwards(matchedInws);
 
         let parsedItems: any[] = [];
         if (typeof editing.items === "string") {
@@ -1853,8 +1568,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
         reset(editing);
       } else {
-        setSelectedInward(null);
-        setSelectedOutwards([]);
+        setSelectedInwards([]);
         setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
         setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
         setFreightOpen(false);
@@ -1881,7 +1595,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         bill_no: formData.bill_no,
         bill_date: formData.bill_date,
         ledger_id: Number(formData.ledger_id),
-        inward_id: selectedInward ? selectedInward.id : (selectedOutwards.length > 0 ? selectedOutwards[0].inward_id : null),
+        inward_id: selectedInwards.length > 0 ? selectedInwards[0].id : null,
         product_id: lineItems[0]?.product_id ? Number(lineItems[0].product_id) : null,
         process_id: lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null,
         quantity: totalQty,
@@ -1983,15 +1697,17 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                 <TextField {...register("dispatch_through")} label="Dispatch Through" fullWidth size="small" placeholder="Transport details" />
               </Grid>
 
-              {/* Inward Number Selection on main form */}
+              {/* Multi Inward Number Selection */}
               {selectedLedger && (
                 <Grid size={{ xs: 12 }}>
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                  <Box sx={{ mb: 1 }}>
                     <LazyAutocomplete
                       size="small"
                       fullWidth
-                      value={selectedInward}
-                      onChange={(_, val) => handleInwardChange(val)}
+                      value={null}
+                      onChange={(_, val) => {
+                        if (val) handleInwardAdd(val);
+                      }}
                       options={eligibleInwardNumbers}
                       getOptionLabel={(option: any) => {
                         if (!option) return "";
@@ -2023,62 +1739,67 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label="Select Inward Number"
-                          placeholder="Search by Inward No or Serial No..."
-                          helperText={`${eligibleInwardNumbers.length} eligible inward record(s) — selecting auto-loads all linked outward goods`}
+                          label="Select Inward Number *"
+                          placeholder="Search and select inward numbers..."
+                          helperText={`${eligibleInwardNumbers.length} eligible inward record(s) available`}
                         />
                       )}
                     />
-                    {selectedInward && (
+                  </Box>
+
+                  {/* Selected Inward Pills */}
+                  {selectedInwards.length > 0 && (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                        Selected Inwards:
+                      </Typography>
+                      {selectedInwards.map((inw: any) => {
+                        const sNo = inw.serial_no || inw.ref_no;
+                        return (
+                          <Box
+                            key={inw.id}
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 0.75,
+                              bgcolor: "#e8f5e9",
+                              border: "1px solid #023020",
+                              borderRadius: "16px",
+                              px: 1.5,
+                              py: 0.5
+                            }}
+                          >
+                            <Box>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
+                                {inw.inward_no} {sNo ? `(${sNo})` : ""}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
+                                {inw.unbilledOutwardCount || 1} Outward(s) • {formatWeight(inw.unbilledWeight || 0)} kg
+                              </Typography>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              sx={{ p: 0.25, ml: 0.5, color: "#023020", "&:hover": { bgcolor: "#c8e6c9" } }}
+                              onClick={() => handleInwardRemove(inw.id)}
+                            >
+                              <Typography sx={{ fontSize: 12, lineHeight: 1, fontWeight: 700 }}>✕</Typography>
+                            </IconButton>
+                          </Box>
+                        );
+                      })}
                       <Button
                         size="small"
-                        variant="outlined"
+                        variant="text"
                         color="error"
-                        onClick={() => handleInwardChange(null)}
-                        sx={{ whiteSpace: "nowrap", textTransform: "none", height: 40, mt: 0.25 }}
+                        onClick={() => handleSupplierChange(ledgerMapObj[selectedLedger])}
+                        sx={{ textTransform: "none", fontSize: "0.75rem", ml: 0.5 }}
                       >
-                        Clear
+                        Clear All
                       </Button>
-                    )}
-                  </Box>
+                    </Box>
+                  )}
                 </Grid>
               )}
-
-              {/* Linked Outward Vouchers */}
-              <Grid size={{ xs: 12 }}>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Linked Outward Vouchers:</Typography>
-                  {selectedOutwards.map((out) => (
-                    <Box key={out.id} sx={{
-                      display: "inline-flex", alignItems: "center", gap: 0.5,
-                      bgcolor: "#e8f5e9", border: "1px solid #023020",
-                      borderRadius: "8px", px: 1.5, py: 0.5
-                    }}>
-                      <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
-                          {out.outward_no || `#${out.id}`}
-                        </Typography>
-                        {out.ref_no && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
-                            Ref: {out.ref_no}
-                          </Typography>
-                        )}
-                        <Typography variant="caption" sx={{ fontSize: "0.7rem", lineHeight: 1.4, display: "block", color: "text.primary" }}>
-                          Wt: {formatWeight(out.total_weight || out.weight || 0)} kg
-                        </Typography>
-                      </Box>
-                      <IconButton size="small" sx={{ p: 0, ml: 0.5, color: "#023020" }} onClick={() => handleRemoveSelectedOutward(out.id)}>
-                        <Typography sx={{ fontSize: 12, lineHeight: 1 }}>✕</Typography>
-                      </IconButton>
-                    </Box>
-                  ))}
-                  <Button size="small" variant="text" sx={{ textTransform: "none", fontWeight: 600, color: "#023020" }}
-                    disabled={!selectedLedger}
-                    onClick={() => setOutwardPickerOpen(true)}>
-                    + Add Outward Vouchers
-                  </Button>
-                </Box>
-              </Grid>
 
               {/* Line Items Table */}
               <Grid size={{ xs: 12 }}>
@@ -2295,15 +2016,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           </DialogActions>
         </form>
       </Dialog>
-
-      <OutwardPicker
-        open={outwardPickerOpen}
-        onClose={() => setOutwardPickerOpen(false)}
-        pendingOutwards={pendingSupplierOutwardVouchers}
-        selectedOutwards={selectedOutwards}
-        onSelect={handleOutwardSelect}
-        inwardMap={inwardMap}
-      />
     </>
   );
 }
