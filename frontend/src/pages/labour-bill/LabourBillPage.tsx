@@ -1323,6 +1323,7 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
 function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
+  const [selectedInward, setSelectedInward] = useState<any | null>(null);
   const [selectedOutwards, setSelectedOutwards] = useState<any[]>([]);
   const [outwardPickerOpen, setOutwardPickerOpen] = useState(false);
   const [lineItems, setLineItems] = useState<any[]>([
@@ -1331,6 +1332,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const [freightOpen, setFreightOpen] = useState(false);
   const [freightItem, setFreightItem] = useState<any>({ process_id: "", quantity: "", rate: "", amount: "" });
 
+  const { data: bills = [] } = useQuery<any[]>({
+    queryKey: ["labour-bills", activeFY],
+    queryFn: async () => (await api.get(`/labour-bills/?fy=${activeFY}`)).data,
+    enabled: open
+  });
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", "Account"],
     queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
@@ -1357,6 +1363,21 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return map;
   }, [inwardVouchers]);
 
+  const billedOutwardIdsSet = useMemo(() => {
+    const set = new Set<number>();
+    bills.forEach((b: any) => {
+      if (editing && b.id === editing.id) return;
+      const oids = Array.isArray(b.outward_ids)
+        ? b.outward_ids
+        : (typeof b.outward_ids === "string"
+          ? (() => { try { return JSON.parse(b.outward_ids); } catch { return []; } })()
+          : []);
+      (oids || []).forEach((id: number) => {
+        if (id) set.add(Number(id));
+      });
+    });
+    return set;
+  }, [bills, editing]);
 
   const ledgerMapObj = useMemo(() => {
     const map: Record<number | string, any> = {};
@@ -1389,11 +1410,51 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return outwardVouchers.filter((v: any) => v.ledger_id === Number(selectedLedger));
   }, [outwardVouchers, selectedLedger]);
 
-  const handleSupplierChange = (val: any) => {
-    setValue("ledger_id", val ? val.id : "");
-    setSelectedOutwards([]);
-    setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
-  };
+  const pendingSupplierOutwardVouchers = useMemo(() => {
+    return supplierOutwardVouchers.filter((v: any) => !billedOutwardIdsSet.has(v.id));
+  }, [supplierOutwardVouchers, billedOutwardIdsSet]);
+
+  const eligibleInwardNumbers = useMemo(() => {
+    if (!selectedLedger) return [];
+    const supplierInwards = inwardVouchers.filter((inv: any) => inv.ledger_id === Number(selectedLedger));
+
+    const isLinked = (out: any, inwId: number) => {
+      if (Number(out.inward_id) === inwId) return true;
+      if (Array.isArray(out.inward_ids) && out.inward_ids.map(Number).includes(inwId)) return true;
+      if (typeof out.inward_ids === "string") {
+        try {
+          const parsed = JSON.parse(out.inward_ids);
+          if (Array.isArray(parsed) && parsed.map(Number).includes(inwId)) return true;
+        } catch {}
+      }
+      if (Array.isArray(out.items) && out.items.some((i: any) => Number(i.inward_id) === inwId)) return true;
+      const inv = inwardMap[inwId];
+      if (inv) {
+        if (inv.inward_no && out.inward_no === inv.inward_no) return true;
+        if (inv.serial_no && (out.serial_no === inv.serial_no || out.ref_no === inv.serial_no)) return true;
+        if (inv.ref_no && (out.ref_no === inv.ref_no || out.serial_no === inv.ref_no)) return true;
+      }
+      return false;
+    };
+
+    return supplierInwards
+      .map((inv: any) => {
+        const linkedOutwards = supplierOutwardVouchers.filter((out: any) => isLinked(out, inv.id));
+        const unbilledOutwards = linkedOutwards.filter((out: any) => !billedOutwardIdsSet.has(out.id));
+        const unbilledOutwardCount = unbilledOutwards.length;
+        const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => sum + Number(o.total_weight || o.weight || 0), 0);
+        return {
+          ...inv,
+          linkedOutwards,
+          unbilledOutwards,
+          unbilledOutwardCount,
+          unbilledWeight,
+          isOutwardCompleted: linkedOutwards.length > 0,
+          hasUnbilledOutward: unbilledOutwardCount > 0,
+        };
+      })
+      .filter((inv: any) => inv.isOutwardCompleted && inv.hasUnbilledOutward);
+  }, [inwardVouchers, selectedLedger, supplierOutwardVouchers, billedOutwardIdsSet, inwardMap]);
 
   const [enableRoundOff, setEnableRoundOff] = useState(true);
 
@@ -1430,6 +1491,123 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
     }
     setFreightOpen((prev) => !prev);
+  };
+
+  const handleInwardChange = (inw: any) => {
+    setSelectedInward(inw);
+    if (!inw) {
+      setSelectedOutwards([]);
+      setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+      return;
+    }
+
+    const unbilledOuts = inw.unbilledOutwards || [];
+    setSelectedOutwards(unbilledOuts);
+
+    const newItems: any[] = [];
+    unbilledOuts.forEach((out: any) => {
+      let rawItems: any[] = [];
+      if (out.items && Array.isArray(out.items) && out.items.length > 0) {
+        rawItems = out.items;
+      } else if (typeof out.items === "string") {
+        try {
+          const parsed = JSON.parse(out.items);
+          if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
+        } catch (e) {}
+      }
+
+      if (rawItems.length === 0) {
+        rawItems = [{
+          product_id: out.product_id || "",
+          process_id: out.process_id || "",
+          quantity: out.total_weight || out.weight || 0,
+        }];
+      }
+
+      rawItems.forEach((item: any) => {
+        const productId = item.product_id || out.product_id || "";
+        const processIdStr = String(item.process_id || out.process_id || "");
+        const totalWeightVal = Number(item.total_weight || item.weight || (Number(item.quantity) * Number(item.weight)) || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
+
+        const proc = processes.find((p: any) => p.id === Number(processIdStr));
+        if (proc && proc.process_ids) {
+          const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
+          childIds.forEach((cid: string) => {
+            const childProc = processes.find((p: any) => p.id === Number(cid));
+            if (childProc) {
+              const rateVal = getCompanyRate(productId, childProc.id);
+              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
+                setValue("gst_percent", childProc.gst_percent);
+              }
+              newItems.push({
+                product_id: productId,
+                process_id: childProc.id,
+                quantity: totalWeightVal,
+                rate: rateVal,
+                amount: Number((totalWeightVal * rateVal).toFixed(2))
+              });
+            }
+          });
+        } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
+          const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          parts.forEach((part: any) => {
+            const childProc = processes.find((p: any) => p.process_code === part);
+            if (childProc) {
+              const rateVal = getCompanyRate(productId, childProc.id);
+              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
+                setValue("gst_percent", childProc.gst_percent);
+              }
+              newItems.push({
+                product_id: productId,
+                process_id: childProc.id,
+                quantity: totalWeightVal,
+                rate: rateVal,
+                amount: Number((totalWeightVal * rateVal).toFixed(2))
+              });
+            }
+          });
+        } else {
+          const rateVal = getCompanyRate(productId, processIdStr);
+          if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
+            setValue("gst_percent", proc.gst_percent);
+          }
+          newItems.push({
+            product_id: productId,
+            process_id: processIdStr ? Number(processIdStr) : "",
+            quantity: totalWeightVal,
+            rate: rateVal,
+            amount: Number((totalWeightVal * rateVal).toFixed(2))
+          });
+        }
+      });
+    });
+
+    const merged: Record<number | string, any> = {};
+    newItems.forEach((item) => {
+      if (!item.process_id) {
+        const tempKey = `temp_${Math.random()}`;
+        merged[tempKey] = { ...item };
+      } else {
+        const key = Number(item.process_id);
+        if (merged[key]) {
+          const sumQty = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
+          merged[key].quantity = sumQty.toFixed(3);
+          merged[key].amount = Number((sumQty * Number(merged[key].rate || 0)).toFixed(2));
+        } else {
+          merged[key] = { ...item, quantity: Number(item.quantity || 0).toFixed(3) };
+        }
+      }
+    });
+
+    const mergedList = Object.values(merged);
+    setLineItems(mergedList.length > 0 ? mergedList : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+  };
+
+  const handleSupplierChange = (val: any) => {
+    setValue("ledger_id", val ? val.id : "");
+    setSelectedInward(null);
+    setSelectedOutwards([]);
+    setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
   };
 
   const handleOutwardSelect = (out: any) => {
@@ -1615,11 +1793,24 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
               ref_no: out?.ref_no || "",
               process_id: out?.process_id || "",
               quantity: out?.quantity || 0,
+              inward_id: out?.inward_id || null,
+              inward_ids: out?.inward_ids || null,
               items: out?.items || null
             };
           });
         })();
         setSelectedOutwards(outwardIdList);
+
+        if (outwardIdList.length > 0) {
+          const firstOutId = outwardIdList[0].id;
+          const fullOut = outwardVouchers.find((v: any) => v.id === firstOutId);
+          if (fullOut) {
+            const matchedInw = inwardVouchers.find((inv: any) => inv.id === fullOut.inward_id || inv.inward_no === fullOut.inward_no);
+            if (matchedInw) {
+              setSelectedInward(matchedInw);
+            }
+          }
+        }
 
         let parsedItems: any[] = [];
         if (typeof editing.items === "string") {
@@ -1662,6 +1853,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
         reset(editing);
       } else {
+        setSelectedInward(null);
         setSelectedOutwards([]);
         setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
         setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
@@ -1681,7 +1873,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           .catch((e) => console.error(e));
       }
     }
-  }, [open, editing, reset, outwardVouchers, setValue]);
+  }, [open, editing, reset, outwardVouchers, inwardVouchers, setValue]);
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
@@ -1689,7 +1881,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         bill_no: formData.bill_no,
         bill_date: formData.bill_date,
         ledger_id: Number(formData.ledger_id),
-        inward_id: selectedOutwards.length > 0 ? selectedOutwards[0].inward_id : null,
+        inward_id: selectedInward ? selectedInward.id : (selectedOutwards.length > 0 ? selectedOutwards[0].inward_id : null),
         product_id: lineItems[0]?.product_id ? Number(lineItems[0].product_id) : null,
         process_id: lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null,
         quantity: totalQty,
@@ -1789,6 +1981,68 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
               </Grid>
               <Grid size={{ xs: 12, sm: 3 }}>
                 <TextField {...register("dispatch_through")} label="Dispatch Through" fullWidth size="small" placeholder="Transport details" />
+              </Grid>
+
+              {/* Inward Selection Section */}
+              <Grid size={{ xs: 12 }}>
+                <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                  <LazyAutocomplete
+                    size="small"
+                    fullWidth
+                    disabled={!selectedLedger}
+                    value={selectedInward}
+                    onChange={(_, val) => handleInwardChange(val)}
+                    options={eligibleInwardNumbers}
+                    getOptionLabel={(option: any) => {
+                      if (!option) return "";
+                      const sNo = option.serial_no || option.ref_no;
+                      return `${option.inward_no}${sNo ? ` (${sNo})` : ""}`;
+                    }}
+                    renderOption={(props, option: any) => {
+                      const sNo = option.serial_no || option.ref_no;
+                      const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
+                      return (
+                        <Box component="li" {...props} key={option.id} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, width: "100%" }}>
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
+                              {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                              Date: {dStr}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ textAlign: "right", ml: 2 }}>
+                            <Chip
+                              size="small"
+                              label={`${option.unbilledOutwardCount} Outward${option.unbilledOutwardCount > 1 ? "s" : ""} • ${formatWeight(option.unbilledWeight)} kg`}
+                              sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem" }}
+                            />
+                          </Box>
+                        </Box>
+                      );
+                    }}
+                    noOptionsText={!selectedLedger ? "Select a supplier first" : "No pending outward-completed inwards for this supplier"}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Select Inward Number *"
+                        placeholder="Search by Inward No or Serial No..."
+                        helperText={selectedLedger ? `${eligibleInwardNumbers.length} eligible inward record(s) available for billing` : "Select supplier first"}
+                      />
+                    )}
+                  />
+                  {selectedInward && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={() => handleInwardChange(null)}
+                      sx={{ whiteSpace: "nowrap", textTransform: "none", height: 40 }}
+                    >
+                      Clear Selection
+                    </Button>
+                  )}
+                </Box>
               </Grid>
 
               {/* Linked Outward Vouchers */}
@@ -2046,7 +2300,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       <OutwardPicker
         open={outwardPickerOpen}
         onClose={() => setOutwardPickerOpen(false)}
-        pendingOutwards={supplierOutwardVouchers}
+        pendingOutwards={pendingSupplierOutwardVouchers}
         selectedOutwards={selectedOutwards}
         onSelect={handleOutwardSelect}
         inwardMap={inwardMap}
