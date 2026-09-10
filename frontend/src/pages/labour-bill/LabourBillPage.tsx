@@ -1310,8 +1310,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           hasUnbilledOutward: unbilledOutwardCount > 0,
         };
       })
-      .filter((inv: any) => inv.isOutwardCompleted && inv.hasUnbilledOutward && !selectedInwardIds.has(inv.id));
-  }, [inwardVouchers, selectedLedger, supplierOutwardVouchers, billedOutwardIdsSet, inwardMap, selectedInwards]);
+      .filter((inv: any) => inv.isOutwardCompleted && inv.hasUnbilledOutward);
+  }, [inwardVouchers, selectedLedger, supplierOutwardVouchers, billedOutwardIdsSet, inwardMap]);
 
   // Derive selectedOutwards from selectedInwards
   const selectedOutwards = useMemo(() => {
@@ -1411,29 +1411,15 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return result.length > 0 ? result : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }];
   };
 
-  const handleInwardAdd = (inw: any) => {
-    if (!inw) return;
-    setSelectedInwards((prev) => {
-      const updated = [...prev, inw];
-      const allOuts = updated.flatMap((i: any) => i.unbilledOutwards || []);
-      setLineItems(computeLineItemsFromOutwards(allOuts));
-      return updated;
-    });
-  };
-
-  const handleInwardRemove = (inwId: number) => {
-    setSelectedInwards((prev) => {
-      const updated = prev.filter((i: any) => i.id !== inwId);
-      const allOuts = updated.flatMap((i: any) => i.unbilledOutwards || []);
-      setLineItems(computeLineItemsFromOutwards(allOuts));
-      return updated;
-    });
+  const handleInwardSelectionChange = (newSelected: any[]) => {
+    setSelectedInwards(newSelected);
+    const allOuts = newSelected.flatMap((i: any) => i.unbilledOutwards || []);
+    setLineItems(computeLineItemsFromOutwards(allOuts));
   };
 
   const handleSupplierChange = (val: any) => {
     setValue("ledger_id", val ? val.id : "");
-    setSelectedInwards([]);
-    setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+    handleInwardSelectionChange([]);
   };
 
   const handleAddLineItem = () => {
@@ -1697,28 +1683,34 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                 <TextField {...register("dispatch_through")} label="Dispatch Through" fullWidth size="small" placeholder="Transport details" />
               </Grid>
 
-              {/* Multi Inward Number Selection */}
+              {/* Multi Inward Number Selection with Checkboxes */}
               {selectedLedger && (
                 <Grid size={{ xs: 12 }}>
-                  <Box sx={{ mb: 1 }}>
-                    <LazyAutocomplete
-                      size="small"
-                      fullWidth
-                      value={null}
-                      onChange={(_, val) => {
-                        if (val) handleInwardAdd(val);
-                      }}
-                      options={eligibleInwardNumbers}
-                      getOptionLabel={(option: any) => {
-                        if (!option) return "";
-                        const sNo = option.serial_no || option.ref_no;
-                        return `${option.inward_no}${sNo ? ` (${sNo})` : ""}`;
-                      }}
-                      renderOption={(props, option: any) => {
-                        const sNo = option.serial_no || option.ref_no;
-                        const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
-                        return (
-                          <Box component="li" {...props} key={option.id} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, width: "100%" }}>
+                  {(Autocomplete as any)({
+                    multiple: true,
+                    disableCloseOnSelect: true,
+                    size: "small",
+                    fullWidth: true,
+                    value: selectedInwards,
+                    onChange: (_: any, val: any) => handleInwardSelectionChange(val || []),
+                    options: eligibleInwardNumbers,
+                    getOptionLabel: (option: any) => {
+                      if (!option) return "";
+                      const sNo = option.serial_no || option.ref_no;
+                      return `${option.inward_no}${sNo ? ` (${sNo})` : ""}`;
+                    },
+                    isOptionEqualToValue: (option: any, val: any) => option.id === val.id,
+                    renderOption: (props: any, option: any, { selected }: any) => {
+                      const sNo = option.serial_no || option.ref_no;
+                      const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
+                      return (
+                        <Box component="li" {...props} key={option.id} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, width: "100%" }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Checkbox
+                              size="small"
+                              checked={selected}
+                              sx={{ p: 0.5, color: "#023020", "&.Mui-checked": { color: "#023020" } }}
+                            />
                             <Box>
                               <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
                                 {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
@@ -1727,77 +1719,46 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                                 {dStr} · {option.unbilledOutwardCount} outward voucher{option.unbilledOutwardCount > 1 ? "s" : ""} · {formatWeight(option.unbilledWeight)} kg unbilled
                               </Typography>
                             </Box>
-                            <Chip
-                              size="small"
-                              label={`${formatWeight(option.unbilledWeight)} kg`}
-                              sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem", ml: 2 }}
-                            />
                           </Box>
-                        );
-                      }}
-                      noOptionsText="No pending outward-completed inwards for this supplier"
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Select Inward Number *"
-                          placeholder="Search and select inward numbers..."
-                          helperText={`${eligibleInwardNumbers.length} eligible inward record(s) available`}
-                        />
-                      )}
-                    />
-                  </Box>
-
-                  {/* Selected Inward Pills */}
-                  {selectedInwards.length > 0 && (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mt: 1 }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                        Selected Inwards:
-                      </Typography>
-                      {selectedInwards.map((inw: any) => {
-                        const sNo = inw.serial_no || inw.ref_no;
+                          <Chip
+                            size="small"
+                            label={`${formatWeight(option.unbilledWeight)} kg`}
+                            sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem", ml: 2 }}
+                          />
+                        </Box>
+                      );
+                    },
+                    renderTags: (value: any[], getTagProps: any) =>
+                      value.map((option: any, index: number) => {
+                        const { key, ...tagProps } = getTagProps({ index });
+                        const sNo = option.serial_no || option.ref_no;
                         return (
-                          <Box
-                            key={inw.id}
+                          <Chip
+                            key={option.id}
+                            label={`Inward: ${option.inward_no}${sNo ? ` (${sNo})` : ""} • ${formatWeight(option.unbilledWeight || 0)} kg`}
+                            size="small"
+                            {...tagProps}
                             sx={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 0.75,
                               bgcolor: "#e8f5e9",
+                              color: "#023020",
+                              fontWeight: 700,
                               border: "1px solid #023020",
                               borderRadius: "16px",
-                              px: 1.5,
-                              py: 0.5
+                              m: "2px !important"
                             }}
-                          >
-                            <Box>
-                              <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", display: "block", lineHeight: 1.2 }}>
-                                {inw.inward_no} {sNo ? `(${sNo})` : ""}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.65rem", lineHeight: 1.2, display: "block" }}>
-                                {inw.unbilledOutwardCount || 1} Outward(s) • {formatWeight(inw.unbilledWeight || 0)} kg
-                              </Typography>
-                            </Box>
-                            <IconButton
-                              size="small"
-                              sx={{ p: 0.25, ml: 0.5, color: "#023020", "&:hover": { bgcolor: "#c8e6c9" } }}
-                              onClick={() => handleInwardRemove(inw.id)}
-                            >
-                              <Typography sx={{ fontSize: 12, lineHeight: 1, fontWeight: 700 }}>✕</Typography>
-                            </IconButton>
-                          </Box>
+                          />
                         );
-                      })}
-                      <Button
-                        size="small"
-                        variant="text"
-                        color="error"
-                        onClick={() => handleSupplierChange(ledgerMapObj[selectedLedger])}
-                        sx={{ textTransform: "none", fontSize: "0.75rem", ml: 0.5 }}
-                      >
-                        Clear All
-                      </Button>
-                    </Box>
-                  )}
+                      }),
+                    noOptionsText: "No pending outward-completed inwards for this supplier",
+                    renderInput: (params: any) => (
+                      <TextField
+                        {...params}
+                        label="Select Inward Number(s) *"
+                        placeholder="Tick checkboxes to select inward numbers..."
+                        helperText={`${eligibleInwardNumbers.length} eligible inward record(s) available — tick checkboxes to select multiple`}
+                      />
+                    )
+                  })}
                 </Grid>
               )}
 
