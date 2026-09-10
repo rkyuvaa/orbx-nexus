@@ -1188,6 +1188,9 @@ interface OutwardPickerProps {
   selectedOutwards: any[];
   onSelect: (voucher: any) => void;
   inwardMap: Record<number, any>;
+  eligibleInwardNumbers: any[];
+  selectedInward: any | null;
+  onInwardChange: (inw: any | null) => void;
 }
 
 const getInwardDetails = (out: any, inwardMap: Record<number, any>) => {
@@ -1235,7 +1238,26 @@ const getInwardDetails = (out: any, inwardMap: Record<number, any>) => {
   };
 };
 
-const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect, inwardMap }: OutwardPickerProps) {
+const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwards, selectedOutwards, onSelect, inwardMap, eligibleInwardNumbers, selectedInward, onInwardChange }: OutwardPickerProps) {
+  const displayedOutwards = useMemo(() => {
+    if (!selectedInward) return pendingOutwards;
+    return pendingOutwards.filter((out: any) => {
+      if (Number(out.inward_id) === Number(selectedInward.id)) return true;
+      if (Array.isArray(out.inward_ids) && out.inward_ids.map(Number).includes(Number(selectedInward.id))) return true;
+      if (typeof out.inward_ids === "string") {
+        try {
+          const parsed = JSON.parse(out.inward_ids);
+          if (Array.isArray(parsed) && parsed.map(Number).includes(Number(selectedInward.id))) return true;
+        } catch {}
+      }
+      if (Array.isArray(out.items) && out.items.some((i: any) => Number(i.inward_id) === Number(selectedInward.id))) return true;
+      const { inwardNo, serialNo } = getInwardDetails(out, inwardMap);
+      if (inwardNo !== "-" && inwardNo.includes(selectedInward.inward_no)) return true;
+      if (selectedInward.serial_no && serialNo !== "-" && serialNo.includes(selectedInward.serial_no)) return true;
+      return false;
+    });
+  }, [pendingOutwards, selectedInward, inwardMap]);
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ fontWeight: 700, color: "#023020", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1249,11 +1271,72 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
           sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none" }}
           onClick={onClose}>Done</Button>
       </DialogTitle>
+      <Box sx={{ px: 3, py: 1.5, bgcolor: "#f4f9f6", borderBottom: "1px solid #e0e0e0", display: "flex", gap: 1.5, alignItems: "center" }}>
+        <LazyAutocomplete
+          size="small"
+          sx={{ flex: 1, maxWidth: 550 }}
+          value={selectedInward}
+          onChange={(_, val) => onInwardChange(val)}
+          options={eligibleInwardNumbers}
+          getOptionLabel={(option: any) => {
+            if (!option) return "";
+            const sNo = option.serial_no || option.ref_no;
+            return `${option.inward_no}${sNo ? ` (${sNo})` : ""}`;
+          }}
+          renderOption={(props, option: any) => {
+            const sNo = option.serial_no || option.ref_no;
+            const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
+            return (
+              <Box component="li" {...props} key={option.id} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, width: "100%" }}>
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
+                    {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                    Date: {dStr}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "right", ml: 2 }}>
+                  <Chip
+                    size="small"
+                    label={`${option.unbilledOutwardCount} Outward${option.unbilledOutwardCount > 1 ? "s" : ""} • ${formatWeight(option.unbilledWeight)} kg`}
+                    sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem" }}
+                  />
+                </Box>
+              </Box>
+            );
+          }}
+          noOptionsText="No pending outward-completed inwards"
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Select Inward Number"
+              placeholder="Search by Inward No or Serial No..."
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          )}
+        />
+        {selectedInward && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onClick={() => onInwardChange(null)}
+            sx={{ whiteSpace: "nowrap", textTransform: "none", height: 40 }}
+          >
+            Clear Selection / Unselect
+          </Button>
+        )}
+      </Box>
       <DialogContent dividers sx={{ p: 0, overflowX: "auto" }}>
-        {pendingOutwards.length === 0 ? (
+        {displayedOutwards.length === 0 ? (
           <Box sx={{ py: 6, textAlign: "center" }}>
-            <Typography color="text.secondary">No pending outward vouchers found for this supplier.</Typography>
-            <Button sx={{ mt: 2 }} variant="outlined" onClick={onClose}>Continue without selecting</Button>
+            <Typography color="text.secondary">
+              {selectedInward ? `No pending outward vouchers found for Inward ${selectedInward.inward_no}.` : "No pending outward vouchers found for this supplier."}
+            </Typography>
+            {selectedInward && (
+              <Button sx={{ mt: 2 }} variant="outlined" onClick={() => onInwardChange(null)}>Clear Selection</Button>
+            )}
           </Box>
         ) : (
           <Table size="small" sx={{ minWidth: 800 }}>
@@ -1268,7 +1351,7 @@ const OutwardPicker = memo(function OutwardPicker({ open, onClose, pendingOutwar
               </TableRow>
             </TableHead>
             <TableBody>
-              {pendingOutwards.map((out: any) => {
+              {displayedOutwards.map((out: any) => {
                 const alreadySelected = selectedOutwards.some((s) => s.id === out.id);
                 const { inwardNo, serialNo } = getInwardDetails(out, inwardMap);
                 return (
@@ -1983,68 +2066,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                 <TextField {...register("dispatch_through")} label="Dispatch Through" fullWidth size="small" placeholder="Transport details" />
               </Grid>
 
-              {/* Inward Selection Section */}
-              <Grid size={{ xs: 12 }}>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
-                  <LazyAutocomplete
-                    size="small"
-                    fullWidth
-                    disabled={!selectedLedger}
-                    value={selectedInward}
-                    onChange={(_, val) => handleInwardChange(val)}
-                    options={eligibleInwardNumbers}
-                    getOptionLabel={(option: any) => {
-                      if (!option) return "";
-                      const sNo = option.serial_no || option.ref_no;
-                      return `${option.inward_no}${sNo ? ` (${sNo})` : ""}`;
-                    }}
-                    renderOption={(props, option: any) => {
-                      const sNo = option.serial_no || option.ref_no;
-                      const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
-                      return (
-                        <Box component="li" {...props} key={option.id} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, width: "100%" }}>
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
-                              {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                              Date: {dStr}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ textAlign: "right", ml: 2 }}>
-                            <Chip
-                              size="small"
-                              label={`${option.unbilledOutwardCount} Outward${option.unbilledOutwardCount > 1 ? "s" : ""} • ${formatWeight(option.unbilledWeight)} kg`}
-                              sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem" }}
-                            />
-                          </Box>
-                        </Box>
-                      );
-                    }}
-                    noOptionsText={!selectedLedger ? "Select a supplier first" : "No pending outward-completed inwards for this supplier"}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Select Inward Number *"
-                        placeholder="Search by Inward No or Serial No..."
-                        helperText={selectedLedger ? `${eligibleInwardNumbers.length} eligible inward record(s) available for billing` : "Select supplier first"}
-                      />
-                    )}
-                  />
-                  {selectedInward && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      onClick={() => handleInwardChange(null)}
-                      sx={{ whiteSpace: "nowrap", textTransform: "none", height: 40 }}
-                    >
-                      Clear Selection
-                    </Button>
-                  )}
-                </Box>
-              </Grid>
-
               {/* Linked Outward Vouchers */}
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
@@ -2304,6 +2325,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         selectedOutwards={selectedOutwards}
         onSelect={handleOutwardSelect}
         inwardMap={inwardMap}
+        eligibleInwardNumbers={eligibleInwardNumbers}
+        selectedInward={selectedInward}
+        onInwardChange={handleInwardChange}
       />
     </>
   );
