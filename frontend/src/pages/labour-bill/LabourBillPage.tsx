@@ -1399,18 +1399,25 @@ export default function LabourBillPage() {
     }
     excelRows.push(subHeader);
 
+    const toExcelNum = (val: any): number | string => {
+      if (val === null || val === undefined || val === "" || val === "-") return "-";
+      const num = typeof val === "number" ? val : Number(String(val).replace(/,/g, ""));
+      if (isNaN(num)) return "-";
+      return Number(num.toFixed(3));
+    };
+
     // Data rows
     reportRows.forEach((r) => {
       const rowData: any[] = [
         r.ref,
         r.inward_date,
         r.productName,
-        r.inward_qty !== null && r.inward_qty !== undefined ? r.inward_qty : "-",
-        r.inward_weight !== null && r.inward_weight !== undefined ? Number(formatWeight(r.inward_weight)) : "-",
+        toExcelNum(r.inward_qty),
+        toExcelNum(r.inward_weight),
         r.outward_no,
         r.outward_date,
-        r.outward_qty !== null && r.outward_qty !== undefined ? r.outward_qty : "-",
-        r.outward_weight !== null && r.outward_weight !== undefined ? Number(formatWeight(r.outward_weight)) : "-"
+        toExcelNum(r.outward_qty),
+        toExcelNum(r.outward_weight)
       ];
 
       if (uniqueActiveProcesses.length === 0) {
@@ -1420,7 +1427,7 @@ export default function LabourBillPage() {
           if (isProcessInRow(proc.id, r.processId)) {
             const w = Number(r.outward_weight) || 0;
             processTotals[proc.id] += w;
-            rowData.push(Number(formatWeight(w)));
+            rowData.push(toExcelNum(w));
           } else {
             rowData.push("-");
           }
@@ -1432,17 +1439,17 @@ export default function LabourBillPage() {
     // Total Row
     const totalRow: any[] = [
       "Total", "", "",
-      totalInwardQty,
-      Number(formatWeight(totalInwardWeight)),
+      toExcelNum(totalInwardQty),
+      toExcelNum(totalInwardWeight),
       "", "",
-      totalOutwardQty,
-      Number(formatWeight(totalOutwardWeight))
+      toExcelNum(totalOutwardQty),
+      toExcelNum(totalOutwardWeight)
     ];
     if (uniqueActiveProcesses.length === 0) {
       totalRow.push("-");
     } else {
       uniqueActiveProcesses.forEach((proc: any) => {
-        totalRow.push(Number(formatWeight(processTotals[proc.id] || 0)));
+        totalRow.push(toExcelNum(processTotals[proc.id]));
       });
     }
     excelRows.push(totalRow);
