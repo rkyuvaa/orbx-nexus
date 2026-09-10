@@ -1302,12 +1302,14 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         const unbilledOutwards = linkedOutwards.filter((out: any) => !billedOutwardIdsSet.has(out.id));
         const unbilledOutwardCount = unbilledOutwards.length;
         const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => sum + Number(o.total_weight || o.weight || 0), 0);
+        const outwardNos = unbilledOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
         return {
           ...inv,
           linkedOutwards,
           unbilledOutwards,
           unbilledOutwardCount,
           unbilledWeight,
+          outwardNos,
           isOutwardCompleted: linkedOutwards.length > 0,
           hasUnbilledOutward: unbilledOutwardCount > 0,
         };
@@ -1705,6 +1707,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                     renderOption={(props: any, option: any, { selected }: any) => {
                       const sNo = option.serial_no || option.ref_no;
                       const dStr = option.inward_date ? new Date(option.inward_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
+                      const outsStr = option.outwardNos || (option.unbilledOutwards || []).map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
                       return (
                         <Box component="li" {...props} key={option.id} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, width: "100%" }}>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1718,7 +1721,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                                 {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
                               </Typography>
                               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                                {dStr} · {option.unbilledOutwardCount} outward voucher{option.unbilledOutwardCount > 1 ? "s" : ""} · {formatWeight(option.unbilledWeight)} kg unbilled
+                                {dStr}{outsStr ? ` · Outwards: ${outsStr}` : ""}
                               </Typography>
                             </Box>
                           </Box>
@@ -1734,10 +1737,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                       value.map((option: any, index: number) => {
                         const { key, ...tagProps } = getTagProps({ index });
                         const sNo = option.serial_no || option.ref_no;
+                        const outsStr = option.outwardNos || (option.unbilledOutwards || []).map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
                         return (
                           <Chip
                             key={option.id}
-                            label={`Inward: ${option.inward_no}${sNo ? ` (${sNo})` : ""} • ${formatWeight(option.unbilledWeight || 0)} kg`}
+                            label={`Inward: ${option.inward_no}${sNo ? ` (${sNo})` : ""}${outsStr ? ` (Out: ${outsStr})` : ""} • ${formatWeight(option.unbilledWeight || 0)} kg`}
                             size="small"
                             {...tagProps}
                             sx={{
