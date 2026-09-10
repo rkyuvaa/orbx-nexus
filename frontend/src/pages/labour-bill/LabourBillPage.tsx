@@ -2,10 +2,11 @@ import { useState, useMemo, useEffect, useCallback, useRef, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Grid, IconButton, Chip, Tooltip, MenuItem, Autocomplete,
+  TextField, Grid, IconButton, Chip, Tooltip, MenuItem, Menu, Autocomplete,
   Typography, Paper, Table, TableHead, TableRow, TableCell, TableBody,
   Checkbox, FormControlLabel
 } from "@mui/material";
+import * as XLSX from "xlsx";
 import Add from "@mui/icons-material/Add";
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
@@ -33,6 +34,53 @@ import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
 
 const AutocompleteAny = Autocomplete as any;
+
+function WorkDetailsActionMenu({
+  row,
+  onPrint,
+  onExportExcel
+}: {
+  row: any;
+  onPrint: (row: any) => void;
+  onExportExcel: (row: any) => void;
+}) {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setAnchorEl(e.currentTarget);
+  };
+
+  const handleClose = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setAnchorEl(null);
+  };
+
+  return (
+    <>
+      <Tooltip title="Work Details">
+        <IconButton size="small" onClick={handleClick}>
+          <Description fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => handleClose()}
+        onClick={(e) => e.stopPropagation()}
+        slotProps={{ paper: { sx: { borderRadius: "8px", minWidth: 170, boxShadow: 3 } } }}
+      >
+        <MenuItem onClick={(e) => { handleClose(e); onPrint(row); }}>
+          <Print fontSize="small" sx={{ mr: 1, color: "#023020" }} /> Print
+        </MenuItem>
+        <MenuItem onClick={(e) => { handleClose(e); onExportExcel(row); }}>
+          <Description fontSize="small" sx={{ mr: 1, color: "#1d6f42" }} /> Download Excel
+        </MenuItem>
+      </Menu>
+    </>
+  );
+}
 
 
 
@@ -1105,7 +1153,315 @@ export default function LabourBillPage() {
     `);
 
     printWindow.document.close();
+  };
 
+  const handleExportLabourWorkDetailsExcel = (row: any) => {
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const cName = compData?.name || "SRI METAL";
+    const cAddress = [compData?.address, compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(", ");
+    const cGstin = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+
+    const dateStr = row.bill_date
+      ? new Date(row.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
+      : "";
+    const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
+    const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
+    const supplierGstin = supplierLedger?.gstin ? `GSTIN: ${supplierLedger.gstin}` : "";
+
+    const parseJsonArray = (x: any): any[] => {
+      if (typeof x === "string") {
+        try { return JSON.parse(x); } catch (e) { return []; }
+      }
+      return Array.isArray(x) ? x : [];
+    };
+
+    const toDateStr = (val: any): string => {
+      if (!val) return "-";
+      try {
+        return new Date(val).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-");
+      } catch (e) { return "-"; }
+    };
+
+    const outwardIds = parseJsonArray(row.outward_ids);
+    const linkedOutwards = outwardIds
+      .map((id: number) => outwardVouchers.find((v: any) => v.id === id))
+      .filter(Boolean);
+
+    const inwardIdSet = new Set<number | string>();
+    if (row.inward_id !== undefined && row.inward_id !== null) inwardIdSet.add(row.inward_id);
+    linkedOutwards.forEach((out: any) => {
+      const outInwardIds = out.inward_ids
+        ? parseJsonArray(out.inward_ids)
+        : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
+      outInwardIds.forEach((inwId: number | string) => inwardIdSet.add(inwId));
+    });
+
+    const linkedInwards = Array.from(inwardIdSet)
+      .map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id)))
+      .filter(Boolean);
+
+    const resolveSeparateProcesses = (procId: any): string => {
+      if (!procId) return "-";
+      const proc = processes.find((p: any) => p.id === Number(procId));
+      if (proc && proc.process_ids) {
+        const pids = String(proc.process_ids).split(",").map((x: string) => x.trim()).filter(Boolean);
+        const names = pids
+          .map((pid: string) => processes.find((p: any) => p.id === Number(pid))?.name || pid)
+          .filter(Boolean);
+        return names.join(" / ") || "-";
+      }
+      return resolveProcessName(procId, processes) || "-";
+    };
+
+    const collectInwardLines = (invList: any[], prodId: number): any[] => {
+      const lines: any[] = [];
+      invList.forEach((inv: any) => {
+        const invItems = parseJsonArray(inv.items);
+        if (invItems.length === 0) {
+          if (inv.product_id && Number(inv.product_id) === prodId) {
+            lines.push({ quantity: inv.quantity || 0, weight: inv.total_weight || inv.weight || 0 });
+          }
+        } else {
+          invItems.forEach((i: any) => {
+            if (Number(i.product_id) === prodId) {
+              lines.push({ quantity: i.quantity || 0, weight: i.total_weight || i.weight || 0 });
+            }
+          });
+        }
+      });
+      return lines;
+    };
+
+    const reportRows: any[] = [];
+
+    linkedOutwards.forEach((out: any) => {
+      const linkedInvForOut = (() => {
+        const ids = out.inward_ids
+          ? parseJsonArray(out.inward_ids)
+          : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
+        return ids.map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id))).filter(Boolean);
+      })();
+
+      const outItems = parseJsonArray(out.items);
+      const pushReportRow = (item: any, outInv: any[]) => {
+        const prodId = Number(item.product_id);
+        const invLines = collectInwardLines(outInv, prodId);
+        const invQty = invLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
+        const invWeight = invLines.reduce((sum, l) => sum + (Number(l.weight) || 0), 0);
+
+        reportRows.push({
+          ref: outInv.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
+          inward_date: outInv.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
+          productName: products.find((p: any) => p.id === prodId)?.name || `Product #${item.product_id}`,
+          inward_qty: invLines.length > 0 ? invQty : null,
+          inward_weight: invLines.length > 0 ? invWeight : null,
+          outward_no: out.outward_no,
+          outward_date: toDateStr(out.outward_date),
+          outward_qty: item.quantity || 0,
+          outward_weight: item.total_weight || item.weight || 0,
+          processName: resolveSeparateProcesses(item.process_id || out.process_id),
+          processId: item.process_id || out.process_id,
+        });
+      };
+
+      if (outItems.length === 0) {
+        pushReportRow(out, linkedInvForOut);
+      } else {
+        outItems.forEach((item: any) => {
+          const prodId = Number(item.product_id);
+          const productMatched = linkedInvForOut.filter((inv: any) => {
+            if (inv.product_id && Number(inv.product_id) === prodId) return true;
+            const invItems = parseJsonArray(inv.items);
+            return invItems.some((i: any) => Number(i.product_id) === prodId);
+          });
+          pushReportRow(item, productMatched.length > 0 ? productMatched : linkedInvForOut);
+        });
+      }
+    });
+
+    if (reportRows.length === 0 && linkedInwards.length > 0) {
+      linkedInwards.forEach((inv: any) => {
+        const invItems = parseJsonArray(inv.items);
+        const invRef = inv.ref_no || inv.serial_no || "-";
+        const pushInvRow = (item: any) => {
+          reportRows.push({
+            ref: invRef,
+            inward_date: toDateStr(inv.inward_date),
+            productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
+            inward_qty: item.quantity || 0,
+            inward_weight: item.total_weight || item.weight || 0,
+            outward_no: "-",
+            outward_date: "-",
+            outward_qty: null,
+            outward_weight: null,
+            processName: "-",
+            processId: null,
+          });
+        };
+        if (invItems.length === 0) pushInvRow(inv);
+        else invItems.forEach((item: any) => pushInvRow(item));
+      });
+    }
+
+    const billItems = (() => {
+      let parsed: any[] = [];
+      if (typeof row.items === "string") {
+        try { parsed = JSON.parse(row.items); } catch (e) {}
+      } else if (Array.isArray(row.items)) {
+        parsed = row.items;
+      }
+      return parsed;
+    })();
+
+    const uniqueActiveProcesses: any[] = [];
+    const seenProcIds = new Set<number>();
+    billItems.forEach((item: any) => {
+      if (item.process_id) {
+        const proc = processes.find((p: any) => p.id === Number(item.process_id));
+        if (proc && !seenProcIds.has(proc.id)) {
+          seenProcIds.add(proc.id);
+          uniqueActiveProcesses.push(proc);
+        }
+      }
+    });
+
+    if (uniqueActiveProcesses.length === 0 && row.process_id) {
+      const proc = processes.find((p: any) => p.id === Number(row.process_id));
+      if (proc) uniqueActiveProcesses.push(proc);
+    }
+
+    const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
+      if (!rowProcId) return false;
+      if (Number(rowProcId) === targetProcId) return true;
+      const proc = processes.find((p: any) => p.id === Number(rowProcId));
+      if (proc) {
+        if (proc.process_ids) {
+          const childIds = String(proc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+          if (childIds.includes(targetProcId)) return true;
+        }
+        if (proc.process_code && proc.process_code.includes(" / ")) {
+          const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          const targetProc = processes.find((p: any) => p.id === targetProcId);
+          if (targetProc && parts.includes(targetProc.process_code)) return true;
+        }
+      }
+      return false;
+    };
+
+    const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
+    const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+    const totalOutwardQty = reportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
+    const totalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
+
+    const processTotals: Record<number, number> = {};
+    uniqueActiveProcesses.forEach((proc) => {
+      processTotals[proc.id] = 0;
+    });
+
+    const excelRows: any[][] = [];
+
+    // Header info rows
+    excelRows.push([cName]);
+    if (cAddress) excelRows.push([cAddress]);
+    if (cGstin) excelRows.push([cGstin]);
+    excelRows.push([]);
+    excelRows.push(["WORK DETAILS"]);
+    excelRows.push([`Bill No: ${row.bill_no}`, "", `Date: ${dateStr}`]);
+    excelRows.push([`Supplier: ${supplierName} ${supplierGstin ? `(${supplierGstin})` : ""}`]);
+    excelRows.push([]);
+
+    // Super Header row
+    const superHeader = [
+      "Inward Details", "", "", "", "",
+      "Outward Details", "", "", ""
+    ];
+    if (uniqueActiveProcesses.length === 0) {
+      superHeader.push("Processing");
+    } else {
+      superHeader.push("Processing");
+      for (let i = 1; i < uniqueActiveProcesses.length; i++) {
+        superHeader.push("");
+      }
+    }
+    excelRows.push(superHeader);
+
+    // Sub Header row
+    const subHeader = [
+      "inward ref no", "Date", "Product", "Qty", "Weight (kg)",
+      "Outward No", "Date", "Qty", "Weight (kg)"
+    ];
+    if (uniqueActiveProcesses.length === 0) {
+      subHeader.push("Process Weight (kg)");
+    } else {
+      uniqueActiveProcesses.forEach((proc: any) => {
+        subHeader.push(`${proc.name} (kg)`);
+      });
+    }
+    excelRows.push(subHeader);
+
+    // Data rows
+    reportRows.forEach((r) => {
+      const rowData: any[] = [
+        r.ref,
+        r.inward_date,
+        r.productName,
+        r.inward_qty !== null && r.inward_qty !== undefined ? r.inward_qty : "-",
+        r.inward_weight !== null && r.inward_weight !== undefined ? Number(formatWeight(r.inward_weight)) : "-",
+        r.outward_no,
+        r.outward_date,
+        r.outward_qty !== null && r.outward_qty !== undefined ? r.outward_qty : "-",
+        r.outward_weight !== null && r.outward_weight !== undefined ? Number(formatWeight(r.outward_weight)) : "-"
+      ];
+
+      if (uniqueActiveProcesses.length === 0) {
+        rowData.push("-");
+      } else {
+        uniqueActiveProcesses.forEach((proc: any) => {
+          if (isProcessInRow(proc.id, r.processId)) {
+            const w = Number(r.outward_weight) || 0;
+            processTotals[proc.id] += w;
+            rowData.push(Number(formatWeight(w)));
+          } else {
+            rowData.push("-");
+          }
+        });
+      }
+      excelRows.push(rowData);
+    });
+
+    // Total Row
+    const totalRow: any[] = [
+      "Total", "", "",
+      totalInwardQty,
+      Number(formatWeight(totalInwardWeight)),
+      "", "",
+      totalOutwardQty,
+      Number(formatWeight(totalOutwardWeight))
+    ];
+    if (uniqueActiveProcesses.length === 0) {
+      totalRow.push("-");
+    } else {
+      uniqueActiveProcesses.forEach((proc: any) => {
+        totalRow.push(Number(formatWeight(processTotals[proc.id] || 0)));
+      });
+    }
+    excelRows.push(totalRow);
+
+    const ws = XLSX.utils.aoa_to_sheet(excelRows);
+    const colWidths = (excelRows[6] || excelRows[5])?.map((_, colIdx) => {
+      let maxLen = 12;
+      excelRows.forEach((r) => {
+        const val = String(r[colIdx] || "");
+        if (val.length > maxLen) maxLen = val.length;
+      });
+      return { wch: Math.min(maxLen + 2, 40) };
+    });
+    if (colWidths) ws["!cols"] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Work Details");
+    const safeBillNo = String(row.bill_no || "Bill").replace(/[/\\?%*:|"<>]/g, "_");
+    XLSX.writeFile(wb, `WorkDetails_${safeBillNo}.xlsx`);
   };
 
   const colDefs: ColDef[] = [
@@ -1117,7 +1473,11 @@ export default function LabourBillPage() {
     { field: "is_paid", headerName: "Status", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Paid" : "Pending"} color={p.value ? "success" : "warning"} /> },
     { headerName: "Actions", width: 200, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
-        <Tooltip title="Work Details"><IconButton size="small" onClick={() => handlePrintLabourWorkDetails(p.data)}><Description fontSize="small" /></IconButton></Tooltip>
+        <WorkDetailsActionMenu
+          row={p.data}
+          onPrint={handlePrintLabourWorkDetails}
+          onExportExcel={handleExportLabourWorkDetailsExcel}
+        />
         <Tooltip title="Print Bill"><IconButton size="small" onClick={() => handlePrintLabourBill(p.data)}><Print fontSize="small" /></IconButton></Tooltip>
         {!p.data.is_paid && <Tooltip title="Mark Paid"><IconButton size="small" color="success" onClick={() => markPaidMutation.mutate(p.data.id)}><CheckCircle fontSize="small" /></IconButton></Tooltip>}
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
