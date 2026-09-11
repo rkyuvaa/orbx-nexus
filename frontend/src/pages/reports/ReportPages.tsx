@@ -1203,9 +1203,182 @@ export function PendingBillsReport() {
 }
 
 // ── Receivables (from Labour Bills) ──
+interface RecordPaymentDialogProps {
+  open: boolean;
+  onClose: () => void;
+  bill: any;
+  activeFY: string;
+  onSuccess: () => void;
+}
+
+function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: RecordPaymentDialogProps) {
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentMode, setPaymentMode] = useState("Bank Transfer");
+  const [tdsPercent, setTdsPercent] = useState<number>(1); // Default 1% TDS under Sec 194C
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPaymentDate(new Date().toISOString().split("T")[0]);
+      setPaymentMode("Bank Transfer");
+      setTdsPercent(1);
+      setNotes("");
+    }
+  }, [open, bill]);
+
+  if (!bill) return null;
+
+  const taxableAmt = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
+  const gstAmt = Number(bill.gst_amount || 0);
+  const tdsAmt = Math.round((taxableAmt * (tdsPercent || 0)) / 100 * 100) / 100;
+  const grossBillAmt = Number(bill.total_amount || bill.net_amount || 0);
+  const netReceiptAmt = Math.max(0, grossBillAmt - tdsAmt);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/labour-bill/${bill.id}/mark-paid?payment_date=${paymentDate}&fy=${activeFY}`);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to record payment.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1 }}>
+        Record Payment — Bill #{bill.bill_no}
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ pt: 2 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", mb: 2 }}>
+          Contractor: {bill.ledger_name}
+        </Typography>
+
+        {/* Bill Breakdown (Taxable, GST, TDS, Net Received) */}
+        <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: "#f8fafc", borderRadius: 2 }}>
+          <Grid container spacing={1.5}>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">Taxable Amount:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 700 }}>₹{formatAmount(taxableAmt)}</Typography>
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">GST Amount:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 700, color: "primary.main" }}>₹{formatAmount(gstAmt)}</Typography>
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">Gross Bill Value:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 700 }}>₹{formatAmount(grossBillAmt)}</Typography>
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>Less: TDS Amount ({tdsPercent}%):</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 700, color: "error.main" }}>- ₹{formatAmount(tdsAmt)}</Typography>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Divider sx={{ my: 0.5 }} />
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                  NET PAYMENT RECEIVED:
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                  ₹{formatAmount(netReceiptAmt)}
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Payment Entry Form */}
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="Payment Date"
+              type="date"
+              fullWidth
+              size="small"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              select
+              label="TDS Deduction (%)"
+              fullWidth
+              size="small"
+              value={tdsPercent}
+              onChange={(e) => setTdsPercent(Number(e.target.value))}
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              <MenuItem value={0}>0% (No TDS)</MenuItem>
+              <MenuItem value={1}>1% (Sec 194C - Indv/HUF)</MenuItem>
+              <MenuItem value={2}>2% (Sec 194C - Company/Others)</MenuItem>
+              <MenuItem value={5}>5% (Sec 194J - Professional)</MenuItem>
+              <MenuItem value={10}>10% (Sec 194I - Rent)</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              select
+              label="Payment Mode"
+              fullWidth
+              size="small"
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              <MenuItem value="Bank Transfer">Bank Transfer (NEFT/RTGS/IMPS)</MenuItem>
+              <MenuItem value="Cash">Cash</MenuItem>
+              <MenuItem value="Cheque">Cheque</MenuItem>
+              <MenuItem value="UPI">UPI</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="Net Paid Amount (₹)"
+              type="number"
+              fullWidth
+              size="small"
+              value={netReceiptAmt}
+              slotProps={{ inputLabel: { shrink: true }, htmlInput: { readOnly: true } }}
+              sx={{ "& .MuiOutlinedInput-root": { bgcolor: "action.disabledBackground" } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              label="Payment Notes / Reference No."
+              fullWidth
+              size="small"
+              multiline
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Transaction UTR / Cheque No / Notes"
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
+        <Button onClick={handleSave} variant="contained" color="success" size="small" disabled={saving}>
+          {saving ? "Saving..." : "Record Payment & Mark Paid"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export function ReceivablesReport() {
   const { activeFY } = useAuthStore();
+  const qc = useQueryClient();
   const [selectedLedgerId, setSelectedLedgerId] = useState<number | "">("");
+  const [activePaymentBill, setActivePaymentBill] = useState<any>(null);
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers-account"],
@@ -1228,14 +1401,30 @@ export function ReceivablesReport() {
 
   // Group by ledger
   const grouped = useMemo(() => {
-    const map: Record<string, { ledger_name: string; ledger_id: number; bills: any[]; total: number }> = {};
+    const map: Record<string, { ledger_name: string; ledger_id: number; bills: any[]; totalTaxable: number; totalGst: number; totalTds: number; total: number }> = {};
     rawData.forEach((bill: any) => {
       const key = String(bill.ledger_id);
+      const taxable = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
+      const gst = Number(bill.gst_amount || 0);
+      const tds = Number(bill.tds_amount || (taxable * 0.01));
+      const tot = Number(bill.total_amount || bill.net_amount || 0);
+
       if (!map[key]) {
-        map[key] = { ledger_name: bill.ledger_name || `Ledger #${bill.ledger_id}`, ledger_id: bill.ledger_id, bills: [], total: 0 };
+        map[key] = {
+          ledger_name: bill.ledger_name || `Ledger #${bill.ledger_id}`,
+          ledger_id: bill.ledger_id,
+          bills: [],
+          totalTaxable: 0,
+          totalGst: 0,
+          totalTds: 0,
+          total: 0
+        };
       }
       map[key].bills.push(bill);
-      map[key].total += Number(bill.total_amount || 0);
+      map[key].totalTaxable += taxable;
+      map[key].totalGst += gst;
+      map[key].totalTds += tds;
+      map[key].total += tot;
     });
     return Object.values(map).sort((a, b) => a.ledger_name.localeCompare(b.ledger_name));
   }, [rawData]);
@@ -1276,29 +1465,35 @@ export function ReceivablesReport() {
     let tableRows = "";
     grouped.forEach((grp) => {
       tableRows += `<tr style="background:#e8f5e9;font-weight:700;">
-        <td colspan="5">${grp.ledger_name}</td>
+        <td colspan="4">${grp.ledger_name}</td>
+        <td style="text-align:right;">₹${formatAmount(grp.totalTaxable)}</td>
+        <td style="text-align:right;">₹${formatAmount(grp.totalGst)}</td>
+        <td style="text-align:right;">₹${formatAmount(grp.totalTds)}</td>
         <td style="text-align:right;">₹${formatAmount(grp.total)}</td>
-        <td></td>
       </tr>`;
       grp.bills.forEach((bill: any) => {
         const aging = bill.aging_bucket as string;
         const agingColor = aging === "0-30 days" ? "#2e7d32" : aging === "31-60 days" ? "#ed6c02" : aging === "61-90 days" ? "#d32f2f" : "#7b1fa2";
+        const taxable = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
+        const gst = Number(bill.gst_amount || 0);
+        const tds = Number(bill.tds_amount || (taxable * 0.01));
         tableRows += `<tr>
-          <td style="padding-left:20px;">${bill.bill_no}</td>
+          <td style="padding-left:15px;">${bill.bill_no}</td>
           <td>${bill.bill_date}</td>
           <td>${bill.days_outstanding} days</td>
           <td><span style="color:${agingColor};font-weight:600;">${bill.aging_bucket}</span></td>
-          <td>${bill.narration || ""}</td>
-          <td style="text-align:right;">₹${formatAmount(bill.total_amount)}</td>
-          <td></td>
+          <td style="text-align:right;">₹${formatAmount(taxable)}</td>
+          <td style="text-align:right;">₹${formatAmount(gst)}</td>
+          <td style="text-align:right;">₹${formatAmount(tds)}</td>
+          <td style="text-align:right;font-weight:700;">₹${formatAmount(bill.total_amount)}</td>
         </tr>`;
       });
     });
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Receivables</title>
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Bills Receivable</title>
       <style>
         ${COMMON_PRINT_CSS}
-        @page { size: A4 portrait; margin: 15mm; }
+        @page { size: A4 landscape; margin: 15mm; }
         table { width:100%; border-collapse: collapse; font-size:11px; }
         th, td { border: 1px solid #cbd5e1; padding: 5px 7px; }
         th { background:#0f5132; color:#fff; font-weight:700; }
@@ -1312,18 +1507,20 @@ export function ReceivablesReport() {
           ${cGstin ? `<p style="margin:2px 0;font-size:11px;font-weight:700;">${cGstin}</p>` : ""}
         </div>
       </div>
-      <h3 style="text-align:right;border-bottom:1px solid #000;margin-bottom:10px;">Receivables Statement</h3>
+      <h3 style="text-align:right;border-bottom:1px solid #000;margin-bottom:10px;">Bills Receivable Statement</h3>
       <table>
         <thead><tr>
-          <th>Bill No.</th><th>Bill Date</th><th>Days O/S</th><th>Aging</th><th>Narration</th>
-          <th style="text-align:right;">Amount (₹)</th><th></th>
+          <th>Bill No.</th><th>Bill Date</th><th>Days O/S</th><th>Aging</th>
+          <th style="text-align:right;">Taxable Amt (₹)</th>
+          <th style="text-align:right;">GST Amt (₹)</th>
+          <th style="text-align:right;">TDS Amt (₹)</th>
+          <th style="text-align:right;">Net Amount (₹)</th>
         </tr></thead>
         <tbody>
           ${tableRows}
           <tr class="total-row">
-            <td colspan="5" style="text-align:right;">GRAND TOTAL OUTSTANDING</td>
+            <td colspan="7" style="text-align:right;">GRAND TOTAL OUTSTANDING</td>
             <td style="text-align:right;">₹${formatAmount(grandTotal)}</td>
-            <td></td>
           </tr>
         </tbody>
       </table>
@@ -1338,7 +1535,7 @@ export function ReceivablesReport() {
       <Box className="no-print">
         <PageHeader
           title="Bills Receivable"
-          subtitle="Outstanding labour bill amounts by contractor"
+          subtitle="Outstanding labour bill amounts by contractor with Taxable, GST & TDS breakdown"
           breadcrumbs={[{ label: "Billing" }, { label: "Bills Receivable" }]}
         />
 
@@ -1354,7 +1551,7 @@ export function ReceivablesReport() {
           />
           <Button variant="outlined" size="small" onClick={() => { setSelectedLedgerId(""); refetch(); }}>Clear</Button>
           {rawData.length > 0 && (
-            <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print</Button>
+            <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print Statement</Button>
           )}
         </FilterRow>
 
@@ -1409,14 +1606,22 @@ export function ReceivablesReport() {
                 <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill Date</TableCell>
                 <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Days O/S</TableCell>
                 <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Aging</TableCell>
-                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Narration</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Amount (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Taxable Amt ({RUPEE})</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>GST ({RUPEE})</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>TDS (1%) ({RUPEE})</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Net Total ({RUPEE})</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px", width: 130 }}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {grp.bills.map((bill: any) => {
                 const bucket: string = bill.aging_bucket;
                 const bucketColor = AGING_COLORS[bucket] || "#333";
+                const taxable = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
+                const gst = Number(bill.gst_amount || 0);
+                const tds = Number(bill.tds_amount || (taxable * 0.01));
+                const tot = Number(bill.total_amount || bill.net_amount || 0);
+
                 return (
                   <TableRow key={bill.id} hover>
                     <TableCell sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#023020", p: "5px 10px" }}>{bill.bill_no}</TableCell>
@@ -1433,21 +1638,50 @@ export function ReceivablesReport() {
                         {bucket}
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.78rem", color: "#555", p: "5px 10px" }}>{bill.narration || "-"}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 700, p: "5px 10px" }}>
-                      ₹{formatAmount(bill.total_amount)}
+                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 600, p: "5px 10px", color: "text.primary" }}>
+                      ₹{formatAmount(taxable)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 600, p: "5px 10px", color: "primary.main" }}>
+                      ₹{formatAmount(gst)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 600, p: "5px 10px", color: "error.main" }}>
+                      ₹{formatAmount(tds)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 800, p: "5px 10px", color: "#0f5132" }}>
+                      ₹{formatAmount(tot)}
+                    </TableCell>
+                    <TableCell align="center" sx={{ p: "5px 10px" }}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={() => setActivePaymentBill(bill)}
+                        sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
+                      >
+                        Record Payment
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
               })}
               {/* Subtotal row */}
               <TableRow sx={{ bgcolor: "#f0fdf4" }}>
-                <TableCell colSpan={5} sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#0f5132", textAlign: "right" }}>
+                <TableCell colSpan={4} sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#0f5132", textAlign: "right" }}>
                   Subtotal — {grp.ledger_name}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#c62828" }}>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "text.primary" }}>
+                  ₹{formatAmount(grp.totalTaxable)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "primary.main" }}>
+                  ₹{formatAmount(grp.totalGst)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "error.main" }}>
+                  ₹{formatAmount(grp.totalTds)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, fontSize: "0.85rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#c62828" }}>
                   ₹{formatAmount(grp.total)}
                 </TableCell>
+                <TableCell />
               </TableRow>
             </TableBody>
           </Table>
@@ -1463,6 +1697,15 @@ export function ReceivablesReport() {
           </Box>
         </Paper>
       )}
+
+      {/* Record Payment Dialog */}
+      <RecordBillPaymentDialog
+        open={!!activePaymentBill}
+        onClose={() => setActivePaymentBill(null)}
+        bill={activePaymentBill}
+        activeFY={activeFY}
+        onSuccess={() => qc.invalidateQueries({ queryKey: ["receivables"] })}
+      />
     </Box>
   );
 }
