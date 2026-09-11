@@ -101,7 +101,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Tools Management",
     icon: <PrecisionManufacturing sx={{ fontSize: 20 }} />,
     children: [
-      { label: "Tools Purchase", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Tools Master", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Tools Management", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },

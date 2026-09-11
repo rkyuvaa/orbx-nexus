@@ -193,8 +193,8 @@ export default function StockItemsPage() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <PageHeader
-        title="Tools & Consumables"
-        breadcrumbs={[{ label: "Inventory" }, { label: "Tools & Consumables" }]}
+        title="Tools Master"
+        breadcrumbs={[{ label: "Inventory" }, { label: "Tools Master" }]}
         actions={
           <Button variant="contained" size="small" onClick={handleOpenCreate}>
             New Item
