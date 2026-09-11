@@ -1565,16 +1565,16 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   }, [enrichedSelectedInwards, lineItemBalanceMap, productBalanceMap, editingProductQtyMap]);
 
   const getLiveStockForProductProcessInward = useCallback((productId: number, processId: number | null, inwardId: number | null) => {
-    if (!inwardId) return 0;
+    if (!inwardId && enrichedSelectedInwards.length > 0) return 0;
     const initialBal = getProductBalance(productId, processId, inwardId);
     
     // Check if the inward has a process-specific stock for this product
-    const exactKey = `${inwardId}_${productId}_${processId ?? ""}`;
+    const exactKey = inwardId ? `${inwardId}_${productId}_${processId ?? ""}` : "";
     const hasExactInwardStock = !!lineItemBalanceMap[exactKey];
     
     const usedQty = lineItems
       .filter((it) => {
-        const matchesProductAndInward = Number(it.product_id) === productId && Number(it.inward_id) === inwardId;
+        const matchesProductAndInward = Number(it.product_id) === productId && (inwardId ? Number(it.inward_id) === inwardId : true);
         if (!matchesProductAndInward) return false;
         
         if (hasExactInwardStock) {
@@ -1586,7 +1586,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
       
     return Math.max(0, initialBal - usedQty);
-  }, [lineItemBalanceMap, getProductBalance, lineItems]);
+  }, [lineItemBalanceMap, getProductBalance, lineItems, enrichedSelectedInwards]);
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
