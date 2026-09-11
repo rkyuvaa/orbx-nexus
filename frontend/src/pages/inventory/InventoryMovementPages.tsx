@@ -105,8 +105,8 @@ function handlePrintMovement(row: any, companyData: any, stockItems: any[], ledg
     itemsHtml += `
       <tr>
         <td style="text-align: center;">${idx + 1}</td>
-        <td style="font-weight: 600;">${itemName}</td>
-        <td style="text-align: right;">${formatQty(q)} ${uomSymbol}</td>
+        <td style="font-weight: 600; text-align: left;">${itemName}</td>
+        <td style="text-align: right;">${formatQty(q)}</td>
         <td style="text-align: right;">₹${formatAmount(r)}</td>
         <td style="text-align: right;">₹${formatAmount(taxable)}</td>
         <td style="text-align: center;">${gstP}%</td>
@@ -163,14 +163,14 @@ function handlePrintMovement(row: any, companyData: any, stockItems: any[], ledg
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
             <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-              <th style="width: 40px; text-align: center;">S.NO</th>
-              <th>STOCK ITEM NAME & CODE</th>
-              <th style="width: 100px; text-align: right;">QTY</th>
-              <th style="width: 90px; text-align: right;">RATE</th>
+              <th style="width: 45px; text-align: center;">S.NO</th>
+              <th style="min-width: 240px; text-align: left;">STOCK ITEM NAME & CODE</th>
+              <th style="width: 75px; text-align: right;">QTY</th>
+              <th style="width: 85px; text-align: right;">RATE</th>
               <th style="width: 100px; text-align: right;">TAXABLE AMT</th>
-              <th style="width: 65px; text-align: center;">GST %</th>
+              <th style="width: 60px; text-align: center;">GST %</th>
               <th style="width: 90px; text-align: right;">GST AMT</th>
-              <th style="width: 110px; text-align: right;">TOTAL AMT</th>
+              <th style="width: 105px; text-align: right;">TOTAL AMT</th>
             </tr>
           </thead>
           <tbody>
