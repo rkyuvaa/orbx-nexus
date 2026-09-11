@@ -23,14 +23,228 @@ import {
   CircularProgress,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
+import PrintIcon from "@mui/icons-material/Print";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore } from "../../store";
 import { formatAmount } from "../../utils/format";
+import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
+
+function handlePrintContractorStatement(contractorData: any, transactions: any[], companyData: any) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) return;
+
+  const savedConfig = localStorage.getItem("orbx_print_config");
+  let printConfig = {
+    showLogo: true,
+    billPaperSize: "A4",
+  };
+  if (savedConfig) {
+    try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
+  }
+
+  const logoBase64 = localStorage.getItem("company_logo");
+  const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+
+  const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+  const cName = compData?.name || "SRI METAL";
+  const cAddress1 = compData?.address || "";
+  const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
+  const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
+  const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
+  const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+
+  const contractorName = contractorData?.contractor_name || contractorData?.name || "Contractor";
+
+  // Calculate totals
+  let totalEarned = 0; // Credit entries (Work done / Job Work)
+  let totalDeductible = 0; // Debit entries (Advances & Payments)
+
+  if (transactions && transactions.length > 0) {
+    transactions.forEach((tx: any) => {
+      const amt = Math.abs(tx.amount || 0);
+      if (tx.dr_cr === "Cr") {
+        totalEarned += amt;
+      } else {
+        totalDeductible += amt;
+      }
+    });
+  } else {
+    totalEarned = Math.abs(contractorData?.job_work_amount || 0);
+    totalDeductible = Math.abs(contractorData?.job_work_paid || 0) + Math.abs(contractorData?.advance_paid || 0);
+  }
+
+  const netPayable = totalEarned - totalDeductible;
+  const isPayable = netPayable >= 0;
+  const absPayable = Math.abs(netPayable);
+  const amountInWordsStr = absPayable > 0 ? toWords(absPayable) : "";
+
+  let txRowsHtml = "";
+  if (transactions && transactions.length > 0) {
+    transactions.forEach((tx: any, idx: number) => {
+      const isDr = tx.dr_cr === "Dr";
+      const amt = Math.abs(tx.amount || 0);
+      const runBal = Math.abs(tx.running_balance ?? 0);
+      const isBalCr = (tx.running_balance ?? 0) >= 0;
+      txRowsHtml += `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td style="text-align: center;">${tx.date || "-"}</td>
+          <td style="font-weight: 600;">${tx.doc_no || "-"}</td>
+          <td>${tx.category || "-"}</td>
+          <td>${tx.process_name || "-"}</td>
+          <td style="text-align: right;">${tx.quantity || "-"}</td>
+          <td style="text-align: right; color: ${isDr ? '#dc3545' : '#6c757d'};">${isDr ? `₹${formatAmount(amt)}` : '—'}</td>
+          <td style="text-align: right; color: ${!isDr ? '#198754' : '#6c757d'};">${!isDr ? `₹${formatAmount(amt)}` : '—'}</td>
+          <td style="text-align: right; font-weight: 700; color: ${isBalCr ? '#198754' : '#dc3545'};">₹${formatAmount(runBal)} ${isBalCr ? 'Cr' : 'Dr'}</td>
+        </tr>
+      `;
+    });
+  } else {
+    txRowsHtml = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: #6c757d; padding: 12px;">No detailed transactions found for this period.</td>
+      </tr>
+    `;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Contractor Balance Statement - ${contractorName}</title>
+        <style>
+          @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 15mm; }
+          ${COMMON_PRINT_CSS}
+          .summary-card-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+          }
+          .summary-card-table td {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            font-size: 13px;
+          }
+          .summary-card-table .label-col {
+            font-weight: 600;
+            color: #334155;
+            background-color: #f8fafc;
+            width: 65%;
+          }
+          .summary-card-table .val-col {
+            font-weight: 700;
+            text-align: right;
+            width: 35%;
+          }
+        </style>
+      </head>
+      <body>
+        <!-- Header -->
+        <div class="header-container">
+          <div class="logo-wrapper">${logoHtml}</div>
+          <div class="company-details">
+            <h1>${cName}</h1>
+            ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
+            ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+            <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+            ${cTax ? `<p class="gstin">${cTax}</p>` : ""}
+          </div>
+        </div>
+
+        <div class="title-section">
+          <h2>CONTRACTOR BALANCE & SETTLEMENT STATEMENT</h2>
+          <div class="doc-no">Contractor: <strong>${contractorName}</strong></div>
+          <div class="doc-date">Statement Date: ${new Date().toLocaleDateString("en-IN")}</div>
+        </div>
+
+        <!-- FIRST HALF: Transaction Summary Table -->
+        <div style="margin-bottom: 20px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 13px; color: #0f5132; text-transform: uppercase; font-weight: 700;">
+            1. Transaction Summary Details
+          </h3>
+          <table class="items-table">
+            <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+              <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
+                <th style="width: 35px; text-align: center;">S.N</th>
+                <th style="width: 85px; text-align: center;">DATE</th>
+                <th style="width: 110px;">DOC NO</th>
+                <th style="width: 100px;">TYPE</th>
+                <th>PROCESS</th>
+                <th style="width: 65px; text-align: right;">QTY</th>
+                <th style="width: 100px; text-align: right;">DEBIT (DR)</th>
+                <th style="width: 100px; text-align: right;">CREDIT (CR)</th>
+                <th style="width: 110px; text-align: right;">CLOSING BAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${txRowsHtml}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- SECOND HALF: Total Earned - Deductible = Payable -->
+        <div style="margin-top: 25px; page-break-inside: avoid;">
+          <h3 style="margin: 0 0 8px 0; font-size: 13px; color: #0f5132; text-transform: uppercase; font-weight: 700;">
+            2. Final Settlement & Balance Breakdown
+          </h3>
+          <table class="summary-card-table">
+            <tbody>
+              <tr>
+                <td class="label-col">Total Amount Earned (Gross Work Done / Credit):</td>
+                <td class="val-col" style="color: #0a7a50;">₹${formatAmount(totalEarned)}</td>
+              </tr>
+              <tr>
+                <td class="label-col">Less: Deductibles (Advances Paid & Job Work Payments / Debit):</td>
+                <td class="val-col" style="color: #b02a37;">- ₹${formatAmount(totalDeductible)}</td>
+              </tr>
+              <tr style="background-color: #f0fdf4 !important; -webkit-print-color-adjust: exact !important;">
+                <td class="label-col" style="font-size: 14px; font-weight: 700; color: #0f5132;">
+                  NET ${isPayable ? 'PAYABLE TO CONTRACTOR' : 'RECEIVABLE FROM CONTRACTOR'}:
+                </td>
+                <td class="val-col" style="font-size: 16px; font-weight: 800; color: ${isPayable ? '#0a7a50' : '#b02a37'};">
+                  ₹${formatAmount(absPayable)} ${isPayable ? '(Cr — Payable)' : '(Dr — Receivable)'}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          ${absPayable > 0 && amountInWordsStr ? `
+            <div style="margin-top: 12px; padding: 10px 14px; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px;">
+              <strong>NET AMOUNT IN WORDS:</strong> ${amountInWordsStr.replace(/^Rupees:\s*/i, "").replace(/\s*Rupees Only$/i, "").trim().toUpperCase()} RUPEES ONLY
+            </div>
+          ` : ""}
+        </div>
+
+        <!-- Signatures Footer -->
+        <div class="signatures-container" style="margin-top: 45px; page-break-inside: avoid;">
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Contractor Signature<br/>(${contractorName})</div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Prepared By</div>
+          </div>
+          <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Authorised Signatory<br/>For ${cName}</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 400);
+}
 
 
 export default function ContractorBalancePage() {
@@ -40,6 +254,11 @@ export default function ContractorBalancePage() {
   const [payAmount, setPayAmount] = useState("");
   const [payNarration, setPayNarration] = useState("");
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({ open: false, msg: "", severity: "success" });
+
+  const { data: companyData } = useQuery({
+    queryKey: ["company"],
+    queryFn: async () => (await api.get("/company/")).data,
+  });
 
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ["contractor-balance-summary", activeFY],
@@ -206,11 +425,16 @@ export default function ContractorBalancePage() {
     },
     {
       headerName: "Actions",
-      width: 80,
+      width: 110,
       sortable: false,
       filter: false,
       cellRenderer: (p: any) => (
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 0.5, height: "100%" }}>
+          <Tooltip title="Print Contractor Statement">
+            <IconButton size="small" color="primary" onClick={() => handlePrintContractorStatement(p.data, [], companyData)}>
+              <PrintIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="View Transactions Summary">
             <IconButton size="small" onClick={() => setSelectedContractor(p.data)}>
               <Visibility fontSize="small" />
@@ -247,8 +471,17 @@ export default function ContractorBalancePage() {
         maxWidth="lg"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Transaction Summary - {selectedContractor?.contractor_name}
+        <DialogTitle sx={{ fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>Transaction Summary - {selectedContractor?.contractor_name}</span>
+          <Button
+            startIcon={<PrintIcon />}
+            variant="outlined"
+            color="primary"
+            size="small"
+            onClick={() => handlePrintContractorStatement(selectedContractor, transactions, companyData)}
+          >
+            Print A4 Statement
+          </Button>
         </DialogTitle>
         <DialogContent dividers>
           {isTxLoading ? (
