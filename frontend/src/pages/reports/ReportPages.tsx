@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useMemo, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, TextField, Paper, Typography, Grid,
-  Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, MenuItem, Autocomplete
+  Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, MenuItem, Autocomplete,
+  Dialog, DialogTitle, DialogContent, DialogActions, Divider
 } from "@mui/material";
 import Print from "@mui/icons-material/Print";
 import Search from "@mui/icons-material/Search";
@@ -14,6 +15,7 @@ import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 
 const ACCENT = "#0f5132";
 const BORDER = "#0f5132";
+const RUPEE = "₹";
 const _now = new Date();
 const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
 const firstOfMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-01`;
