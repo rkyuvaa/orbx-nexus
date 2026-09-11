@@ -35,7 +35,18 @@ import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
 
-function handlePrintContractorStatement(contractorData: any, transactions: any[], companyData: any) {
+async function handlePrintContractorStatement(contractorData: any, transactionsParam: any[] | null, companyData: any, activeFY: string) {
+  let transactions = transactionsParam || [];
+
+  if ((!transactions || transactions.length === 0) && contractorData?.ledger_id) {
+    try {
+      const res = await api.get(`/contractor/transactions?ledger_id=${contractorData.ledger_id}&fy=${activeFY}`);
+      transactions = res.data || [];
+    } catch (e) {
+      console.error("Failed to fetch contractor transactions for print", e);
+    }
+  }
+
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
 
@@ -61,9 +72,9 @@ function handlePrintContractorStatement(contractorData: any, transactions: any[]
 
   const contractorName = contractorData?.contractor_name || contractorData?.name || "Contractor";
 
-  // Calculate totals
-  let totalEarned = 0; // Credit entries (Work done / Job Work)
-  let totalDeductible = 0; // Debit entries (Advances & Payments)
+  // Calculate totals from detailed transactions
+  let totalEarned = 0; // Credit entries (Work done / Job Work / Advance Receipts)
+  let totalDeductible = 0; // Debit entries (Advances Paid & Job Work Payments)
 
   if (transactions && transactions.length > 0) {
     transactions.forEach((tx: any) => {
@@ -75,11 +86,12 @@ function handlePrintContractorStatement(contractorData: any, transactions: any[]
       }
     });
   } else {
-    totalEarned = Math.abs(contractorData?.job_work_amount || 0);
+    totalEarned = Math.abs(contractorData?.job_work_amount || 0) + Math.abs(contractorData?.advance_received || 0);
     totalDeductible = Math.abs(contractorData?.job_work_paid || 0) + Math.abs(contractorData?.advance_paid || 0);
   }
 
-  const netPayable = totalEarned - totalDeductible;
+  const finalTx = transactions && transactions.length > 0 ? transactions[transactions.length - 1] : null;
+  const netPayable = finalTx ? (finalTx.running_balance ?? 0) : (totalEarned - totalDeductible);
   const isPayable = netPayable >= 0;
   const absPayable = Math.abs(netPayable);
   const amountInWordsStr = absPayable > 0 ? toWords(absPayable) : "";
@@ -431,7 +443,7 @@ export default function ContractorBalancePage() {
       cellRenderer: (p: any) => (
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 0.5, height: "100%" }}>
           <Tooltip title="Print Contractor Statement">
-            <IconButton size="small" color="primary" onClick={() => handlePrintContractorStatement(p.data, [], companyData)}>
+            <IconButton size="small" color="primary" onClick={() => handlePrintContractorStatement(p.data, [], companyData, activeFY)}>
               <PrintIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -478,7 +490,7 @@ export default function ContractorBalancePage() {
             variant="outlined"
             color="primary"
             size="small"
-            onClick={() => handlePrintContractorStatement(selectedContractor, transactions, companyData)}
+            onClick={() => handlePrintContractorStatement(selectedContractor, transactions, companyData, activeFY)}
           >
             Print A4 Statement
           </Button>
