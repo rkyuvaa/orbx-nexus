@@ -84,10 +84,21 @@ async def dashboard_summary(
 @router.get("/day-book")
 async def day_book(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
-    from_date: str = Query(...), to_date: str = Query(...)
+    from_date: str = Query(default=None), to_date: str = Query(default=None)
 ):
     schema = s(fy)
     entries = []
+
+    conds_mov = []
+    params = {}
+    if from_date:
+        conds_mov.append("m.movement_date::text >= :fd")
+        params["fd"] = from_date
+    if to_date:
+        conds_mov.append("m.movement_date::text <= :td")
+        params["td"] = to_date
+
+    where_mov = ("WHERE " + " AND ".join(conds_mov)) if conds_mov else ""
 
     # 1. Stock Movements (Inward Purchase & Outward)
     try:
@@ -102,10 +113,10 @@ async def day_book(
                 f"m.paid_amount, m.payment_date::text AS payment_date, m.payment_mode, m.payment_notes "
                 f"FROM {schema}.stock_item_movements m "
                 f"LEFT JOIN master.ledgers l ON l.id = m.ledger_id "
-                f"WHERE m.movement_date BETWEEN :fd AND :td "
+                f"{where_mov} "
                 f"ORDER BY m.movement_date, m.id"
             ),
-            {"fd": from_date, "td": to_date}
+            params
         )
         for r in res_movements.mappings().all():
             d = dict(r)
@@ -122,28 +133,41 @@ async def day_book(
                 "narration": d["narration"] or "",
             })
 
-            # Add Supplier Payment entry if paid_amount > 0 and payment date is within range
+            # Add Supplier Payment entry if paid_amount > 0 and payment date is in range
             paid_amt = float(d["paid_amount"] or 0)
             p_date = d["payment_date"] or d["voucher_date"]
-            if paid_amt > 0 and from_date <= p_date <= to_date:
-                pmode = d["payment_mode"] or "Direct Payment"
-                pnotes = f" ({d['payment_notes']})" if d["payment_notes"] else ""
-                entries.append({
-                    "id": f"pay-{d['id']}",
-                    "voucher_date": p_date,
-                    "voucher_no": f"PAY-{d['voucher_no']}",
-                    "voucher_type": "Payment",
-                    "ledger_name": d["ledger_name"],
-                    "particulars": f"Payment via {pmode}{pnotes}",
-                    "dr_amount": paid_amt,
-                    "cr_amount": 0.0,
-                    "amount": paid_amt,
-                    "narration": f"Payment against {d['voucher_no']} ({pmode})",
-                })
-    except Exception:
-        pass
+            if paid_amt > 0:
+                in_range = True
+                if from_date and p_date < from_date:
+                    in_range = False
+                if to_date and p_date > to_date:
+                    in_range = False
+                if in_range:
+                    pmode = d["payment_mode"] or "Direct Payment"
+                    pnotes = f" ({d['payment_notes']})" if d["payment_notes"] else ""
+                    entries.append({
+                        "id": f"pay-{d['id']}",
+                        "voucher_date": p_date,
+                        "voucher_no": f"PAY-{d['voucher_no']}",
+                        "voucher_type": "Payment",
+                        "ledger_name": d["ledger_name"],
+                        "particulars": f"Payment via {pmode}{pnotes}",
+                        "dr_amount": paid_amt,
+                        "cr_amount": 0.0,
+                        "amount": paid_amt,
+                        "narration": f"Payment against {d['voucher_no']} ({pmode})",
+                    })
+    except Exception as e:
+        print("Daybook error movements:", e)
 
     # 2. Vouchers (Payment, Receipt, Contra, Journal, Misc. Expenses)
+    conds_v = []
+    if from_date:
+        conds_v.append("v.voucher_date::text >= :fd")
+    if to_date:
+        conds_v.append("v.voucher_date::text <= :td")
+    where_v = ("WHERE " + " AND ".join(conds_v)) if conds_v else ""
+
     try:
         res_vouchers = await db.execute(
             text(
@@ -151,10 +175,10 @@ async def day_book(
                 f"COALESCE(l.name, 'General Ledger') AS ledger_name, v.amount, v.narration "
                 f"FROM {schema}.vouchers v "
                 f"LEFT JOIN master.ledgers l ON l.id = v.ledger_id "
-                f"WHERE v.voucher_date BETWEEN :fd AND :td "
+                f"{where_v} "
                 f"ORDER BY v.voucher_date, v.id"
             ),
-            {"fd": from_date, "td": to_date}
+            params
         )
         for r in res_vouchers.mappings().all():
             d = dict(r)
@@ -174,10 +198,17 @@ async def day_book(
                 "amount": amt,
                 "narration": d["narration"] or "",
             })
-    except Exception:
-        pass
+    except Exception as e:
+        print("Daybook error vouchers:", e)
 
     # 3. Labour Bills
+    conds_lb = []
+    if from_date:
+        conds_lb.append("lb.bill_date::text >= :fd")
+    if to_date:
+        conds_lb.append("lb.bill_date::text <= :td")
+    where_lb = ("WHERE " + " AND ".join(conds_lb)) if conds_lb else ""
+
     try:
         res_labour = await db.execute(
             text(
@@ -186,10 +217,10 @@ async def day_book(
                 f"lb.total_amount AS amount, lb.notes AS narration "
                 f"FROM {schema}.labour_bills lb "
                 f"LEFT JOIN master.ledgers l ON l.id = lb.ledger_id "
-                f"WHERE lb.bill_date BETWEEN :fd AND :td "
+                f"{where_lb} "
                 f"ORDER BY lb.bill_date, lb.id"
             ),
-            {"fd": from_date, "td": to_date}
+            params
         )
         for r in res_labour.mappings().all():
             d = dict(r)
@@ -206,8 +237,8 @@ async def day_book(
                 "amount": amt,
                 "narration": d["narration"] or "",
             })
-    except Exception:
-        pass
+    except Exception as e:
+        print("Daybook error labour:", e)
 
     # Sort all combined day book entries chronologically by voucher_date
     entries.sort(key=lambda x: (x["voucher_date"], str(x["id"])))
