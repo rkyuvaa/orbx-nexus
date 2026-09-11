@@ -28,7 +28,11 @@ async def dashboard_summary(
             f"  (SELECT COUNT(*) FROM {schema}.vouchers WHERE voucher_date = CURRENT_DATE) AS today_vouchers,"
             f"  (SELECT COALESCE(SUM(total_amount), 0) FROM {schema}.labour_bills WHERE is_paid = FALSE) AS pending_bills,"
             f"  (SELECT COUNT(*) FROM {schema}.stock_inward WHERE is_completed = FALSE) AS pending_inward,"
-            f"  (SELECT COALESCE(SUM(quantity), 0) FROM {schema}.stock_inward WHERE inward_date = CURRENT_DATE) AS today_production"
+            f"  (SELECT COALESCE(SUM(qty), 0) FROM ("
+            f"     SELECT quantity AS qty FROM {schema}.stock_inward WHERE inward_date = CURRENT_DATE AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) = 0"
+            f"     UNION ALL "
+            f"     SELECT (item->>'quantity')::numeric AS qty FROM {schema}.stock_inward, jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item WHERE inward_date = CURRENT_DATE AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) > 0"
+            f"   ) t) AS today_production"
         )
     )
     row = today_result.mappings().one()
@@ -43,11 +47,13 @@ async def dashboard_summary(
             f"  SUM(outward_qty) AS outward_qty, "
             f"  SUM(outward_weight) AS outward_weight "
             f"FROM ( "
-            f"  SELECT inward_date AS tx_date, COALESCE(quantity, 0) AS inward_qty, COALESCE(weight, 0) AS inward_weight, 0 AS outward_qty, 0 AS outward_weight "
-            f"  FROM {schema}.stock_inward "
+            f"  SELECT si.inward_date AS tx_date, si.quantity AS inward_qty, COALESCE(NULLIF(si.total_weight, 0), si.weight, 0) AS inward_weight, 0 AS outward_qty, 0 AS outward_weight FROM {schema}.stock_inward si WHERE jsonb_array_length(COALESCE(si.items, '[]'::jsonb)) = 0 "
             f"  UNION ALL "
-            f"  SELECT outward_date AS tx_date, 0 AS inward_qty, 0 AS inward_weight, COALESCE(quantity, 0) AS outward_qty, COALESCE(weight, 0) AS outward_weight "
-            f"  FROM {schema}.stock_outward "
+            f"  SELECT si.inward_date AS tx_date, COALESCE((item->>'quantity')::numeric, 0) AS inward_qty, COALESCE((item->>'total_weight')::numeric, (item->>'weight')::numeric, 0) AS inward_weight, 0 AS outward_qty, 0 AS outward_weight FROM {schema}.stock_inward si, jsonb_array_elements(COALESCE(si.items, '[]'::jsonb)) AS item WHERE jsonb_array_length(COALESCE(si.items, '[]'::jsonb)) > 0 "
+            f"  UNION ALL "
+            f"  SELECT so.outward_date AS tx_date, 0 AS inward_qty, 0 AS inward_weight, so.quantity AS outward_qty, COALESCE(NULLIF(so.total_weight, 0), so.weight, 0) AS outward_weight FROM {schema}.stock_outward so WHERE jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) = 0 "
+            f"  UNION ALL "
+            f"  SELECT so.outward_date AS tx_date, 0 AS inward_qty, 0 AS inward_weight, COALESCE((item->>'quantity')::numeric, 0) AS outward_qty, COALESCE((item->>'total_weight')::numeric, (item->>'weight')::numeric, 0) AS outward_weight FROM {schema}.stock_outward so, jsonb_array_elements(COALESCE(so.items, '[]'::jsonb)) AS item WHERE jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0 "
             f") sub "
             f"WHERE tx_date >= CURRENT_DATE - INTERVAL '30 days' "
             f"GROUP BY 1, 2 ORDER BY 2 ASC"
@@ -253,7 +259,7 @@ async def stock_in_hand(
         params["lid"] = ledger_id
 
     inward_res = await db.execute(
-        text(f"SELECT * FROM {schema}.stock_inward si WHERE {' AND '.join(conds)} ORDER BY si.inward_date DESC, si.id DESC"),
+        text(f"SELECT * FROM {schema}.stock_inward si WHERE {' AND '.join(conds)} ORDER BY si.inward_date ASC, si.id ASC"),
         params
     )
     inward_rows = inward_res.mappings().all()
@@ -265,11 +271,13 @@ async def stock_in_hand(
     )
     outward_rows = outward_res.mappings().all()
 
-    # Map from (inward_id, product_id) -> initial_quantity
     inward_quantities = {}
+    inward_item_list = []
+
     for si in inward_rows:
         si_dict = dict(si)
-        inward_id = si_dict["id"]
+        inward_id = int(si_dict["id"])
+        lid = si_dict.get("ledger_id")
         raw_items = si_dict.get("items")
         if isinstance(raw_items, str):
             try: raw_items = json.loads(raw_items)
@@ -280,22 +288,34 @@ async def stock_in_hand(
             for item in raw_items:
                 unrolled_items.append({
                     "product_id": item.get("product_id"),
-                    "quantity": float(item.get("quantity") or 0)
+                    "quantity": float(item.get("quantity") or 0),
+                    "weight": float(item.get("weight") or 0)
                 })
         else:
             if si_dict.get("product_id") or float(si_dict.get("quantity") or 0) > 0:
                 unrolled_items.append({
                     "product_id": si_dict.get("product_id"),
-                    "quantity": float(si_dict.get("quantity") or 0)
+                    "quantity": float(si_dict.get("quantity") or 0),
+                    "weight": float(si_dict.get("weight") or 0)
                 })
 
         for item in unrolled_items:
             p_id = item["product_id"]
             if p_id:
-                key = (int(inward_id), int(p_id))
+                p_id = int(p_id)
+                key = (inward_id, p_id)
                 inward_quantities[key] = inward_quantities.get(key, 0.0) + item["quantity"]
+                inward_item_list.append({
+                    "inward_id": inward_id,
+                    "inward_no": si_dict["inward_no"],
+                    "inward_date": str(si_dict["inward_date"]),
+                    "ref_no": si_dict.get("ref_no") or si_dict.get("serial_no") or "-",
+                    "product_id": p_id,
+                    "ledger_id": lid,
+                    "quantity": item["quantity"],
+                    "weight": item["weight"],
+                })
 
-    # Map from (inward_id, product_id) -> total_dispatched_qty
     dispatched_pool = {}
 
     for so in outward_rows:
@@ -340,100 +360,66 @@ async def stock_in_hand(
             remaining_qty = item["quantity"]
 
             matching_inwards = [iid for iid in inw_ids if (iid, p_id) in inward_quantities]
-
-            if not matching_inwards:
-                matching_inwards = inw_ids
-
             for iid in matching_inwards:
                 if remaining_qty <= 0:
                     break
-                
                 inw_key = (iid, p_id)
                 init_qty = inward_quantities.get(inw_key, 0.0)
                 already_disp = dispatched_pool.get(inw_key, 0.0)
                 avail_qty = max(0.0, init_qty - already_disp)
+                if avail_qty > 0:
+                    alloc = min(avail_qty, remaining_qty)
+                    dispatched_pool[inw_key] = already_disp + alloc
+                    remaining_qty -= alloc
 
-                if avail_qty <= 0:
-                    if iid == matching_inwards[-1]:
-                        allocate_qty = remaining_qty
-                    else:
-                        continue
-                else:
-                    allocate_qty = min(avail_qty, remaining_qty)
+            if remaining_qty > 0:
+                for inw_item in inward_item_list:
+                    if remaining_qty <= 0:
+                        break
+                    if inw_item["product_id"] == p_id:
+                        if ledger_id and ledger_id > 0 and inw_item["ledger_id"] != ledger_id:
+                            continue
+                        inw_key = (inw_item["inward_id"], p_id)
+                        init_qty = inward_quantities.get(inw_key, 0.0)
+                        already_disp = dispatched_pool.get(inw_key, 0.0)
+                        avail_qty = max(0.0, init_qty - already_disp)
+                        if avail_qty > 0:
+                            alloc = min(avail_qty, remaining_qty)
+                            dispatched_pool[inw_key] = already_disp + alloc
+                            remaining_qty -= alloc
 
-                dispatched_pool[inw_key] = already_disp + allocate_qty
-                remaining_qty -= allocate_qty
-
-            if remaining_qty > 0 and not matching_inwards:
-                if inw_ids:
-                    inw_key = (inw_ids[0], p_id)
-                    dispatched_pool[inw_key] = dispatched_pool.get(inw_key, 0.0) + remaining_qty
-
-    # 4. Unroll inward line items and calculate balance
     result_list = []
     remaining_dispatched = {k: v for k, v in dispatched_pool.items()}
 
-    for si in inward_rows:
-        si_dict = dict(si)
-        inward_id = si_dict["id"]
-        inward_no = si_dict["inward_no"]
-        inward_date = str(si_dict["inward_date"])
-        ref_no = si_dict.get("ref_no") or si_dict.get("serial_no") or "-"
-        lid = si_dict.get("ledger_id")
+    for item in inward_item_list:
+        inward_id = item["inward_id"]
+        p_id = item["product_id"]
+        line_qty = item["quantity"]
+        unit_weight = item["weight"]
+        lid = item["ledger_id"]
         supplier_name = ledger_map.get(lid, "Unknown Supplier")
 
-        raw_items = si_dict.get("items")
-        if isinstance(raw_items, str):
-            try: raw_items = json.loads(raw_items)
-            except Exception: raw_items = []
+        pool_key = (inward_id, p_id)
+        dispatched_to_subtract = 0.0
+        if pool_key in remaining_dispatched:
+            avail = remaining_dispatched[pool_key]
+            sub = min(line_qty, avail)
+            dispatched_to_subtract = sub
+            remaining_dispatched[pool_key] = avail - sub
 
-        unrolled_items = []
-        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
-            for item in raw_items:
-                unrolled_items.append({
-                    "product_id": item.get("product_id"),
-                    "process_id": item.get("process_id"),
-                    "quantity": float(item.get("quantity") or 0),
-                    "weight": float(item.get("weight") or 0),
-                })
-        else:
-            if si_dict.get("product_id") or float(si_dict.get("quantity") or 0) > 0:
-                unrolled_items.append({
-                    "product_id": si_dict.get("product_id"),
-                    "process_id": si_dict.get("process_id"),
-                    "quantity": float(si_dict.get("quantity") or 0),
-                    "weight": float(si_dict.get("weight") or 0),
-                })
-
-        for item in unrolled_items:
-            p_id = item["product_id"]
-            line_qty = item["quantity"]
-            unit_weight = item["weight"]
-
-            if not p_id:
-                continue
-
-            pool_key = (int(inward_id), int(p_id))
-            dispatched_to_subtract = 0.0
-            if pool_key in remaining_dispatched:
-                avail = remaining_dispatched[pool_key]
-                sub = min(line_qty, avail)
-                dispatched_to_subtract = sub
-                remaining_dispatched[pool_key] = avail - sub
-
-            balance_qty = max(0.0, line_qty - dispatched_to_subtract)
-            if balance_qty > 0:
-                p_name = product_map.get(p_id, f"Product #{p_id}")
-                result_list.append({
-                    "inward_no": inward_no,
-                    "inward_date": inward_date,
-                    "ref_no": ref_no,
-                    "product": p_name,
-                    "ledger_id": lid,
-                    "supplier_name": supplier_name,
-                    "balance_qty": balance_qty,
-                    "balance_weight": balance_qty * unit_weight,
-                })
+        balance_qty = max(0.0, line_qty - dispatched_to_subtract)
+        if balance_qty > 0:
+            p_name = product_map.get(p_id, f"Product #{p_id}")
+            result_list.append({
+                "inward_no": item["inward_no"],
+                "inward_date": item["inward_date"],
+                "ref_no": item["ref_no"],
+                "product": p_name,
+                "ledger_id": lid,
+                "supplier_name": supplier_name,
+                "balance_qty": balance_qty,
+                "balance_weight": balance_qty * unit_weight,
+            })
 
     return result_list
 
@@ -679,39 +665,90 @@ async def stock_summary(
         conds_out.append("so.outward_date <= :td")
         params["td"] = to_date
         
-    where_in = f"WHERE {' AND '.join(conds_in)}" if conds_in else ""
-    where_out = f"WHERE {' AND '.join(conds_out)}" if conds_out else ""
+    where_in_and = f"AND {' AND '.join(conds_in)}" if conds_in else ""
+    where_out_and = f"AND {' AND '.join(conds_out)}" if conds_out else ""
     
     query = f"""
+    WITH in_unrolled AS (
+      SELECT 
+        si.id,
+        si.inward_date::text AS tx_date,
+        si.inward_no AS voucher_no,
+        COALESCE(NULLIF(si.ref_no, ''), NULLIF(si.serial_no, ''), '-') AS ref_no,
+        si.ledger_id,
+        si.quantity AS qty,
+        COALESCE(NULLIF(si.total_weight, 0), si.weight, 0) AS wt
+      FROM {schema}.stock_inward si
+      WHERE jsonb_array_length(COALESCE(si.items, '[]'::jsonb)) = 0 {where_in_and}
+      UNION ALL
+      SELECT 
+        si.id,
+        si.inward_date::text AS tx_date,
+        si.inward_no AS voucher_no,
+        COALESCE(NULLIF(si.ref_no, ''), NULLIF(si.serial_no, ''), '-') AS ref_no,
+        si.ledger_id,
+        COALESCE((item->>'quantity')::numeric, 0) AS qty,
+        COALESCE((item->>'total_weight')::numeric, (item->>'weight')::numeric, 0) AS wt
+      FROM {schema}.stock_inward si,
+        jsonb_array_elements(COALESCE(si.items, '[]'::jsonb)) AS item
+      WHERE jsonb_array_length(COALESCE(si.items, '[]'::jsonb)) > 0 {where_in_and}
+    ),
+    in_grouped AS (
+      SELECT 
+        id, tx_date, voucher_no, ref_no, ledger_id,
+        SUM(qty) AS inward_qty,
+        SUM(wt) AS inward_weight,
+        0::numeric AS outward_qty,
+        0::numeric AS outward_weight
+      FROM in_unrolled
+      GROUP BY id, tx_date, voucher_no, ref_no, ledger_id
+    ),
+    out_unrolled AS (
+      SELECT 
+        so.id,
+        so.outward_date::text AS tx_date,
+        so.outward_no AS voucher_no,
+        COALESCE(NULLIF(so.ref_no, ''), NULLIF(so.serial_no, ''), '-') AS ref_no,
+        so.ledger_id,
+        so.quantity AS qty,
+        COALESCE(NULLIF(so.total_weight, 0), so.weight, 0) AS wt
+      FROM {schema}.stock_outward so
+      WHERE jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) = 0 {where_out_and}
+      UNION ALL
+      SELECT 
+        so.id,
+        so.outward_date::text AS tx_date,
+        so.outward_no AS voucher_no,
+        COALESCE(NULLIF(so.ref_no, ''), NULLIF(so.serial_no, ''), '-') AS ref_no,
+        so.ledger_id,
+        COALESCE((item->>'quantity')::numeric, 0) AS qty,
+        COALESCE((item->>'total_weight')::numeric, (item->>'weight')::numeric, 0) AS wt
+      FROM {schema}.stock_outward so,
+        jsonb_array_elements(COALESCE(so.items, '[]'::jsonb)) AS item
+      WHERE jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0 {where_out_and}
+    ),
+    out_grouped AS (
+      SELECT 
+        id, tx_date, voucher_no, ref_no, ledger_id,
+        0::numeric AS inward_qty,
+        0::numeric AS inward_weight,
+        SUM(qty) AS outward_qty,
+        SUM(wt) AS outward_weight
+      FROM out_unrolled
+      GROUP BY id, tx_date, voucher_no, ref_no, ledger_id
+    )
     SELECT 
-      inward_date::text AS tx_date,
-      inward_no AS voucher_no,
-      COALESCE(NULLIF(ref_no, ''), NULLIF(serial_no, ''), '-') AS ref_no,
-      l.name AS particulars,
-      quantity AS inward_qty,
-      weight AS inward_weight,
-      0::numeric AS outward_qty,
-      0::numeric AS outward_weight
-    FROM {schema}.stock_inward si
-    LEFT JOIN master.ledgers l ON l.id = si.ledger_id
-    {where_in}
-
-    UNION ALL
-
-    SELECT 
-      outward_date::text AS tx_date,
-      outward_no AS voucher_no,
-      COALESCE(NULLIF(ref_no, ''), NULLIF(serial_no, ''), '-') AS ref_no,
-      l.name AS particulars,
-      0::numeric AS inward_qty,
-      0::numeric AS inward_weight,
-      quantity AS outward_qty,
-      weight AS outward_weight
-    FROM {schema}.stock_outward so
-    LEFT JOIN master.ledgers l ON l.id = so.ledger_id
-    {where_out}
-
-    ORDER BY tx_date ASC, voucher_no ASC
+      g.tx_date, g.voucher_no, g.ref_no,
+      COALESCE(l.name, '-') AS particulars,
+      g.inward_qty, g.inward_weight,
+      g.outward_qty, g.outward_weight
+    FROM (
+      SELECT * FROM in_grouped
+      UNION ALL
+      SELECT * FROM out_grouped
+    ) g
+    LEFT JOIN master.ledgers l ON l.id = g.ledger_id
+    ORDER BY g.tx_date ASC, g.voucher_no ASC
     """
     
     result = await db.execute(text(query), params)
