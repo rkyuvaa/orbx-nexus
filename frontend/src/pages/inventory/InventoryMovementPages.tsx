@@ -178,53 +178,59 @@ function handlePrintMovement(row: any, companyData: any, stockItems: any[], ledg
           </tbody>
         </table>
 
-        <div class="totals-section" style="margin-top: 15px;">
-          <div class="totals-row">
-            <span class="label">Total Quantity:</span>
-            <span class="value">${formatQty(totalQty)}</span>
-          </div>
-          <div class="totals-row">
-            <span class="label">Taxable Value:</span>
-            <span class="value">₹${formatAmount(totalTaxable)}</span>
-          </div>
-          ${totalGst > 0 ? `
-            <div class="totals-row">
-              <span class="label">CGST Amount:</span>
-              <span class="value">₹${formatAmount(cgstVal)}</span>
+        <div class="totals-section">
+          <div class="calculation-box">
+            <div class="calculation-row">
+              <span>Total Quantity:</span>
+              <span><strong>${formatQty(totalQty)}</strong></span>
             </div>
-            <div class="totals-row">
-              <span class="label">SGST Amount:</span>
-              <span class="value">₹${formatAmount(sgstVal)}</span>
+            <div class="calculation-row">
+              <span>Taxable Value:</span>
+              <span>₹${formatAmount(totalTaxable)}</span>
             </div>
-            <div class="totals-row">
-              <span class="label">Total GST Amount:</span>
-              <span class="value">₹${formatAmount(totalGst)}</span>
+            ${totalGst > 0 ? `
+              <div class="calculation-row">
+                <span>CGST Amount:</span>
+                <span>₹${formatAmount(cgstVal)}</span>
+              </div>
+              <div class="calculation-row">
+                <span>SGST Amount:</span>
+                <span>₹${formatAmount(sgstVal)}</span>
+              </div>
+              <div class="calculation-row">
+                <span>Total GST Amount:</span>
+                <span>₹${formatAmount(totalGst)}</span>
+              </div>
+            ` : ""}
+            <div class="calculation-row grand-total">
+              <span>Grand Total:</span>
+              <span>₹${formatAmount(grandTotal)}</span>
             </div>
-          ` : ""}
-          <div class="totals-row grand-total" style="border-top: 2px solid #000; font-size: 1.1rem; font-weight: 800; color: #0f5132;">
-            <span class="label">Grand Total:</span>
-            <span class="value">₹${formatAmount(grandTotal)}</span>
           </div>
         </div>
 
-        ${amountInWordsStr ? `
-          <div style="margin-top: 15px; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; border: 1px solid #ddd; padding: 8px 12px; background: #f9fbf9;">
-            Amount in Words: ${amountInWordsStr}
-          </div>
-        ` : ""}
+        <div class="bottom-section">
+          ${amountInWordsStr ? `
+            <div class="narration-box" style="background-color: #f0fdf4 !important; font-weight: 700;">
+              <strong>AMOUNT IN WORDS:</strong> ${amountInWordsStr.replace(/^Rupees:\s*/i, "").replace(/\s*Rupees Only$/i, "").trim().toUpperCase()} RUPEES ONLY
+            </div>
+          ` : ""}
 
-        ${row.narration ? `
-          <div style="margin-top: 10px; font-size: 0.85rem;">
-            <strong>Narration / Remarks:</strong> ${row.narration}
-          </div>
-        ` : ""}
+          ${row.narration ? `
+            <div class="narration-box">
+              <strong>Narration / Remarks:</strong> ${row.narration}
+            </div>
+          ` : ""}
 
-        <div class="signatures-section" style="margin-top: 40px; display: flex; justify-content: space-between;">
-          <div class="signature-box" style="text-align: center;">
-            <p style="margin-top: 40px; border-top: 1px solid #000; pt: 5px; width: 180px;">Prepared By</p>
-          </div>
-          <div class="signature-box" style="text-align: center;">
-            <p style="margin-top: 40px; border-top: 1px solid #000; pt: 5px; width: 220px; font-weight: 700;">Authorised Signatory<br/>For ${cName}</p>
+          <div class="signatures-container">
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">Prepared By</div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">Authorised Signatory<br/>For ${cName}</div>
+            </div>
           </div>
         </div>
       </body>
