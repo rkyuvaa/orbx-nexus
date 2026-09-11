@@ -39,14 +39,17 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
 
-  const totalOwed = purchases.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalInvoice = purchases.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalPaid = purchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
+  const totalPending = Math.max(0, totalInvoice - totalPaid);
+  const supplierName = purchases[0]?.ledger_name || "Supplier";
 
   const { register, handleSubmit, watch, setValue, control, reset } = useForm({
     defaultValues: {
-      payment_status: isBulk ? "Paid" : (purchases[0]?.payment_status || "Unpaid"),
-      paid_amount: "",
+      payment_status: totalPending <= 0.01 ? "Paid" : "Paid",
+      paid_amount: String(totalPending),
       payment_date: new Date().toISOString().split("T")[0],
-      payment_mode: isBulk ? "" : (purchases[0]?.payment_mode || ""),
+      payment_mode: "Bank Transfer",
       payment_notes: "",
     },
   });
@@ -55,30 +58,30 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
 
   useEffect(() => {
     if (paymentStatus === "Paid") {
-      setValue("paid_amount", String(isBulk ? totalOwed : Number(purchases[0]?.amount || 0)));
+      setValue("paid_amount", String(totalPending));
     } else if (paymentStatus === "Unpaid") {
       setValue("paid_amount", "0");
     }
-  }, [paymentStatus, isBulk, totalOwed, purchases, setValue]);
+  }, [paymentStatus, totalPending, setValue]);
 
   useEffect(() => {
     if (open) {
       reset({
-        payment_status: isBulk ? "Paid" : (purchases[0]?.payment_status || "Unpaid"),
-        paid_amount: isBulk ? String(totalOwed) : String(Number(purchases[0]?.amount || 0)),
-        payment_date: purchases[0]?.payment_date || new Date().toISOString().split("T")[0],
-        payment_mode: isBulk ? "" : (purchases[0]?.payment_mode || ""),
+        payment_status: totalPending <= 0.01 ? "Paid" : "Paid",
+        paid_amount: String(totalPending),
+        payment_date: new Date().toISOString().split("T")[0],
+        payment_mode: "Bank Transfer",
         payment_notes: "",
       });
     }
-  }, [open, isBulk, purchases, totalOwed, reset]);
+  }, [open, purchases, totalPending, reset]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
       const payload = {
         payment_status: data.payment_status,
         paid_amount: paymentStatus === "Paid"
-          ? (isBulk ? totalOwed : Number(purchases[0]?.amount || 0))
+          ? totalInvoice
           : Number(data.paid_amount) || 0,
         payment_date: data.payment_date || null,
         payment_mode: data.payment_mode || null,
@@ -102,35 +105,64 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
   if (!purchases.length) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ pb: 1 }}>
-        {isBulk ? `Bulk Payment — ${purchases.length} entries` : `Update Payment — ${purchases[0]?.movement_no}`}
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ pb: 1, color: "#0f5132", fontWeight: 700 }}>
+        Supplier Ledger & Payment — {supplierName}
       </DialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
-        <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 1.5, mb: 2 }}>
-          {isBulk ? (
-            <>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {purchases.length} purchase entries selected
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Combined total: {RUPEE}{formatAmount(totalOwed)}
-              </Typography>
-            </>
-          ) : (
-            <>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {purchases[0]?.stock_item_name}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {purchases[0]?.movement_date} · Supplier: {purchases[0]?.ledger_name || DASH} · Total: {RUPEE}{formatAmount(Number(purchases[0]?.amount || 0))}
-              </Typography>
-            </>
-          )}
-        </Box>
+        {/* Supplier Complete Ledger / Statement Table (Dr / Cr from Nil) */}
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", mb: 1 }}>
+          Supplier Bill-wise Statement (Dr / Cr Statement)
+        </Typography>
+        <Paper variant="outlined" sx={{ mb: 3, borderRadius: "8px", overflow: "hidden" }}>
+          <Table size="small">
+            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Voucher No.</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Stock Items</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Invoice Amt (Cr)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Paid (Dr)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Balance (Payable)</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {purchases.map((p) => {
+                const amt = Number(p.amount || 0);
+                const pd = Number(p.paid_amount || 0);
+                const bal = Math.max(0, amt - pd);
+                return (
+                  <TableRow key={p.id} hover>
+                    <TableCell sx={{ fontSize: 12 }}>{p.movement_date}</TableCell>
+                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main" }}>{p.movement_no}</TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>{p.stock_item_name || DASH}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>{RUPEE}{formatAmount(amt)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, color: "success.main" }}>{RUPEE}{formatAmount(pd)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: bal > 0 ? "#dc3545" : "success.main" }}>
+                      {RUPEE}{formatAmount(bal)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+            <TableFooter sx={{ bgcolor: "#f4f9f6" }}>
+              <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
+                <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Total Statement Summary:</TableCell>
+                <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 14, color: "#dc3545" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </Paper>
+
+        {/* Record Payment Form */}
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", mb: 1 }}>
+          Record Payment Details
+        </Typography>
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12 }}>
+          <Grid size={{ xs: 6 }}>
             <Controller
               name="payment_status"
               control={control}
@@ -138,55 +170,51 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
                 <TextField select label="Payment Status" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...field}>
                   <MenuItem value="Unpaid">Unpaid</MenuItem>
                   <MenuItem value="Partial">Partial</MenuItem>
-                  <MenuItem value="Paid">Paid</MenuItem>
+                  <MenuItem value="Paid">Paid (Full Payment)</MenuItem>
                 </TextField>
               )}
             />
           </Grid>
-          {(paymentStatus === "Partial" || paymentStatus === "Paid") && (
-            <>
-              <Grid size={{ xs: 6 }}>
-                <TextField
-                  label="Paid Amount"
-                  type="number"
-                  fullWidth
-                  size="small"
-                  slotProps={{
-                    inputLabel: { shrink: true },
-                    htmlInput: { step: "0.01", min: 0, readOnly: paymentStatus === "Paid" },
-                  }}
-                  {...register("paid_amount")}
-                  sx={paymentStatus === "Paid" ? { "& .MuiOutlinedInput-root": { bgcolor: "action.disabledBackground" } } : {}}
-                />
-              </Grid>
-              <Grid size={{ xs: 6 }}>
-                <TextField label="Payment Date" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...register("payment_date")} />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="payment_mode"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField select label="Payment Mode" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...field}>
-                      <MenuItem value="">— Select —</MenuItem>
-                      {PAYMENT_MODE_OPTIONS.map((m) => (
-                        <MenuItem key={m} value={m}>{m}</MenuItem>
-                      ))}
-                    </TextField>
-                  )}
-                />
-              </Grid>
-            </>
-          )}
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="Payment Amount (₹)"
+              type="number"
+              fullWidth
+              size="small"
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { step: "0.01", min: 0, readOnly: paymentStatus === "Paid" },
+              }}
+              {...register("paid_amount")}
+              sx={paymentStatus === "Paid" ? { "& .MuiOutlinedInput-root": { bgcolor: "action.disabledBackground" } } : {}}
+            />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField label="Payment Date" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...register("payment_date")} />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <Controller
+              name="payment_mode"
+              control={control}
+              render={({ field }) => (
+                <TextField select label="Payment Mode" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...field}>
+                  <MenuItem value="">— Select —</MenuItem>
+                  {PAYMENT_MODE_OPTIONS.map((m) => (
+                    <MenuItem key={m} value={m}>{m}</MenuItem>
+                  ))}
+                </TextField>
+              )}
+            />
+          </Grid>
           <Grid size={{ xs: 12 }}>
-            <TextField label="Notes" fullWidth size="small" multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} {...register("payment_notes")} />
+            <TextField label="Notes / Narration" fullWidth size="small" multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} {...register("payment_notes")} />
           </Grid>
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
         <Button onClick={handleSubmit((d) => saveMutation.mutate(d))} variant="contained" size="small" color="success" disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? "Saving..." : isBulk ? `Pay ${purchases.length} Entries` : "Save Payment"}
+          {saveMutation.isPending ? "Saving..." : "Save Payment"}
         </Button>
       </DialogActions>
     </Dialog>
