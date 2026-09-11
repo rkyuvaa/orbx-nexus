@@ -1564,29 +1564,24 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     return dbBal + editingQty;
   }, [enrichedSelectedInwards, lineItemBalanceMap, productBalanceMap, editingProductQtyMap]);
 
-  const getLiveStockForProductProcessInward = useCallback((productId: number, processId: number | null, inwardId: number | null) => {
+  const getLiveStockForProductProcessInward = useCallback((productId: number, processId: number | null | string, inwardId: number | null) => {
     if (!inwardId && enrichedSelectedInwards.length > 0) return 0;
-    const initialBal = getProductBalance(productId, processId, inwardId);
-    
-    // Check if the inward has a process-specific stock for this product
-    const exactKey = inwardId ? `${inwardId}_${productId}_${processId ?? ""}` : "";
-    const hasExactInwardStock = !!lineItemBalanceMap[exactKey];
+    const initialBal = getProductBalance(productId, typeof processId === "number" ? processId : null, inwardId);
     
     const usedQty = lineItems
-      .filter((it) => {
-        const matchesProductAndInward = Number(it.product_id) === productId && (inwardId ? Number(it.inward_id) === inwardId : true);
-        if (!matchesProductAndInward) return false;
-        
-        if (hasExactInwardStock) {
-          return Number(it.process_id) === processId;
-        } else {
-          return true; // consumes from the process-less pool
-        }
-      })
+      .filter((it) => Number(it.product_id) === productId && (inwardId ? Number(it.inward_id) === inwardId : true))
       .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
       
     return Math.max(0, initialBal - usedQty);
-  }, [lineItemBalanceMap, getProductBalance, lineItems, enrichedSelectedInwards]);
+  }, [getProductBalance, lineItems, enrichedSelectedInwards]);
+
+  const entryLiveStockBal = useMemo(() => {
+    if (!activeInward || !entryProduct) return 0;
+    const inwardId = activeInward.id;
+    const productId = entryProduct.id;
+    const processId = entryProcess ? entryProcess.id : null;
+    return getLiveStockForProductProcessInward(productId, processId, inwardId);
+  }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward]);
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
@@ -1727,39 +1722,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       )
     );
   }, [activeInward, entryProduct, lineItemBalanceMap, processes]);
-
-  const entryLiveStockBal = useMemo(() => {
-    if (!activeInward || !entryProduct) return 0;
-    const inwardId = activeInward.id;
-    const productId = entryProduct.id;
-    
-    const matchingItems = Object.values(lineItemBalanceMap).filter(
-      (li) => li.inwardId === inwardId && li.productId === productId
-    );
-
-    if (entryProcess) {
-      const targetProcId = entryProcess.id;
-      const processItem = matchingItems.find(
-        (li) => li.processId === targetProcId || 
-                String(li.processId) === String(targetProcId) ||
-                li.processId === entryProcess.name ||
-                li.processId === entryProcess.process_code
-      );
-      if (processItem) {
-        return getLiveStockForProductProcessInward(productId, processItem.processId as number | null, inwardId);
-      }
-      return getLiveStockForProductProcessInward(productId, targetProcId, inwardId);
-    }
-
-    if (matchingItems.length === 1) {
-      return getLiveStockForProductProcessInward(productId, matchingItems[0].processId as number | null, inwardId);
-    }
-    if (matchingItems.length > 1) {
-      return getLiveStockForProductProcessInward(productId, matchingItems[0].processId as number | null, inwardId);
-    }
-
-    return getLiveStockForProductProcessInward(productId, null, inwardId);
-  }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward, lineItemBalanceMap]);
 
   const entryTotalWeight = useMemo(() => {
     const qty = Number(entryQty) || 0;
