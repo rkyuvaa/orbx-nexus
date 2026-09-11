@@ -1713,31 +1713,52 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     const procIds = new Set<number | string | null>();
     Object.values(lineItemBalanceMap).forEach((li) => {
       if (li.inwardId === activeInward.id && li.productId === entryProduct.id) {
-        procIds.add(li.processId);
+        if (li.processId !== null && li.processId !== undefined) {
+          procIds.add(li.processId);
+        }
       }
     });
-    return processes.filter((p: any) => procIds.has(p.id));
+    return processes.filter((p: any) => 
+      Array.from(procIds).some((pid) => 
+        p.id === Number(pid) || 
+        String(p.id) === String(pid) || 
+        p.name === pid || 
+        p.process_code === pid
+      )
+    );
   }, [activeInward, entryProduct, lineItemBalanceMap, processes]);
 
   const entryLiveStockBal = useMemo(() => {
     if (!activeInward || !entryProduct) return 0;
     const inwardId = activeInward.id;
     const productId = entryProduct.id;
-    const processId = entryProcess ? entryProcess.id : null;
-    if (entryProcess) {
-      // Process selected: live balance for this specific process
-      return getLiveStockForProductProcessInward(productId, processId, inwardId);
-    }
-    // No process selected yet: sum live balances across ALL processes for this product+inward
-    const matchingKeys = Object.values(lineItemBalanceMap).filter(
+    
+    const matchingItems = Object.values(lineItemBalanceMap).filter(
       (li) => li.inwardId === inwardId && li.productId === productId
     );
-    if (matchingKeys.length === 0) {
-      return getLiveStockForProductProcessInward(productId, null, inwardId);
+
+    if (entryProcess) {
+      const targetProcId = entryProcess.id;
+      const processItem = matchingItems.find(
+        (li) => li.processId === targetProcId || 
+                String(li.processId) === String(targetProcId) ||
+                li.processId === entryProcess.name ||
+                li.processId === entryProcess.process_code
+      );
+      if (processItem) {
+        return getLiveStockForProductProcessInward(productId, processItem.processId as number | null, inwardId);
+      }
+      return getLiveStockForProductProcessInward(productId, targetProcId, inwardId);
     }
-    return matchingKeys.reduce((sum, li) => {
-      return sum + getLiveStockForProductProcessInward(productId, li.processId as number | null, inwardId);
-    }, 0);
+
+    if (matchingItems.length === 1) {
+      return getLiveStockForProductProcessInward(productId, matchingItems[0].processId as number | null, inwardId);
+    }
+    if (matchingItems.length > 1) {
+      return getLiveStockForProductProcessInward(productId, matchingItems[0].processId as number | null, inwardId);
+    }
+
+    return getLiveStockForProductProcessInward(productId, null, inwardId);
   }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward, lineItemBalanceMap]);
 
   const entryTotalWeight = useMemo(() => {
@@ -1759,13 +1780,19 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   useEffect(() => {
     if (entryProduct && activeInward) {
       setEntryWeight(entryProduct.weight ? String(entryProduct.weight) : "0");
-      // Only auto-set process if the user hasn't already selected one
-      if (!entryProcess) {
-        const match = Object.values(lineItemBalanceMap).find(
-          (li) => li.inwardId === activeInward.id && li.productId === entryProduct.id
-        );
-        if (match && match.processId) {
-          const procObj = processes.find((p: any) => p.id === match.processId);
+      // Find matching process item in lineItemBalanceMap for this activeInward and entryProduct
+      const matches = Object.values(lineItemBalanceMap).filter(
+        (li) => li.inwardId === activeInward.id && li.productId === entryProduct.id
+      );
+      if (matches.length > 0) {
+        const firstMatch = matches[0];
+        if (firstMatch.processId) {
+          const procObj = processes.find((p: any) => 
+            p.id === Number(firstMatch.processId) || 
+            String(p.id) === String(firstMatch.processId) || 
+            p.name === firstMatch.processId || 
+            p.process_code === firstMatch.processId
+          );
           if (procObj) setEntryProcess(procObj);
         }
       }
