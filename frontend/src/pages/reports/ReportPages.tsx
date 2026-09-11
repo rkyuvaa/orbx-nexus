@@ -220,6 +220,8 @@ export function DayBookReport() {
     queryFn: async () => (await api.get("/company/")).data,
   });
 
+  const totalDr = data.reduce((s: number, r: any) => s + Number(r.dr_amount || 0), 0);
+  const totalCr = data.reduce((s: number, r: any) => s + Number(r.cr_amount || 0), 0);
   const totalAmt = data.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
   const totalEntries = data.length;
 
@@ -231,19 +233,22 @@ export function DayBookReport() {
     const cName = compData?.name || "SRI METAL";
     const cAddress1 = compData?.address || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
     let rowsHtml = "";
     data.forEach((r: any) => {
+      const dr = Number(r.dr_amount || 0);
+      const cr = Number(r.cr_amount || 0);
       rowsHtml += `<tr>
         <td style="text-align: center; white-space: nowrap;">${r.voucher_no}</td>
         <td style="text-align: center; white-space: nowrap;">${r.voucher_date}</td>
         <td style="text-align: center;">${r.voucher_type}</td>
         <td>${r.ledger_name}</td>
-        <td style="text-align: right;">₹${formatAmount(r.amount)}</td>
-        <td>${r.narration || ""}</td>
+        <td style="text-align: right; color: ${dr > 0 ? '#198754' : '#6c757d'};">${dr > 0 ? `₹${formatAmount(dr)}` : '—'}</td>
+        <td style="text-align: right;">${cr > 0 ? `₹${formatAmount(cr)}` : '—'}</td>
+        <td>${r.narration || r.particulars || ""}</td>
       </tr>`;
     });
 
@@ -259,18 +264,20 @@ export function DayBookReport() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Day Book</title>
+          <title>Day Book Report</title>
           <style>
             ${COMMON_PRINT_CSS}
-            @page { size: A4 portrait; margin: 15mm; }
+            @page { size: A4 landscape; margin: 15mm; }
             table.items-table th, table.items-table td {
               border: 1px solid #cbd5e1;
               padding: 5px 7px;
               white-space: nowrap;
             }
             table.items-table th {
-              background-color: #f8fafc;
-              border-bottom: 2px solid #94a3b8;
+              background-color: #0f5132 !important;
+              color: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             .totals-row td {
               font-weight: 700;
@@ -292,25 +299,27 @@ export function DayBookReport() {
             </div>
           </div>
           <div class="title-section" style="align-items: flex-start; margin-bottom: 20px;">
-            <h2>Day Book</h2>
+            <h2>Day Book Report</h2>
             <div class="doc-date">Period: <strong>${fromDate} to ${toDate}</strong></div>
           </div>
           <table class="items-table">
             <thead>
-              <tr>
-                <th style="width: 100px; text-align: center;">Voucher No.</th>
-                <th style="width: 85px; text-align: center;">Date</th>
-                <th style="width: 80px; text-align: center;">Type</th>
-                <th style="text-align: left;">Ledger</th>
-                <th style="width: 90px; text-align: right;">Amount</th>
-                <th style="text-align: left;">Narration</th>
+              <tr style="background-color: #0f5132; color: #fff;">
+                <th style="width: 110px; text-align: center;">Voucher No.</th>
+                <th style="width: 95px; text-align: center;">Date</th>
+                <th style="width: 100px; text-align: center;">Type</th>
+                <th style="text-align: left;">Ledger / Particulars</th>
+                <th style="width: 110px; text-align: right;">Debit (Dr)</th>
+                <th style="width: 110px; text-align: right;">Credit (Cr)</th>
+                <th style="text-align: left;">Narration / Details</th>
               </tr>
             </thead>
             <tbody>
               ${rowsHtml}
               <tr class="totals-row">
                 <td colspan="4" style="text-align: right; text-transform: uppercase;">Total</td>
-                <td style="text-align: right;">₹${formatAmount(totalAmt)}</td>
+                <td style="text-align: right; color: #198754;">₹${formatAmount(totalDr)}</td>
+                <td style="text-align: right;">₹${formatAmount(totalCr)}</td>
                 <td></td>
               </tr>
             </tbody>
@@ -337,7 +346,8 @@ export function DayBookReport() {
           {data.length > 0 && (
             <>
               <StatPill label="Entries" value={totalEntries} color="#1976d2" />
-              <StatPill label="Total Amount" value={`₹${formatAmount(totalAmt)}`} color="#ed6c02" />
+              <StatPill label="Total Debit (Dr)" value={`₹${formatAmount(totalDr)}`} color="#2e7d32" />
+              <StatPill label="Total Credit (Cr)" value={`₹${formatAmount(totalCr)}`} color="#ed6c02" />
               <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print</Button>
             </>
           )}
@@ -347,9 +357,17 @@ export function DayBookReport() {
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <PrintTable
             title="Day Book"
-            columns={["Voucher No.", "Date", "Type", "Ledger", "Amount", "Narration"]}
-            rows={data.map((r: any) => [r.voucher_no, r.voucher_date, r.voucher_type, r.ledger_name, `₹${formatAmount(r.amount)}`, r.narration])}
-            totals={["", "", "", "TOTAL", `₹${formatAmount(totalAmt)}`, ""]}
+            columns={["Voucher No.", "Date", "Type", "Ledger / Particulars", "Debit (Dr)", "Credit (Cr)", "Narration / Details"]}
+            rows={data.map((r: any) => [
+              r.voucher_no,
+              r.voucher_date,
+              r.voucher_type,
+              r.ledger_name,
+              Number(r.dr_amount || 0) > 0 ? `₹${formatAmount(r.dr_amount)}` : "—",
+              Number(r.cr_amount || 0) > 0 ? `₹${formatAmount(r.cr_amount)}` : "—",
+              r.narration || r.particulars || "-"
+            ])}
+            totals={["", "", "", "TOTAL", `₹${formatAmount(totalDr)}`, `₹${formatAmount(totalCr)}`, ""]}
           />
         </Paper>
       )}

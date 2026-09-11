@@ -87,18 +87,132 @@ async def day_book(
     from_date: str = Query(...), to_date: str = Query(...)
 ):
     schema = s(fy)
-    result = await db.execute(
-        text(
-            f"SELECT v.id, v.voucher_date::text, v.voucher_no, v.voucher_type, "
-            f"l.name AS ledger_name, v.amount, v.narration "
-            f"FROM {schema}.vouchers v "
-            f"LEFT JOIN master.ledgers l ON l.id = v.ledger_id "
-            f"WHERE v.voucher_date BETWEEN :fd AND :td "
-            f"ORDER BY v.voucher_date, v.id"
-        ),
-        {"fd": from_date, "td": to_date}
-    )
-    return [dict(r) for r in result.mappings().all()]
+    entries = []
+
+    # 1. Stock Movements (Inward Purchase & Outward)
+    try:
+        res_movements = await db.execute(
+            text(
+                f"SELECT m.id, m.movement_date::text AS voucher_date, m.movement_no AS voucher_no, "
+                f"CASE WHEN m.movement_type = 'Inward' THEN 'Purchase' ELSE 'Outward' END AS voucher_type, "
+                f"COALESCE(l.name, 'Unassigned Ledger') AS ledger_name, m.amount, "
+                f"COALESCE(m.stock_item_name, 'Stock Movement') AS narration, "
+                f"CASE WHEN m.movement_type = 'Inward' THEN 0 ELSE m.amount END AS dr_amount, "
+                f"CASE WHEN m.movement_type = 'Inward' THEN m.amount ELSE 0 END AS cr_amount, "
+                f"m.paid_amount, m.payment_date::text AS payment_date, m.payment_mode, m.payment_notes "
+                f"FROM {schema}.stock_item_movements m "
+                f"LEFT JOIN master.ledgers l ON l.id = m.ledger_id "
+                f"WHERE m.movement_date BETWEEN :fd AND :td "
+                f"ORDER BY m.movement_date, m.id"
+            ),
+            {"fd": from_date, "td": to_date}
+        )
+        for r in res_movements.mappings().all():
+            d = dict(r)
+            entries.append({
+                "id": f"mov-{d['id']}",
+                "voucher_date": d["voucher_date"],
+                "voucher_no": d["voucher_no"],
+                "voucher_type": d["voucher_type"],
+                "ledger_name": d["ledger_name"],
+                "particulars": d["narration"],
+                "dr_amount": float(d["dr_amount"] or 0),
+                "cr_amount": float(d["cr_amount"] or 0),
+                "amount": float(d["amount"] or 0),
+                "narration": d["narration"] or "",
+            })
+
+            # Add Supplier Payment entry if paid_amount > 0 and payment date is within range
+            paid_amt = float(d["paid_amount"] or 0)
+            p_date = d["payment_date"] or d["voucher_date"]
+            if paid_amt > 0 and from_date <= p_date <= to_date:
+                pmode = d["payment_mode"] or "Direct Payment"
+                pnotes = f" ({d['payment_notes']})" if d["payment_notes"] else ""
+                entries.append({
+                    "id": f"pay-{d['id']}",
+                    "voucher_date": p_date,
+                    "voucher_no": f"PAY-{d['voucher_no']}",
+                    "voucher_type": "Payment",
+                    "ledger_name": d["ledger_name"],
+                    "particulars": f"Payment via {pmode}{pnotes}",
+                    "dr_amount": paid_amt,
+                    "cr_amount": 0.0,
+                    "amount": paid_amt,
+                    "narration": f"Payment against {d['voucher_no']} ({pmode})",
+                })
+    except Exception:
+        pass
+
+    # 2. Vouchers (Payment, Receipt, Contra, Journal, Misc. Expenses)
+    try:
+        res_vouchers = await db.execute(
+            text(
+                f"SELECT v.id, v.voucher_date::text, v.voucher_no, v.voucher_type, "
+                f"COALESCE(l.name, 'General Ledger') AS ledger_name, v.amount, v.narration "
+                f"FROM {schema}.vouchers v "
+                f"LEFT JOIN master.ledgers l ON l.id = v.ledger_id "
+                f"WHERE v.voucher_date BETWEEN :fd AND :td "
+                f"ORDER BY v.voucher_date, v.id"
+            ),
+            {"fd": from_date, "td": to_date}
+        )
+        for r in res_vouchers.mappings().all():
+            d = dict(r)
+            vtype = d["voucher_type"]
+            amt = float(d["amount"] or 0)
+            dr = amt if vtype in ("Payment", "Misc. Expenses", "Contra") else 0.0
+            cr = amt if vtype in ("Receipt", "Purchase", "Journal") else 0.0
+            entries.append({
+                "id": f"vouch-{d['id']}",
+                "voucher_date": d["voucher_date"],
+                "voucher_no": d["voucher_no"],
+                "voucher_type": vtype,
+                "ledger_name": d["ledger_name"],
+                "particulars": d["narration"] or vtype,
+                "dr_amount": dr,
+                "cr_amount": cr,
+                "amount": amt,
+                "narration": d["narration"] or "",
+            })
+    except Exception:
+        pass
+
+    # 3. Labour Bills
+    try:
+        res_labour = await db.execute(
+            text(
+                f"SELECT lb.id, lb.bill_date::text AS voucher_date, lb.bill_no AS voucher_no, "
+                f"'Labour Bill' AS voucher_type, COALESCE(l.name, 'Labour Party') AS ledger_name, "
+                f"lb.total_amount AS amount, lb.notes AS narration "
+                f"FROM {schema}.labour_bills lb "
+                f"LEFT JOIN master.ledgers l ON l.id = lb.ledger_id "
+                f"WHERE lb.bill_date BETWEEN :fd AND :td "
+                f"ORDER BY lb.bill_date, lb.id"
+            ),
+            {"fd": from_date, "td": to_date}
+        )
+        for r in res_labour.mappings().all():
+            d = dict(r)
+            amt = float(d["amount"] or 0)
+            entries.append({
+                "id": f"lb-{d['id']}",
+                "voucher_date": d["voucher_date"],
+                "voucher_no": d["voucher_no"],
+                "voucher_type": "Labour Bill",
+                "ledger_name": d["ledger_name"],
+                "particulars": d["narration"] or "Labour Bill Entry",
+                "dr_amount": 0.0,
+                "cr_amount": amt,
+                "amount": amt,
+                "narration": d["narration"] or "",
+            })
+    except Exception:
+        pass
+
+    # Sort all combined day book entries chronologically by voucher_date
+    entries.sort(key=lambda x: (x["voucher_date"], str(x["id"])))
+
+    return entries
 
 
 # ─────── Ledger Account ───────
