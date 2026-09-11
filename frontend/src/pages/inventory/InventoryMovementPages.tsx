@@ -29,11 +29,13 @@ interface MovementDialogProps {
   movementType: "Inward" | "Outward";
 }
 
+const GST_RATES = [0, 5, 12, 18, 28];
+
 function MovementDialog({ open, onClose, editing, movementType }: MovementDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
   const [lineItems, setLineItems] = useState<any[]>([
-    { stock_item_id: "", quantity: "", rate: "", amount: "", uom_id: "" }
+    { stock_item_id: "", quantity: "", rate: "", gst_percent: "0", taxable_amount: "", gst_amount: "0.00", amount: "", uom_id: "" }
   ]);
 
   const { data: stockItems = [] } = useQuery({
@@ -78,7 +80,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
     },
   });
 
-  // Auto-fill UOM when stock item is selected in a row
+  // Auto-fill UOM and calculate amounts (Taxable, GST Amt, Total Amt)
   const handleLineItemChange = (index: number, field: string, value: any) => {
     setLineItems((prev) =>
       prev.map((item, i) => {
@@ -92,10 +94,18 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               updated.uom_id = "";
             }
           }
-          if (field === "quantity" || field === "rate") {
+          if (field === "quantity" || field === "rate" || field === "gst_percent") {
             const q = Number(field === "quantity" ? value : item.quantity) || 0;
             const r = Number(field === "rate" ? value : item.rate) || 0;
-            updated.amount = q > 0 && r > 0 ? (q * r).toFixed(2) : "";
+            const gstP = Number(field === "gst_percent" ? value : item.gst_percent) || 0;
+            
+            const taxable = q > 0 && r > 0 ? (q * r) : 0;
+            const gstAmt = taxable > 0 && gstP > 0 ? ((taxable * gstP) / 100) : 0;
+            const totalAmt = taxable + gstAmt;
+
+            updated.taxable_amount = taxable > 0 ? taxable.toFixed(2) : "";
+            updated.gst_amount = gstAmt > 0 ? gstAmt.toFixed(2) : "0.00";
+            updated.amount = totalAmt > 0 ? totalAmt.toFixed(2) : "";
           }
           return updated;
         }
@@ -105,7 +115,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
   };
 
   const handleAddLineItem = () => {
-    setLineItems((prev) => [...prev, { stock_item_id: "", quantity: "", rate: "", amount: "", uom_id: "" }]);
+    setLineItems((prev) => [...prev, { stock_item_id: "", quantity: "", rate: "", gst_percent: "0", taxable_amount: "", gst_amount: "0.00", amount: "", uom_id: "" }]);
   };
 
   const handleRemoveLineItem = (index: number) => {
@@ -132,19 +142,39 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
         }
 
         if (parsedItems && parsedItems.length > 0) {
-          setLineItems(parsedItems.map((item: any) => ({
-            stock_item_id: String(item.stock_item_id || ""),
-            quantity: String(item.quantity || ""),
-            rate: String(item.rate || ""),
-            amount: String(item.amount || ""),
-            uom_id: String(item.uom_id || "")
-          })));
+          setLineItems(parsedItems.map((item: any) => {
+            const q = Number(item.quantity) || 0;
+            const r = Number(item.rate) || 0;
+            const gstP = Number(item.gst_percent) || 0;
+            const taxable = item.taxable_amount !== undefined ? Number(item.taxable_amount) : (q * r);
+            const gstAmt = item.gst_amount !== undefined ? Number(item.gst_amount) : ((taxable * gstP) / 100);
+            const totalAmt = item.amount !== undefined ? Number(item.amount) : (taxable + gstAmt);
+            return {
+              stock_item_id: String(item.stock_item_id || ""),
+              quantity: String(item.quantity || ""),
+              rate: String(item.rate || ""),
+              gst_percent: String(item.gst_percent ?? "0"),
+              taxable_amount: taxable > 0 ? taxable.toFixed(2) : "",
+              gst_amount: gstAmt > 0 ? gstAmt.toFixed(2) : "0.00",
+              amount: totalAmt > 0 ? totalAmt.toFixed(2) : "",
+              uom_id: String(item.uom_id || "")
+            };
+          }));
         } else {
+          const q = Number(editing.quantity) || 0;
+          const r = Number(editing.rate) || 0;
+          const gstP = Number(editing.gst_percent) || 0;
+          const taxable = editing.taxable_amount !== undefined ? Number(editing.taxable_amount) : (q * r);
+          const gstAmt = editing.gst_amount !== undefined ? Number(editing.gst_amount) : ((taxable * gstP) / 100);
+          const totalAmt = editing.amount !== undefined ? Number(editing.amount) : (taxable + gstAmt);
           setLineItems([{
             stock_item_id: String(editing.stock_item_id || ""),
             quantity: String(editing.quantity || ""),
             rate: String(editing.rate || ""),
-            amount: String(editing.amount || ""),
+            gst_percent: String(editing.gst_percent ?? "0"),
+            taxable_amount: taxable > 0 ? taxable.toFixed(2) : "",
+            gst_amount: gstAmt > 0 ? gstAmt.toFixed(2) : "0.00",
+            amount: totalAmt > 0 ? totalAmt.toFixed(2) : "",
             uom_id: String(editing.uom_id || "")
           }]);
         }
@@ -156,7 +186,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
           ref_no: "",
           narration: "",
         });
-        setLineItems([{ stock_item_id: "", quantity: "", rate: "", amount: "", uom_id: "" }]);
+        setLineItems([{ stock_item_id: "", quantity: "", rate: "", gst_percent: "0", taxable_amount: "", gst_amount: "0.00", amount: "", uom_id: "" }]);
 
         const seqType = movementType === "Inward" ? "inventory_inward" : "inventory_outward";
         api.get(`/sequences/preview/${seqType}`)
@@ -167,7 +197,18 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
   }, [open, editing, reset, movementType, setValue]);
 
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-  const totalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const totalTaxableAmount = lineItems.reduce((sum, item) => {
+    const q = Number(item.quantity) || 0;
+    const r = Number(item.rate) || 0;
+    return sum + (q * r);
+  }, 0);
+  const totalGstAmount = lineItems.reduce((sum, item) => {
+    const q = Number(item.quantity) || 0;
+    const r = Number(item.rate) || 0;
+    const gstP = Number(item.gst_percent) || 0;
+    return sum + ((q * r * gstP) / 100);
+  }, 0);
+  const grandTotalAmount = totalTaxableAmount + totalGstAmount;
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => {
@@ -184,15 +225,26 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
         ledger_id: data.ledger_id ? Number(data.ledger_id) : null,
         quantity: totalQty,
         rate: Number(validItems[0].rate) || 0,
-        amount: totalAmount,
+        amount: grandTotalAmount > 0 ? grandTotalAmount : totalTaxableAmount,
         uom_id: validItems[0].uom_id ? Number(validItems[0].uom_id) : null,
-        items: validItems.map((item) => ({
-          stock_item_id: Number(item.stock_item_id),
-          quantity: Number(item.quantity) || 0,
-          rate: Number(item.rate) || 0,
-          amount: Number(item.amount) || 0,
-          uom_id: item.uom_id ? Number(item.uom_id) : null,
-        })),
+        items: validItems.map((item) => {
+          const q = Number(item.quantity) || 0;
+          const r = Number(item.rate) || 0;
+          const gstP = Number(item.gst_percent) || 0;
+          const taxable = q * r;
+          const gstAmt = (taxable * gstP) / 100;
+          const totalAmt = taxable + gstAmt;
+          return {
+            stock_item_id: Number(item.stock_item_id),
+            quantity: q,
+            rate: r,
+            taxable_amount: Number(taxable.toFixed(2)),
+            gst_percent: gstP,
+            gst_amount: Number(gstAmt.toFixed(2)),
+            amount: Number(totalAmt.toFixed(2)),
+            uom_id: item.uom_id ? Number(item.uom_id) : null,
+          };
+        }),
       };
       return editing
         ? api.put(`/stock/inventory/movements/${editing.id}?fy=${activeFY}`, payload)
@@ -220,7 +272,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
   }, [lineItems, balanceMap, movementType]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>
         {editing 
           ? `Edit ${movementType === "Inward" ? "Purchase" : movementType}` 
@@ -277,12 +329,15 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               <Table size="small">
                 <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 260, fontWeight: 700 }}>Stock Item *</TableCell>
-                    <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Qty *</TableCell>
-                    <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Rate</TableCell>
-                    <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Amount</TableCell>
-                    <TableCell sx={{ width: 180, minWidth: 180, fontWeight: 700 }}>UOM</TableCell>
-                    <TableCell sx={{ width: 50, minWidth: 50 }} align="center">Del</TableCell>
+                    <TableCell sx={{ minWidth: 220, fontWeight: 700 }}>Stock Item *</TableCell>
+                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
+                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Rate</TableCell>
+                    <TableCell sx={{ width: 110, minWidth: 110, fontWeight: 700 }} align="right">Taxable Amt</TableCell>
+                    <TableCell sx={{ width: 95, minWidth: 95, fontWeight: 700 }} align="center">GST %</TableCell>
+                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">GST Amt</TableCell>
+                    <TableCell sx={{ width: 110, minWidth: 110, fontWeight: 700 }} align="right">Total Amt</TableCell>
+                    <TableCell sx={{ width: 140, minWidth: 140, fontWeight: 700 }}>UOM</TableCell>
+                    <TableCell sx={{ width: 40, minWidth: 40 }} align="center">Del</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -290,9 +345,16 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                     const currentBalance = item.stock_item_id ? (balanceMap[Number(item.stock_item_id)] ?? 0) : null;
                     const itemExceeds = movementType === "Outward" && currentBalance !== null && (Number(item.quantity) || 0) > currentBalance;
                     
+                    const q = Number(item.quantity) || 0;
+                    const r = Number(item.rate) || 0;
+                    const gstP = Number(item.gst_percent) || 0;
+                    const taxable = q * r;
+                    const gstAmt = (taxable * gstP) / 100;
+                    const totalAmt = taxable + gstAmt;
+
                     return (
                       <TableRow key={idx}>
-                        <TableCell sx={{ minWidth: 260, verticalAlign: "top", pt: 1.5 }}>
+                        <TableCell sx={{ minWidth: 220, verticalAlign: "top", pt: 1.5 }}>
                           <LazyAutocomplete
                             size="small"
                             options={stockItems}
@@ -308,7 +370,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ minWidth: 120, verticalAlign: "top", pt: 1.5 }} align="right">
+                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 1.5 }} align="right">
                           <TextField
                             size="small"
                             type="number"
@@ -324,7 +386,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             fullWidth
                           />
                         </TableCell>
-                        <TableCell sx={{ minWidth: 120, verticalAlign: "top", pt: 1.5 }} align="right">
+                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 1.5 }} align="right">
                           <TextField
                             size="small"
                             type="number"
@@ -334,12 +396,37 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             fullWidth
                           />
                         </TableCell>
-                        <TableCell sx={{ minWidth: 120, verticalAlign: "top", pt: 2.2 }} align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 600, pr: 1 }}>
-                            {item.amount ? `₹${formatAmount(item.amount)}` : "-"}
+                        <TableCell sx={{ minWidth: 110, verticalAlign: "top", pt: 2.2 }} align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {taxable > 0 ? `₹${formatAmount(taxable)}` : "—"}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 180, verticalAlign: "top", pt: 1.5 }}>
+                        <TableCell sx={{ minWidth: 95, verticalAlign: "top", pt: 1.5 }} align="center">
+                          <TextField
+                            select
+                            size="small"
+                            value={item.gst_percent ?? "0"}
+                            onChange={(e) => handleLineItemChange(idx, "gst_percent", e.target.value)}
+                            fullWidth
+                          >
+                            {GST_RATES.map((rate) => (
+                              <MenuItem key={rate} value={String(rate)}>
+                                {rate}%
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 2.2 }} align="right">
+                          <Typography variant="body2" sx={{ color: gstAmt > 0 ? "#0f5132" : "text.secondary", fontWeight: 600 }}>
+                            {gstAmt > 0 ? `₹${formatAmount(gstAmt)}` : "₹0.00"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 110, verticalAlign: "top", pt: 2.2 }} align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                            {totalAmt > 0 ? `₹${formatAmount(totalAmt)}` : "—"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 140, verticalAlign: "top", pt: 1.5 }}>
                           <LazyAutocomplete
                             size="small"
                             options={uoms}
@@ -350,7 +437,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             fullWidth
                           />
                         </TableCell>
-                        <TableCell sx={{ minWidth: 50, verticalAlign: "top", pt: 2 }} align="center">
+                        <TableCell sx={{ minWidth: 40, verticalAlign: "top", pt: 2 }} align="center">
                           <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
@@ -361,17 +448,23 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                   
                   {/* Totals & Add Row */}
                   <TableRow sx={{ bgcolor: "#f4f9f6" }}>
-                    <TableCell colSpan={6}>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <TableCell colSpan={9}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, py: 0.5 }}>
                         <Button size="small" startIcon={<Add />} onClick={handleAddLineItem} sx={{ textTransform: "none", color: "#0f5132", fontWeight: 700 }}>
                           Add Item Row
                         </Button>
-                        <Box sx={{ display: "flex", gap: 3, pr: 2 }}>
+                        <Box sx={{ display: "flex", gap: 3, pr: 1, alignItems: "center" }}>
                           <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132" }}>
                             Total Qty: {formatQty(totalQty)}
                           </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                            Taxable Value: ₹{formatAmount(totalTaxableAmount)}
+                          </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132" }}>
-                            Total Value: ₹{formatAmount(totalAmount)}
+                            Total GST: ₹{formatAmount(totalGstAmount)}
+                          </Typography>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0f5132", fontSize: "0.95rem" }}>
+                            Grand Total: ₹{formatAmount(grandTotalAmount)}
                           </Typography>
                         </Box>
                       </Box>
