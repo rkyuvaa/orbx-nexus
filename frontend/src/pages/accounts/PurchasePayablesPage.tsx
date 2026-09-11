@@ -419,19 +419,6 @@ export default function PurchasePayablesPage() {
             control={
               <Switch
                 size="small"
-                checked={groupBySupplier}
-                onChange={(e) => setGroupBySupplier(e.target.checked)}
-                color="primary"
-              />
-            }
-            label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Group by Supplier</Typography>}
-            sx={{ ml: 0.5, mr: 1 }}
-          />
-
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
                 checked={hideZeroPayables}
                 onChange={(e) => setHideZeroPayables(e.target.checked)}
                 color="error"
@@ -442,7 +429,7 @@ export default function PurchasePayablesPage() {
           />
 
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-            {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${filtered.length} entries`}
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${supplierGroups.length} suppliers (${filtered.length} pending bills)`}
           </Typography>
 
           {selectedIds.size > 0 && (
@@ -479,51 +466,55 @@ export default function PurchasePayablesPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {!groupBySupplier && filtered.map((m: any) => renderRow(m))}
+              {supplierGroups.map((group) => {
+                const groupItemIds = group.items.map((it) => it.id);
+                const isGroupAllChecked = groupItemIds.every((id) => selectedIds.has(id));
+                const isGroupSomeChecked = groupItemIds.some((id) => selectedIds.has(id)) && !isGroupAllChecked;
+                const isCollapsed = !!collapsedGroups[group.supplier];
 
-              {groupBySupplier &&
-                supplierGroups.map((group) => {
-                  const groupItemIds = group.items.map((it) => it.id);
-                  const isGroupAllChecked = groupItemIds.every((id) => selectedIds.has(id));
-                  const isGroupSomeChecked = groupItemIds.some((id) => selectedIds.has(id)) && !isGroupAllChecked;
-                  const isCollapsed = !!collapsedGroups[group.supplier];
-
-                  return (
-                    <Fragment key={group.supplier}>
-                      <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 1.0 } }}>
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            size="small"
-                            checked={isGroupAllChecked}
-                            indeterminate={isGroupSomeChecked}
-                            onChange={() => toggleGroup(group.items)}
-                          />
-                        </TableCell>
-                        <TableCell colSpan={4}>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                            <IconButton size="small" onClick={() => toggleCollapseGroup(group.supplier)} sx={{ p: 0.25 }}>
-                              {isCollapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
-                            </IconButton>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132" }}>
-                              {group.supplier} <Typography component="span" variant="caption" color="text.secondary">({group.items.length} {group.items.length === 1 ? "pending bill" : "pending bills"})</Typography>
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "text.secondary" }}>
-                          {RUPEE}{formatAmount(group.totalAmount)}
-                        </TableCell>
-                        <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "success.main" }}>
-                          {RUPEE}{formatAmount(group.totalPaid)}
-                        </TableCell>
-                        <TableCell sx={{ textAlign: "right", fontWeight: 800, color: "#dc3545", fontSize: "0.95rem" }}>
-                          {RUPEE}{formatAmount(group.totalPayable)}
-                        </TableCell>
-                        <TableCell colSpan={2} />
-                      </TableRow>
-                      {!isCollapsed && group.items.map((m: any) => renderRow(m))}
-                    </Fragment>
-                  );
-                })}
+                return (
+                  <Fragment key={group.supplier}>
+                    <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 1.0 } }}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={isGroupAllChecked}
+                          indeterminate={isGroupSomeChecked}
+                          onChange={() => toggleGroup(group.items)}
+                        />
+                      </TableCell>
+                      <TableCell colSpan={4} onClick={() => toggleCollapseGroup(group.supplier)} sx={{ cursor: "pointer" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <IconButton size="small" sx={{ p: 0.25 }}>
+                            {isCollapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
+                          </IconButton>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                            {group.supplier} <Typography component="span" variant="caption" color="text.secondary">({group.items.length} {group.items.length === 1 ? "pending bill" : "pending bills"})</Typography>
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "text.secondary" }}>
+                        {RUPEE}{formatAmount(group.totalAmount)}
+                      </TableCell>
+                      <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "success.main" }}>
+                        {RUPEE}{formatAmount(group.totalPaid)}
+                      </TableCell>
+                      <TableCell sx={{ textAlign: "right", fontWeight: 800, color: "#dc3545", fontSize: "0.95rem" }}>
+                        {RUPEE}{formatAmount(group.totalPayable)}
+                      </TableCell>
+                      <TableCell colSpan={1} />
+                      <TableCell sx={{ textAlign: "center" }}>
+                        <Tooltip title={`Pay All for ${group.supplier}`}>
+                          <IconButton size="small" color="success" onClick={() => { setSelectedIds(new Set(groupItemIds)); setSingleItem(null); setPayOpen(true); }}>
+                            <PaymentIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                    {!isCollapsed && group.items.map((m: any) => renderRow(m))}
+                  </Fragment>
+                );
+              })}
 
               {filtered.length === 0 && !isLoading && (
                 <TableRow>
