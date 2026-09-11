@@ -80,6 +80,7 @@ export const router = createBrowserRouter([
 
       // Purchase
       { path: "purchase/tools-consumables", element: <InventoryInwardPage /> },
+      { path: "purchase/payables", element: <PurchasePayablesPage /> },
 
       // Process Info
       { path: "process/products", element: <ProductRegisterPage /> },

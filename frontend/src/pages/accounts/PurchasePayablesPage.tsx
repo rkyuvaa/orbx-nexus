@@ -199,7 +199,8 @@ export default function PurchasePayablesPage() {
   const [singleItem, setSingleItem] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState("");
-  const [groupBySupplier, setGroupBySupplier] = useState(false);
+  const [groupBySupplier, setGroupBySupplier] = useState(true);
+  const [hideZeroPayables, setHideZeroPayables] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const { data: movements = [], isLoading, refetch } = useQuery({
@@ -209,39 +210,62 @@ export default function PurchasePayablesPage() {
   });
 
   const filtered = useMemo(() => {
+    let result = movements;
+    if (hideZeroPayables) {
+      result = result.filter((m: any) => {
+        const amt = Number(m.amount || 0);
+        const paid = Number(m.paid_amount || 0);
+        const pending = amt - paid;
+        return pending > 0.01 && m.payment_status !== "Paid";
+      });
+    }
+
     const q = search.toLowerCase();
-    if (!q) return movements;
-    return movements.filter((m: any) =>
-      [m.movement_no, m.stock_item_name, m.ledger_name, m.payment_status].some(
-        (v) => v && String(v).toLowerCase().includes(q)
-      )
-    );
-  }, [movements, search]);
+    if (q) {
+      result = result.filter((m: any) =>
+        [m.movement_no, m.stock_item_name, m.ledger_name, m.payment_status].some(
+          (v) => v && String(v).toLowerCase().includes(q)
+        )
+      );
+    }
+    return result;
+  }, [movements, search, hideZeroPayables]);
 
   const supplierGroups = useMemo(() => {
     if (!groupBySupplier) return [];
     const groupsMap: Record<string, any[]> = {};
     filtered.forEach((m: any) => {
-      const supplierName = m.ledger_name || "Unassigned";
+      const supplierName = m.ledger_name || "Unassigned Supplier";
       if (!groupsMap[supplierName]) groupsMap[supplierName] = [];
       groupsMap[supplierName].push(m);
     });
-    return Object.entries(groupsMap).map(([supplier, items]) => {
-      const totalAmount = items.reduce((s, item) => s + Number(item.amount || 0), 0);
-      return { supplier, items, totalAmount };
-    });
-  }, [filtered, groupBySupplier]);
+
+    return Object.entries(groupsMap)
+      .map(([supplier, items]) => {
+        const totalAmount = items.reduce((s, item) => s + Number(item.amount || 0), 0);
+        const totalPaid = items.reduce((s, item) => s + Number(item.paid_amount || 0), 0);
+        const totalPayable = Math.max(0, totalAmount - totalPaid);
+        return { supplier, items, totalAmount, totalPaid, totalPayable };
+      })
+      .filter((g) => !hideZeroPayables || g.totalPayable > 0.01);
+  }, [filtered, groupBySupplier, hideZeroPayables]);
 
   const summary = useMemo(() => {
     const totalAmount = movements.reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     const totalPaid = movements.reduce((s: number, m: any) => s + Number(m.paid_amount || 0), 0);
-    const totalPending = totalAmount - totalPaid;
-    const unpaidCount = movements.filter((m: any) => !m.payment_status || m.payment_status === "Unpaid").length;
+    const totalPending = Math.max(0, totalAmount - totalPaid);
+    const unpaidCount = movements.filter((m: any) => {
+      const pending = Number(m.amount || 0) - Number(m.paid_amount || 0);
+      return pending > 0.01 && m.payment_status !== "Paid";
+    }).length;
     return { totalAmount, totalPaid, totalPending, unpaidCount };
   }, [movements]);
 
-  const filteredTotalAmount = useMemo(() => {
-    return filtered.reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
+  const filteredTotalPayable = useMemo(() => {
+    return filtered.reduce((s: number, m: any) => {
+      const pending = Number(m.amount || 0) - Number(m.paid_amount || 0);
+      return s + Math.max(0, pending);
+    }, 0);
   }, [filtered]);
 
   const allIds = filtered.map((m: any) => m.id as number);
@@ -307,47 +331,59 @@ export default function PurchasePayablesPage() {
   const dialogPurchases = singleItem ? [singleItem] : selectedPurchases;
 
   const pills = [
-    { label: "Total Payable", value: `${RUPEE}${formatAmount(summary.totalAmount)}`, color: "error.main" },
+    { label: "Total Pending Payable", value: `${RUPEE}${formatAmount(summary.totalPending)}`, color: "error.main" },
     { label: "Total Paid", value: `${RUPEE}${formatAmount(summary.totalPaid)}`, color: "success.main" },
-    { label: "Pending Balance", value: `${RUPEE}${formatAmount(summary.totalPending)}`, color: "warning.dark" },
-    { label: "Unpaid Entries", value: String(summary.unpaidCount), color: "primary.main" },
+    { label: "Total Purchase Amount", value: `${RUPEE}${formatAmount(summary.totalAmount)}`, color: "primary.main" },
+    { label: "Unpaid / Pending Bills", value: String(summary.unpaidCount), color: "warning.dark" },
   ];
 
-  const renderRow = (m: any) => (
-    <TableRow key={m.id} selected={selectedIds.has(m.id)} hover sx={{ cursor: "pointer" }} onClick={() => toggleOne(m.id)}>
-      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-        <Checkbox size="small" checked={selectedIds.has(m.id)} onChange={() => toggleOne(m.id)} />
-      </TableCell>
-      <TableCell sx={{ whiteSpace: "nowrap", color: "primary.main", fontWeight: 600, fontSize: 13 }}>
-        {m.movement_no}
-      </TableCell>
-      <TableCell sx={{ whiteSpace: "nowrap", fontSize: 13 }}>{m.movement_date}</TableCell>
-      <TableCell sx={{ fontSize: 13, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {m.stock_item_name || DASH}
-      </TableCell>
-      <TableCell sx={{ fontSize: 13, whiteSpace: "nowrap" }}>{m.ledger_name || DASH}</TableCell>
-      <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>
-        {RUPEE}{formatAmount(m.amount)}
-      </TableCell>
-      <TableCell sx={{ textAlign: "center" }}>
-        {statusChip(m.payment_status)}
-      </TableCell>
-      <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-        <Tooltip title="Update Payment">
-          <IconButton size="small" color="success" onClick={() => openSingle(m)}>
-            <PaymentIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </TableCell>
-    </TableRow>
-  );
+  const renderRow = (m: any) => {
+    const amt = Number(m.amount || 0);
+    const paid = Number(m.paid_amount || 0);
+    const pending = Math.max(0, amt - paid);
+
+    return (
+      <TableRow key={m.id} selected={selectedIds.has(m.id)} hover sx={{ cursor: "pointer" }} onClick={() => toggleOne(m.id)}>
+        <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+          <Checkbox size="small" checked={selectedIds.has(m.id)} onChange={() => toggleOne(m.id)} />
+        </TableCell>
+        <TableCell sx={{ whiteSpace: "nowrap", color: "primary.main", fontWeight: 600, fontSize: 13 }}>
+          {m.movement_no}
+        </TableCell>
+        <TableCell sx={{ whiteSpace: "nowrap", fontSize: 13 }}>{m.movement_date}</TableCell>
+        <TableCell sx={{ fontSize: 13, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {m.stock_item_name || DASH}
+        </TableCell>
+        <TableCell sx={{ fontSize: 13, whiteSpace: "nowrap" }}>{m.ledger_name || DASH}</TableCell>
+        <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>
+          {RUPEE}{formatAmount(amt)}
+        </TableCell>
+        <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", color: paid > 0 ? "success.main" : "text.secondary" }}>
+          {RUPEE}{formatAmount(paid)}
+        </TableCell>
+        <TableCell sx={{ textAlign: "right", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", color: pending > 0 ? "#dc3545" : "success.main" }}>
+          {RUPEE}{formatAmount(pending)}
+        </TableCell>
+        <TableCell sx={{ textAlign: "center" }}>
+          {statusChip(m.payment_status)}
+        </TableCell>
+        <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+          <Tooltip title="Update Payment">
+            <IconButton size="small" color="success" onClick={() => openSingle(m)}>
+              <PaymentIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </TableCell>
+      </TableRow>
+    );
+  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <PageHeader
         title="Purchase Payables"
-        subtitle="Track and update payment status for your purchases"
-        breadcrumbs={[{ label: "Accounts" }, { label: "Payables" }]}
+        subtitle="Track and update payment status for your supplier purchases"
+        breadcrumbs={[{ label: "Purchase" }, { label: "Purchase Payables" }]}
       />
 
       <Box sx={{ display: "flex", gap: 2, mb: 1.5, flexWrap: "wrap" }}>
@@ -389,7 +425,20 @@ export default function PurchasePayablesPage() {
               />
             }
             label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Group by Supplier</Typography>}
-            sx={{ ml: 1, mr: 1 }}
+            sx={{ ml: 0.5, mr: 1 }}
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={hideZeroPayables}
+                onChange={(e) => setHideZeroPayables(e.target.checked)}
+                color="error"
+              />
+            }
+            label={<Typography variant="body2" sx={{ fontWeight: 600, color: hideZeroPayables ? "error.main" : "text.secondary" }}>Hide 0 Payables</Typography>}
+            sx={{ mr: 1 }}
           />
 
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
@@ -422,7 +471,9 @@ export default function PurchasePayablesPage() {
                 <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Stock Item</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Supplier</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Total ({RUPEE})</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Invoice Amt ({RUPEE})</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Paid ({RUPEE})</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Pending Payable ({RUPEE})</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "center", width: 80 }}>Action</TableCell>
               </TableRow>
@@ -439,7 +490,7 @@ export default function PurchasePayablesPage() {
 
                   return (
                     <Fragment key={group.supplier}>
-                      <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 0.75 } }}>
+                      <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 1.0 } }}>
                         <TableCell padding="checkbox">
                           <Checkbox
                             size="small"
@@ -453,13 +504,19 @@ export default function PurchasePayablesPage() {
                             <IconButton size="small" onClick={() => toggleCollapseGroup(group.supplier)} sx={{ p: 0.25 }}>
                               {isCollapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
                             </IconButton>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "primary.main" }}>
-                              {group.supplier} ({group.items.length} {group.items.length === 1 ? "entry" : "entries"})
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                              {group.supplier} <Typography component="span" variant="caption" color="text.secondary">({group.items.length} {group.items.length === 1 ? "pending bill" : "pending bills"})</Typography>
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell sx={{ textAlign: "right", fontWeight: 700 }}>
+                        <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "text.secondary" }}>
                           {RUPEE}{formatAmount(group.totalAmount)}
+                        </TableCell>
+                        <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "success.main" }}>
+                          {RUPEE}{formatAmount(group.totalPaid)}
+                        </TableCell>
+                        <TableCell sx={{ textAlign: "right", fontWeight: 800, color: "#dc3545", fontSize: "0.95rem" }}>
+                          {RUPEE}{formatAmount(group.totalPayable)}
                         </TableCell>
                         <TableCell colSpan={2} />
                       </TableRow>
@@ -470,19 +527,19 @@ export default function PurchasePayablesPage() {
 
               {filtered.length === 0 && !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6, color: "text.secondary" }}>
-                    {search ? "No results match your search." : "No purchase entries found."}
+                  <TableCell colSpan={10} align="center" sx={{ py: 6, color: "text.secondary" }}>
+                    {search ? "No results match your search." : (hideZeroPayables ? "No pending supplier payables (> 0)." : "No purchase entries found.")}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
             <TableFooter sx={{ position: "sticky", bottom: 0, bgcolor: (t) => t.palette.mode === "dark" ? "#1e293b" : "#e2e8f0" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700, py: 1.2 } }}>
-                <TableCell colSpan={5} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
-                  Total
+                <TableCell colSpan={7} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
+                  Total Pending Supplier Payable:
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700, fontSize: 14, textAlign: "right", color: "primary.main" }}>
-                  {RUPEE}{formatAmount(filteredTotalAmount)}
+                <TableCell sx={{ fontWeight: 800, fontSize: 15, textAlign: "right", color: "#dc3545" }}>
+                  {RUPEE}{formatAmount(filteredTotalPayable)}
                 </TableCell>
                 <TableCell colSpan={2} />
               </TableRow>

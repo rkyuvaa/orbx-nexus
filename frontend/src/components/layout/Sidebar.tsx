@@ -101,7 +101,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Tools Management",
     icon: <PrecisionManufacturing sx={{ fontSize: 20 }} />,
     children: [
-      { label: "Tools & Consumables", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Tools Purchase", path: "/inventory/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Tools Management", path: "/inventory/locations", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
@@ -109,7 +109,8 @@ const NAV_ITEMS: NavItem[] = [
     label: "Purchase",
     icon: <Receipt sx={{ fontSize: 20 }} />,
     children: [
-      { label: "Tools & Consumables", path: "/purchase/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Tools Purchase", path: "/purchase/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Purchase Payables", path: "/purchase/payables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
 
