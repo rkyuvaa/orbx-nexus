@@ -770,13 +770,18 @@ export function InventoryInwardPage() {
   });
 
   const colDefs: ColDef[] = [
-    { field: "movement_no", headerName: "Purchase No.", width: 150 },
+    { field: "movement_no", headerName: "Purchase No.", width: 140 },
     { field: "movement_date", headerName: "Date", width: 110 },
+    { field: "ledger_name", headerName: "Supplier / Party", flex: 1, minWidth: 200 },
     {
-      field: "stock_item_name",
-      headerName: "Stock Item",
-      flex: 1,
-      minWidth: 180,
+      field: "quantity", headerName: "Quantity", width: 120, type: "numericColumn",
+      valueFormatter: (p) => `${formatQty(p.value)} ${p.data?.uom_symbol || ""}`,
+    },
+    {
+      field: "taxable_amount",
+      headerName: "Taxable Amount",
+      width: 140,
+      type: "numericColumn",
       valueGetter: (p: any) => {
         let itemsList: any[] = [];
         if (typeof p.data?.items === "string") {
@@ -785,27 +790,48 @@ export function InventoryInwardPage() {
           itemsList = p.data.items;
         }
         if (itemsList && itemsList.length > 0) {
-          return itemsList
-            .map((it: any) => {
-              const item = stockItems.find((s: any) => s.id === Number(it.stock_item_id));
-              return item ? item.name : `Item #${it.stock_item_id}`;
-            })
-            .join(", ");
+          return itemsList.reduce((sum: number, it: any) => {
+            const q = Number(it.quantity) || 0;
+            const r = Number(it.rate) || 0;
+            return sum + (it.taxable_amount !== undefined ? Number(it.taxable_amount) : (q * r));
+          }, 0);
         }
-        return p.data?.stock_item_name || "-";
-      }
-    },
-    { field: "ledger_name", headerName: "Supplier / Party", width: 180 },
-    {
-      field: "quantity", headerName: "Quantity", width: 110, type: "numericColumn",
-      valueFormatter: (p) => `${formatQty(p.value)} ${p.data?.uom_symbol || ""}`,
-    },
-    {
-      field: "rate", headerName: "Rate", width: 100, type: "numericColumn",
+        const amt = Number(p.data?.amount) || 0;
+        const gst = Number(p.data?.gst_amount) || 0;
+        return p.data?.taxable_amount !== undefined ? Number(p.data.taxable_amount) : Math.max(0, amt - gst);
+      },
       valueFormatter: (p) => p.value ? `₹${formatAmount(p.value)}` : "-",
     },
     {
-      field: "amount", headerName: "Amount", width: 120, type: "numericColumn",
+      field: "gst_amount",
+      headerName: "GST Amount",
+      width: 130,
+      type: "numericColumn",
+      valueGetter: (p: any) => {
+        let itemsList: any[] = [];
+        if (typeof p.data?.items === "string") {
+          try { itemsList = JSON.parse(p.data.items); } catch (e) {}
+        } else if (Array.isArray(p.data?.items)) {
+          itemsList = p.data.items;
+        }
+        if (itemsList && itemsList.length > 0) {
+          return itemsList.reduce((sum: number, it: any) => {
+            const q = Number(it.quantity) || 0;
+            const r = Number(it.rate) || 0;
+            const gstP = Number(it.gst_percent) || 0;
+            const taxable = it.taxable_amount !== undefined ? Number(it.taxable_amount) : (q * r);
+            return sum + (it.gst_amount !== undefined ? Number(it.gst_amount) : ((taxable * gstP) / 100));
+          }, 0);
+        }
+        return Number(p.data?.gst_amount) || 0;
+      },
+      valueFormatter: (p) => p.value ? `₹${formatAmount(p.value)}` : "₹0.00",
+    },
+    {
+      field: "amount",
+      headerName: "Total Amount",
+      width: 140,
+      type: "numericColumn",
       valueFormatter: (p) => p.value ? `₹${formatAmount(p.value)}` : "-",
     },
     {
@@ -837,8 +863,8 @@ export function InventoryInwardPage() {
   return (
     <Box>
       <PageHeader
-        title="Tools & Consumables Purchase"
-        breadcrumbs={[{ label: "Purchase" }, { label: "Tools & Consumables" }]}
+        title="Tools Purchase"
+        breadcrumbs={[{ label: "Purchase" }, { label: "Tools Purchase" }]}
       />
       <OrbxGrid
         rowData={movements}
