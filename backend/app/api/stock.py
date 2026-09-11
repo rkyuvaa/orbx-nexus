@@ -137,37 +137,44 @@ async def get_pending_inward_for_outward(
         text(f"""
         WITH i_lines AS (
           SELECT si.id AS inward_id,
-            si.product_id AS hdr_product_id, si.quantity AS hdr_qty,
+            si.product_id AS hdr_product_id,
+            si.process_id AS hdr_process_id,
+            si.quantity AS hdr_qty,
             si.items AS hdr_items
           FROM {s}.stock_inward si WHERE 1=1 {ledger_filter}
         ),
         in_lines AS (
-          SELECT inward_id, hdr_product_id AS product_id, hdr_qty AS line_qty,
-            NULL::int AS process_id
+          SELECT inward_id,
+            hdr_product_id AS product_id,
+            hdr_qty AS line_qty,
+            hdr_process_id AS process_id
           FROM i_lines
           WHERE jsonb_array_length(COALESCE(hdr_items, '[]'::jsonb)) = 0
             AND hdr_product_id IS NOT NULL
           UNION ALL
-          SELECT inward_id, (item->>'product_id')::int AS product_id,
-            (item->>'quantity')::numeric AS line_qty,
-            (item->>'process_id')::int AS process_id
+          SELECT inward_id,
+            NULLIF(item->>'product_id', '')::int AS product_id,
+            COALESCE(NULLIF(item->>'quantity', ''), '0')::numeric AS line_qty,
+            COALESCE(NULLIF(item->>'process_id', ''), hdr_process_id) AS process_id
           FROM i_lines,
             jsonb_array_elements(COALESCE(hdr_items, '[]'::jsonb)) AS item
           WHERE jsonb_array_length(COALESCE(hdr_items, '[]'::jsonb)) > 0
+            AND NULLIF(item->>'product_id', '') IS NOT NULL
         ),
         -- Outward items matched only by inward_id + product_id (ignoring process)
         out_dispatched AS (
-          SELECT COALESCE((o_item->>'inward_id')::int, so.inward_id) AS inward_id,
-            COALESCE((o_item->>'product_id')::int, so.product_id) AS product_id,
-            SUM(COALESCE((o_item->>'quantity')::numeric, so.quantity)) AS dispatched
+          SELECT
+            COALESCE(NULLIF(o_item->>'inward_id', ''), NULLIF(so.inward_id::text, ''))::int AS inward_id,
+            COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, ''))::int AS product_id,
+            SUM(COALESCE(NULLIF(o_item->>'quantity', ''), NULLIF(so.quantity::text, ''), '0')::numeric) AS dispatched
           FROM {s}.stock_outward so
           LEFT JOIN LATERAL jsonb_array_elements(
             CASE WHEN jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0
               THEN so.items ELSE NULL END
           ) AS o_item ON TRUE
-          WHERE COALESCE((o_item->>'inward_id')::int, so.inward_id) IS NOT NULL
-          GROUP BY COALESCE((o_item->>'inward_id')::int, so.inward_id),
-            COALESCE((o_item->>'product_id')::int, so.product_id)
+          WHERE COALESCE(NULLIF(o_item->>'inward_id', ''), NULLIF(so.inward_id::text, '')) IS NOT NULL
+            AND COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, '')) IS NOT NULL
+          GROUP BY 1, 2
         ),
         inward_balances AS (
           SELECT il.inward_id,
@@ -187,7 +194,7 @@ async def get_pending_inward_for_outward(
                 'quantity', il.line_qty,
                 'balance_qty', GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0)
               )
-              ORDER BY il.product_id, il.process_id
+              ORDER BY il.product_id
             )
             FROM in_lines il
             LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id

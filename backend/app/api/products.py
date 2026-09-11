@@ -222,12 +222,13 @@ async def product_stock_balance(
                 WHERE inward_date <= :aod AND product_id IS NOT NULL
                   AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) = 0
                 UNION ALL
-                SELECT (item->>'product_id')::int,
-                  (item->>'quantity')::numeric
+                SELECT NULLIF(item->>'product_id', '')::int,
+                  COALESCE(NULLIF(item->>'quantity', ''), '0')::numeric
                 FROM {schema}.stock_inward,
                   jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item
                 WHERE inward_date <= :aod
                   AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) > 0
+                  AND NULLIF(item->>'product_id', '') IS NOT NULL
               ) sub GROUP BY product_id
             ), outward_totals AS (
               SELECT product_id, SUM(qty) AS outward_qty FROM (
@@ -236,12 +237,13 @@ async def product_stock_balance(
                 WHERE outward_date <= :aod AND product_id IS NOT NULL
                   AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) = 0
                 UNION ALL
-                SELECT (item->>'product_id')::int,
-                  (item->>'quantity')::numeric
+                SELECT NULLIF(item->>'product_id', '')::int,
+                  COALESCE(NULLIF(item->>'quantity', ''), '0')::numeric
                 FROM {schema}.stock_outward,
                   jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item
                 WHERE outward_date <= :aod
                   AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) > 0
+                  AND NULLIF(item->>'product_id', '') IS NOT NULL
               ) sub GROUP BY product_id
             ), adj_totals AS (
               SELECT product_id, SUM(quantity) AS adj_qty
