@@ -329,15 +329,14 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
               <Table size="small">
                 <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                   <TableRow>
-                    <TableCell sx={{ minWidth: 220, fontWeight: 700 }}>Stock Item *</TableCell>
-                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Qty *</TableCell>
-                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">Rate</TableCell>
-                    <TableCell sx={{ width: 110, minWidth: 110, fontWeight: 700 }} align="right">Taxable Amt</TableCell>
-                    <TableCell sx={{ width: 95, minWidth: 95, fontWeight: 700 }} align="center">GST %</TableCell>
-                    <TableCell sx={{ width: 100, minWidth: 100, fontWeight: 700 }} align="right">GST Amt</TableCell>
-                    <TableCell sx={{ width: 110, minWidth: 110, fontWeight: 700 }} align="right">Total Amt</TableCell>
-                    <TableCell sx={{ width: 140, minWidth: 140, fontWeight: 700 }}>UOM</TableCell>
-                    <TableCell sx={{ width: 40, minWidth: 40 }} align="center">Del</TableCell>
+                    <TableCell sx={{ width: 160, minWidth: 150, fontWeight: 700 }}>Stock Item *</TableCell>
+                    <TableCell sx={{ width: 120, minWidth: 115, fontWeight: 700 }} align="right">Qty *</TableCell>
+                    <TableCell sx={{ width: 110, minWidth: 105, fontWeight: 700 }} align="right">Rate</TableCell>
+                    <TableCell sx={{ width: 125, minWidth: 120, fontWeight: 700 }} align="right">Taxable Amt</TableCell>
+                    <TableCell sx={{ width: 85, minWidth: 80, fontWeight: 700 }} align="center">GST %</TableCell>
+                    <TableCell sx={{ width: 110, minWidth: 105, fontWeight: 700 }} align="right">GST Amt</TableCell>
+                    <TableCell sx={{ width: 125, minWidth: 120, fontWeight: 700 }} align="right">Total Amt</TableCell>
+                    <TableCell sx={{ width: 45, minWidth: 40 }} align="center">Del</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -354,7 +353,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
 
                     return (
                       <TableRow key={idx}>
-                        <TableCell sx={{ minWidth: 220, verticalAlign: "top", pt: 1.5 }}>
+                        <TableCell sx={{ width: 160, minWidth: 150, verticalAlign: "top", pt: 1.5 }}>
                           <LazyAutocomplete
                             size="small"
                             options={stockItems}
@@ -370,7 +369,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 1.5 }} align="right">
+                        <TableCell sx={{ width: 120, minWidth: 115, verticalAlign: "top", pt: 1.5 }} align="right">
                           <TextField
                             size="small"
                             type="number"
@@ -381,33 +380,34 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                                 handleLineItemChange(idx, "quantity", Number(e.target.value).toFixed(3));
                               }
                             }}
-                            slotProps={{ htmlInput: { style: { textAlign: "right" }, step: "0.001", min: 0 } }}
+                            slotProps={{ htmlInput: { style: { textAlign: "right", paddingLeft: 4, paddingRight: 4 }, step: "0.001", min: 0 } }}
                             required
                             fullWidth
                           />
                         </TableCell>
-                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 1.5 }} align="right">
+                        <TableCell sx={{ width: 110, minWidth: 105, verticalAlign: "top", pt: 1.5 }} align="right">
                           <TextField
                             size="small"
                             type="number"
                             value={item.rate}
                             onChange={(e) => handleLineItemChange(idx, "rate", e.target.value)}
-                            slotProps={{ htmlInput: { style: { textAlign: "right" }, step: "0.01", min: 0 } }}
+                            slotProps={{ htmlInput: { style: { textAlign: "right", paddingLeft: 4, paddingRight: 4 }, step: "0.01", min: 0 } }}
                             fullWidth
                           />
                         </TableCell>
-                        <TableCell sx={{ minWidth: 110, verticalAlign: "top", pt: 2.2 }} align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        <TableCell sx={{ width: 125, minWidth: 120, verticalAlign: "top", pt: 2.2 }} align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                             {taxable > 0 ? `₹${formatAmount(taxable)}` : "—"}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 95, verticalAlign: "top", pt: 1.5 }} align="center">
+                        <TableCell sx={{ width: 85, minWidth: 80, verticalAlign: "top", pt: 1.5 }} align="center">
                           <TextField
                             select
                             size="small"
                             value={item.gst_percent ?? "0"}
                             onChange={(e) => handleLineItemChange(idx, "gst_percent", e.target.value)}
                             fullWidth
+                            slotProps={{ select: { style: { paddingLeft: 4, paddingRight: 4 } } }}
                           >
                             {GST_RATES.map((rate) => (
                               <MenuItem key={rate} value={String(rate)}>
@@ -416,28 +416,17 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                             ))}
                           </TextField>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 100, verticalAlign: "top", pt: 2.2 }} align="right">
-                          <Typography variant="body2" sx={{ color: gstAmt > 0 ? "#0f5132" : "text.secondary", fontWeight: 600 }}>
+                        <TableCell sx={{ width: 110, minWidth: 105, verticalAlign: "top", pt: 2.2 }} align="right">
+                          <Typography variant="body2" sx={{ color: gstAmt > 0 ? "#0f5132" : "text.secondary", fontWeight: 600, whiteSpace: "nowrap" }}>
                             {gstAmt > 0 ? `₹${formatAmount(gstAmt)}` : "₹0.00"}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 110, verticalAlign: "top", pt: 2.2 }} align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                        <TableCell sx={{ width: 125, minWidth: 120, verticalAlign: "top", pt: 2.2 }} align="right">
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132", whiteSpace: "nowrap" }}>
                             {totalAmt > 0 ? `₹${formatAmount(totalAmt)}` : "—"}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ minWidth: 140, verticalAlign: "top", pt: 1.5 }}>
-                          <LazyAutocomplete
-                            size="small"
-                            options={uoms}
-                            getOptionLabel={(o: any) => `${o.name} (${o.symbol})`}
-                            value={uoms.find((u: any) => u.id === Number(item.uom_id)) || null}
-                            onChange={(_, v) => handleLineItemChange(idx, "uom_id", v ? String(v.id) : "")}
-                            renderInput={(params) => <TextField {...params} />}
-                            fullWidth
-                          />
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 40, verticalAlign: "top", pt: 2 }} align="center">
+                        <TableCell sx={{ width: 45, minWidth: 40, verticalAlign: "top", pt: 2 }} align="center">
                           <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
@@ -448,7 +437,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                   
                   {/* Totals & Add Row */}
                   <TableRow sx={{ bgcolor: "#f4f9f6" }}>
-                    <TableCell colSpan={9}>
+                    <TableCell colSpan={8}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, py: 0.5 }}>
                         <Button size="small" startIcon={<Add />} onClick={handleAddLineItem} sx={{ textTransform: "none", color: "#0f5132", fontWeight: 700 }}>
                           Add Item Row
