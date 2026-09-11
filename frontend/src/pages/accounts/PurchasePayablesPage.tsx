@@ -196,12 +196,9 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
 export default function PurchasePayablesPage() {
   const { activeFY } = useAuthStore();
   const [payOpen, setPayOpen] = useState(false);
-  const [singleItem, setSingleItem] = useState<any>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [activeSupplierRow, setActiveSupplierRow] = useState<any>(null);
   const [search, setSearch] = useState("");
-  const [groupBySupplier, setGroupBySupplier] = useState(true);
   const [hideZeroPayables, setHideZeroPayables] = useState(true);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const { data: movements = [], isLoading, refetch } = useQuery({
     queryKey: ["purchase-payables", activeFY],
@@ -209,180 +206,74 @@ export default function PurchasePayablesPage() {
       (await api.get(`/stock/inventory/movements?fy=${activeFY}&movement_type=Inward`)).data,
   });
 
-  const filtered = useMemo(() => {
-    let result = movements;
-    if (hideZeroPayables) {
-      result = result.filter((m: any) => {
-        const amt = Number(m.amount || 0);
-        const paid = Number(m.paid_amount || 0);
-        const pending = amt - paid;
-        return pending > 0.01 && m.payment_status !== "Paid";
-      });
-    }
-
-    const q = search.toLowerCase();
-    if (q) {
-      result = result.filter((m: any) =>
-        [m.movement_no, m.stock_item_name, m.ledger_name, m.payment_status].some(
-          (v) => v && String(v).toLowerCase().includes(q)
-        )
-      );
-    }
-    return result;
-  }, [movements, search, hideZeroPayables]);
-
-  const supplierGroups = useMemo(() => {
-    if (!groupBySupplier) return [];
+  const supplierList = useMemo(() => {
     const groupsMap: Record<string, any[]> = {};
-    filtered.forEach((m: any) => {
+    movements.forEach((m: any) => {
       const supplierName = m.ledger_name || "Unassigned Supplier";
       if (!groupsMap[supplierName]) groupsMap[supplierName] = [];
       groupsMap[supplierName].push(m);
     });
 
-    return Object.entries(groupsMap)
-      .map(([supplier, items]) => {
-        const totalAmount = items.reduce((s, item) => s + Number(item.amount || 0), 0);
-        const totalPaid = items.reduce((s, item) => s + Number(item.paid_amount || 0), 0);
-        const totalPayable = Math.max(0, totalAmount - totalPaid);
-        return { supplier, items, totalAmount, totalPaid, totalPayable };
-      })
-      .filter((g) => !hideZeroPayables || g.totalPayable > 0.01);
-  }, [filtered, groupBySupplier, hideZeroPayables]);
+    let list = Object.entries(groupsMap).map(([supplier, items]) => {
+      const totalAmount = items.reduce((s, item) => s + Number(item.amount || 0), 0);
+      const totalPaid = items.reduce((s, item) => s + Number(item.paid_amount || 0), 0);
+      const totalPayable = Math.max(0, totalAmount - totalPaid);
+      const pendingItems = items.filter((it) => (Number(it.amount || 0) - Number(it.paid_amount || 0)) > 0.01 && it.payment_status !== "Paid");
+      const status = totalPayable <= 0.01 ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid");
+      return { supplier, items, pendingItems, totalAmount, totalPaid, totalPayable, status };
+    });
+
+    if (hideZeroPayables) {
+      list = list.filter((g) => g.totalPayable > 0.01);
+    }
+
+    const q = search.toLowerCase();
+    if (q) {
+      list = list.filter((g) =>
+        g.supplier.toLowerCase().includes(q) ||
+        g.items.some((it: any) => [it.movement_no, it.stock_item_name].some((v) => v && String(v).toLowerCase().includes(q)))
+      );
+    }
+
+    return list;
+  }, [movements, search, hideZeroPayables]);
 
   const summary = useMemo(() => {
     const totalAmount = movements.reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
     const totalPaid = movements.reduce((s: number, m: any) => s + Number(m.paid_amount || 0), 0);
     const totalPending = Math.max(0, totalAmount - totalPaid);
-    const unpaidCount = movements.filter((m: any) => {
-      const pending = Number(m.amount || 0) - Number(m.paid_amount || 0);
-      return pending > 0.01 && m.payment_status !== "Paid";
-    }).length;
-    return { totalAmount, totalPaid, totalPending, unpaidCount };
-  }, [movements]);
+    const unpaidSupplierCount = supplierList.filter((s) => s.totalPayable > 0.01).length;
+    return { totalAmount, totalPaid, totalPending, unpaidSupplierCount };
+  }, [movements, supplierList]);
 
-  const filteredTotalPayable = useMemo(() => {
-    return filtered.reduce((s: number, m: any) => {
-      const pending = Number(m.amount || 0) - Number(m.paid_amount || 0);
-      return s + Math.max(0, pending);
-    }, 0);
-  }, [filtered]);
+  const totalPendingPayable = useMemo(() => {
+    return supplierList.reduce((s, row) => s + row.totalPayable, 0);
+  }, [supplierList]);
 
-  const allIds = filtered.map((m: any) => m.id as number);
-  const allChecked = allIds.length > 0 && allIds.every((id: number) => selectedIds.has(id));
-  const someChecked = selectedIds.size > 0 && !allChecked;
-
-  const toggleAll = () => {
-    if (allChecked) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(allIds));
-    }
-  };
-
-  const toggleOne = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleGroup = (groupItems: any[]) => {
-    const groupItemIds = groupItems.map((it) => it.id);
-    const allGroupChecked = groupItemIds.every((id) => selectedIds.has(id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allGroupChecked) {
-        groupItemIds.forEach((id) => next.delete(id));
-      } else {
-        groupItemIds.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  };
-
-  const toggleCollapseGroup = (supplierName: string) => {
-    setCollapsedGroups((prev) => ({
-      ...prev,
-      [supplierName]: !prev[supplierName],
-    }));
-  };
-
-  const selectedPurchases = movements.filter((m: any) => selectedIds.has(m.id));
-
-  const openSingle = (row: any) => {
-    setSingleItem(row);
-    setSelectedIds(new Set());
-    setPayOpen(true);
-  };
-
-  const openBulk = () => {
-    setSingleItem(null);
+  const openSupplierPayment = (supplierRow: any) => {
+    setActiveSupplierRow(supplierRow);
     setPayOpen(true);
   };
 
   const handleClose = () => {
     setPayOpen(false);
-    setSingleItem(null);
+    setActiveSupplierRow(null);
   };
 
-  const dialogPurchases = singleItem ? [singleItem] : selectedPurchases;
+  const dialogPurchases = activeSupplierRow ? (activeSupplierRow.pendingItems.length > 0 ? activeSupplierRow.pendingItems : activeSupplierRow.items) : [];
 
   const pills = [
     { label: "Total Pending Payable", value: `${RUPEE}${formatAmount(summary.totalPending)}`, color: "error.main" },
     { label: "Total Paid", value: `${RUPEE}${formatAmount(summary.totalPaid)}`, color: "success.main" },
     { label: "Total Purchase Amount", value: `${RUPEE}${formatAmount(summary.totalAmount)}`, color: "primary.main" },
-    { label: "Unpaid / Pending Bills", value: String(summary.unpaidCount), color: "warning.dark" },
+    { label: "Suppliers Pending", value: String(summary.unpaidSupplierCount), color: "warning.dark" },
   ];
-
-  const renderRow = (m: any) => {
-    const amt = Number(m.amount || 0);
-    const paid = Number(m.paid_amount || 0);
-    const pending = Math.max(0, amt - paid);
-
-    return (
-      <TableRow key={m.id} selected={selectedIds.has(m.id)} hover sx={{ cursor: "pointer" }} onClick={() => toggleOne(m.id)}>
-        <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-          <Checkbox size="small" checked={selectedIds.has(m.id)} onChange={() => toggleOne(m.id)} />
-        </TableCell>
-        <TableCell sx={{ whiteSpace: "nowrap", color: "primary.main", fontWeight: 600, fontSize: 13 }}>
-          {m.movement_no}
-        </TableCell>
-        <TableCell sx={{ whiteSpace: "nowrap", fontSize: 13 }}>{m.movement_date}</TableCell>
-        <TableCell sx={{ fontSize: 13, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {m.stock_item_name || DASH}
-        </TableCell>
-        <TableCell sx={{ fontSize: 13, whiteSpace: "nowrap" }}>{m.ledger_name || DASH}</TableCell>
-        <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>
-          {RUPEE}{formatAmount(amt)}
-        </TableCell>
-        <TableCell sx={{ textAlign: "right", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", color: paid > 0 ? "success.main" : "text.secondary" }}>
-          {RUPEE}{formatAmount(paid)}
-        </TableCell>
-        <TableCell sx={{ textAlign: "right", fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", color: pending > 0 ? "#dc3545" : "success.main" }}>
-          {RUPEE}{formatAmount(pending)}
-        </TableCell>
-        <TableCell sx={{ textAlign: "center" }}>
-          {statusChip(m.payment_status)}
-        </TableCell>
-        <TableCell sx={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-          <Tooltip title="Update Payment">
-            <IconButton size="small" color="success" onClick={() => openSingle(m)}>
-              <PaymentIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </TableCell>
-      </TableRow>
-    );
-  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <PageHeader
         title="Purchase Payables"
-        subtitle="Track and update payment status for your supplier purchases"
+        subtitle="Track and update payment status per supplier"
         breadcrumbs={[{ label: "Purchase" }, { label: "Purchase Payables" }]}
       />
 
@@ -399,7 +290,7 @@ export default function PurchasePayablesPage() {
         {/* Toolbar */}
         <Box sx={{ px: 2, py: 1, display: "flex", alignItems: "center", gap: 1.5, borderBottom: "1px solid", borderColor: "divider", flexShrink: 0, flexWrap: "wrap" }}>
           <TextField
-            placeholder="Search purchase no, item, supplier..."
+            placeholder="Search supplier..."
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -429,14 +320,8 @@ export default function PurchasePayablesPage() {
           />
 
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-            {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${supplierGroups.length} suppliers (${filtered.length} pending bills)`}
+            {supplierList.length} suppliers
           </Typography>
-
-          {selectedIds.size > 0 && (
-            <Button size="small" variant="contained" color="success" startIcon={<PaymentIcon />} onClick={openBulk} sx={{ textTransform: "none", borderRadius: 2 }}>
-              Pay {selectedIds.size} Selected
-            </Button>
-          )}
 
           <Tooltip title="Refresh">
             <IconButton size="small" onClick={() => refetch()}>
@@ -451,86 +336,68 @@ export default function PurchasePayablesPage() {
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell padding="checkbox" sx={{ width: 48 }}>
-                  <Checkbox size="small" checked={allChecked} indeterminate={someChecked} onChange={toggleAll} />
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>Purchase No.</TableCell>
-                <TableCell sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Stock Item</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Supplier</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Invoice Amt ({RUPEE})</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Paid ({RUPEE})</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>Pending Payable ({RUPEE})</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 60, textAlign: "center" }}>S.No</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Supplier Name</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Pending Bills</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>Invoice Amount ({RUPEE})</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>Paid ({RUPEE})</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>Pending Payable ({RUPEE})</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 700, textAlign: "center", width: 80 }}>Action</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "center", width: 100 }}>Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {supplierGroups.map((group) => {
-                const groupItemIds = group.items.map((it) => it.id);
-                const isGroupAllChecked = groupItemIds.every((id) => selectedIds.has(id));
-                const isGroupSomeChecked = groupItemIds.some((id) => selectedIds.has(id)) && !isGroupAllChecked;
-                const isCollapsed = !!collapsedGroups[group.supplier];
+              {supplierList.map((row, idx) => (
+                <TableRow key={row.supplier} hover>
+                  <TableCell align="center" sx={{ fontWeight: 600 }}>{idx + 1}</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: "#0f5132", fontSize: 13.5 }}>{row.supplier}</TableCell>
+                  <TableCell align="center" sx={{ fontSize: 13 }}>
+                    <Chip label={`${row.pendingItems.length} bill${row.pendingItems.length === 1 ? '' : 's'}`} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, fontSize: 13, color: "text.secondary" }}>
+                    {RUPEE}{formatAmount(row.totalAmount)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, fontSize: 13, color: "success.main" }}>
+                    {RUPEE}{formatAmount(row.totalPaid)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 800, fontSize: 14, color: row.totalPayable > 0 ? "#dc3545" : "success.main" }}>
+                    {RUPEE}{formatAmount(row.totalPayable)}
+                  </TableCell>
+                  <TableCell align="center">
+                    {statusChip(row.status)}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title={`Pay ${row.supplier}`}>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        startIcon={<PaymentIcon fontSize="small" />}
+                        onClick={() => openSupplierPayment(row)}
+                        sx={{ textTransform: "none", fontSize: 12, py: 0.5, px: 1.5, borderRadius: 2 }}
+                      >
+                        Pay
+                      </Button>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
 
-                return (
-                  <Fragment key={group.supplier}>
-                    <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "#f4f9f6", "& > td": { fontWeight: 700, py: 1.0 } }}>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          size="small"
-                          checked={isGroupAllChecked}
-                          indeterminate={isGroupSomeChecked}
-                          onChange={() => toggleGroup(group.items)}
-                        />
-                      </TableCell>
-                      <TableCell colSpan={4} onClick={() => toggleCollapseGroup(group.supplier)} sx={{ cursor: "pointer" }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                          <IconButton size="small" sx={{ p: 0.25 }}>
-                            {isCollapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
-                          </IconButton>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132" }}>
-                            {group.supplier} <Typography component="span" variant="caption" color="text.secondary">({group.items.length} {group.items.length === 1 ? "pending bill" : "pending bills"})</Typography>
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "text.secondary" }}>
-                        {RUPEE}{formatAmount(group.totalAmount)}
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", fontWeight: 600, color: "success.main" }}>
-                        {RUPEE}{formatAmount(group.totalPaid)}
-                      </TableCell>
-                      <TableCell sx={{ textAlign: "right", fontWeight: 800, color: "#dc3545", fontSize: "0.95rem" }}>
-                        {RUPEE}{formatAmount(group.totalPayable)}
-                      </TableCell>
-                      <TableCell colSpan={1} />
-                      <TableCell sx={{ textAlign: "center" }}>
-                        <Tooltip title={`Pay All for ${group.supplier}`}>
-                          <IconButton size="small" color="success" onClick={() => { setSelectedIds(new Set(groupItemIds)); setSingleItem(null); setPayOpen(true); }}>
-                            <PaymentIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                    {!isCollapsed && group.items.map((m: any) => renderRow(m))}
-                  </Fragment>
-                );
-              })}
-
-              {filtered.length === 0 && !isLoading && (
+              {supplierList.length === 0 && !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 6, color: "text.secondary" }}>
-                    {search ? "No results match your search." : (hideZeroPayables ? "No pending supplier payables (> 0)." : "No purchase entries found.")}
+                  <TableCell colSpan={8} align="center" sx={{ py: 6, color: "text.secondary" }}>
+                    {search ? "No supplier matches your search." : (hideZeroPayables ? "No pending supplier payables (> 0)." : "No suppliers found.")}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
             <TableFooter sx={{ position: "sticky", bottom: 0, bgcolor: (t) => t.palette.mode === "dark" ? "#1e293b" : "#e2e8f0" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700, py: 1.2 } }}>
-                <TableCell colSpan={7} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
+                <TableCell colSpan={5} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
                   Total Pending Supplier Payable:
                 </TableCell>
                 <TableCell sx={{ fontWeight: 800, fontSize: 15, textAlign: "right", color: "#dc3545" }}>
-                  {RUPEE}{formatAmount(filteredTotalPayable)}
+                  {RUPEE}{formatAmount(totalPendingPayable)}
                 </TableCell>
                 <TableCell colSpan={2} />
               </TableRow>
