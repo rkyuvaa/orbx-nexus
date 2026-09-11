@@ -81,22 +81,48 @@ async def dashboard_summary(
 
 # ─────── Day Book ───────
 
+def _norm_date(d_str: str | None) -> str | None:
+    if not d_str:
+        return None
+    d_str = str(d_str).strip()
+    if not d_str:
+        return None
+    if "-" in d_str:
+        parts = d_str.split("-")
+        if len(parts) == 3:
+            if len(parts[0]) == 2 and len(parts[2]) == 4:
+                return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+            elif len(parts[0]) == 4:
+                return f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+    elif "/" in d_str:
+        parts = d_str.split("/")
+        if len(parts) == 3:
+            if len(parts[0]) == 2 and len(parts[2]) == 4:
+                return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+            elif len(parts[0]) == 4:
+                return f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+    return d_str
+
+
 @router.get("/day-book")
 async def day_book(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
     from_date: str = Query(default=None), to_date: str = Query(default=None)
 ):
     schema = s(fy)
+    fd = _norm_date(from_date)
+    td = _norm_date(to_date)
+
     entries = []
 
     conds_mov = []
     params = {}
-    if from_date:
-        conds_mov.append("m.movement_date::text >= :fd")
-        params["fd"] = from_date
-    if to_date:
-        conds_mov.append("m.movement_date::text <= :td")
-        params["td"] = to_date
+    if fd:
+        conds_mov.append("m.movement_date::text::date >= :fd::date")
+        params["fd"] = fd
+    if td:
+        conds_mov.append("m.movement_date::text::date <= :td::date")
+        params["td"] = td
 
     where_mov = ("WHERE " + " AND ".join(conds_mov)) if conds_mov else ""
 
@@ -138,9 +164,9 @@ async def day_book(
             p_date = d["payment_date"] or d["voucher_date"]
             if paid_amt > 0:
                 in_range = True
-                if from_date and p_date < from_date:
+                if fd and p_date < fd:
                     in_range = False
-                if to_date and p_date > to_date:
+                if td and p_date > td:
                     in_range = False
                 if in_range:
                     pmode = d["payment_mode"] or "Direct Payment"
@@ -162,10 +188,10 @@ async def day_book(
 
     # 2. Vouchers (Payment, Receipt, Contra, Journal, Misc. Expenses)
     conds_v = []
-    if from_date:
-        conds_v.append("v.voucher_date::text >= :fd")
-    if to_date:
-        conds_v.append("v.voucher_date::text <= :td")
+    if fd:
+        conds_v.append("v.voucher_date::text::date >= :fd::date")
+    if td:
+        conds_v.append("v.voucher_date::text::date <= :td::date")
     where_v = ("WHERE " + " AND ".join(conds_v)) if conds_v else ""
 
     try:
@@ -203,10 +229,10 @@ async def day_book(
 
     # 3. Labour Bills
     conds_lb = []
-    if from_date:
-        conds_lb.append("lb.bill_date::text >= :fd")
-    if to_date:
-        conds_lb.append("lb.bill_date::text <= :td")
+    if fd:
+        conds_lb.append("lb.bill_date::text::date >= :fd::date")
+    if td:
+        conds_lb.append("lb.bill_date::text::date <= :td::date")
     where_lb = ("WHERE " + " AND ".join(conds_lb)) if conds_lb else ""
 
     try:
