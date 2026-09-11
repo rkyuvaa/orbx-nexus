@@ -488,12 +488,39 @@ export default function PurchasePayablesPage() {
     });
 
     let list = Object.entries(groupsMap).map(([supplier, items]) => {
-      const totalAmount = items.reduce((s, item) => s + Number(item.amount || 0), 0);
-      const totalPaid = items.reduce((s, item) => s + Number(item.paid_amount || 0), 0);
+      let totalAmount = 0;
+      let totalPaid = 0;
+      let totalGst = 0;
+
+      items.forEach((item: any) => {
+        totalAmount += Number(item.amount || 0);
+        totalPaid += Number(item.paid_amount || 0);
+
+        let itemsList: any[] = [];
+        if (typeof item.items === "string") {
+          try { itemsList = JSON.parse(item.items); } catch (e) {}
+        } else if (Array.isArray(item.items)) {
+          itemsList = item.items;
+        }
+
+        if (itemsList && itemsList.length > 0) {
+          const moveGst = itemsList.reduce((sum: number, it: any) => {
+            const q = Number(it.quantity) || 0;
+            const r = Number(it.rate) || 0;
+            const gstP = Number(it.gst_percent) || 0;
+            const taxable = it.taxable_amount !== undefined ? Number(it.taxable_amount) : (q * r);
+            return sum + (it.gst_amount !== undefined ? Number(it.gst_amount) : ((taxable * gstP) / 100));
+          }, 0);
+          totalGst += moveGst;
+        } else {
+          totalGst += Number(item.gst_amount || 0);
+        }
+      });
+
       const totalPayable = Math.max(0, totalAmount - totalPaid);
       const pendingItems = items.filter((it) => (Number(it.amount || 0) - Number(it.paid_amount || 0)) > 0.01 && it.payment_status !== "Paid");
       const status = totalPayable <= 0.01 ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid");
-      return { supplier, items, pendingItems, totalAmount, totalPaid, totalPayable, status };
+      return { supplier, items, pendingItems, totalAmount, totalPaid, totalGst, totalPayable, status };
     });
 
     if (hideZeroPayables) {
@@ -599,6 +626,7 @@ export default function PurchasePayablesPage() {
                 <TableCell sx={{ fontWeight: 700, width: 60, textAlign: "center" }}>S.No</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Supplier Name</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Pending Bills</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>GST Amount ({RUPEE})</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>Invoice Amount ({RUPEE})</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>Paid ({RUPEE})</TableCell>
                 <TableCell sx={{ fontWeight: 700, textAlign: "right" }}>Pending Payable ({RUPEE})</TableCell>
@@ -613,6 +641,9 @@ export default function PurchasePayablesPage() {
                   <TableCell sx={{ fontWeight: 700, color: "#0f5132", fontSize: 13.5 }}>{row.supplier}</TableCell>
                   <TableCell align="center" sx={{ fontSize: 13 }}>
                     <Chip label={`${row.pendingItems.length} bill${row.pendingItems.length === 1 ? '' : 's'}`} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, fontSize: 13, color: "primary.main" }}>
+                    {RUPEE}{formatAmount(row.totalGst)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600, fontSize: 13, color: "text.secondary" }}>
                     {RUPEE}{formatAmount(row.totalAmount)}
@@ -656,7 +687,7 @@ export default function PurchasePayablesPage() {
 
               {supplierList.length === 0 && !isLoading && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 6, color: "text.secondary" }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 6, color: "text.secondary" }}>
                     {search ? "No supplier matches your search." : "No pending supplier payables (> 0)."}
                   </TableCell>
                 </TableRow>
@@ -664,7 +695,7 @@ export default function PurchasePayablesPage() {
             </TableBody>
             <TableFooter sx={{ position: "sticky", bottom: 0, bgcolor: (t) => t.palette.mode === "dark" ? "#1e293b" : "#e2e8f0" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700, py: 1.2 } }}>
-                <TableCell colSpan={5} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
+                <TableCell colSpan={6} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
                   Total Pending Supplier Payable:
                 </TableCell>
                 <TableCell sx={{ fontWeight: 800, fontSize: 15, textAlign: "right", color: "#dc3545" }}>
