@@ -598,10 +598,10 @@ async def stock_in_hand(
 
 # ─────── Receivables / Payables ───────
 
-@router.get("/receivables")
-async def receivables(
+@router.get("/ledger-receivables")
+async def ledger_receivables(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
-    as_of_date: str = Query(...)
+    as_of_date: str = Query(default=None)
 ):
     schema = s(fy)
     result = await db.execute(
