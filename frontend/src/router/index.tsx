@@ -92,8 +92,9 @@ export const router = createBrowserRouter([
       { path: "process-voucher/inward", element: <InwardVoucherPage /> },
       { path: "process-voucher/outward", element: <OutwardVoucherPage /> },
 
-      // Labour Bill
+      // Labour Bill & Billing
       { path: "labour-bill", element: <LabourBillPage /> },
+      { path: "billing/receivables", element: <ReceivablesReport /> },
 
       // Payroll
       { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "HR and Payroll" }, { label: "Contractor" }]} /> },

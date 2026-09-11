@@ -1337,9 +1337,9 @@ export function ReceivablesReport() {
     <Box>
       <Box className="no-print">
         <PageHeader
-          title="Receivables"
+          title="Bills Receivable"
           subtitle="Outstanding labour bill amounts by contractor"
-          breadcrumbs={[{ label: "Accounts" }, { label: "Receivables" }]}
+          breadcrumbs={[{ label: "Billing" }, { label: "Bills Receivable" }]}
         />
 
         {/* Filters */}
