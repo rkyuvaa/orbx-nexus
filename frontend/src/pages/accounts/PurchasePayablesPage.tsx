@@ -44,6 +44,50 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
   const totalPending = Math.max(0, totalInvoice - totalPaid);
   const supplierName = purchases[0]?.ledger_name || "Supplier";
 
+  // Build Chronological Date-Wise Detailed Ledger Statement (Dr / Cr / Running Balance)
+  const ledgerRows = useMemo(() => {
+    const rows: any[] = [];
+    purchases.forEach((p) => {
+      // 1. Credit entry for Purchase Invoice
+      const invAmount = Number(p.amount || 0);
+      rows.push({
+        date: p.movement_date || "-",
+        voucher_no: p.movement_no || "-",
+        type: "Purchase Invoice",
+        particulars: p.stock_item_name ? `Purchase: ${p.stock_item_name}` : `Purchase ${p.movement_no}`,
+        dr: 0,
+        cr: invAmount,
+        status: p.payment_status,
+      });
+
+      // 2. Debit entry for Payment Made (if paid_amount > 0)
+      const paidAmt = Number(p.paid_amount || 0);
+      if (paidAmt > 0) {
+        const pMode = p.payment_mode || "Direct Payment";
+        const pNotes = p.payment_notes ? ` (${p.payment_notes})` : "";
+        rows.push({
+          date: p.payment_date || p.movement_date || "-",
+          voucher_no: `PAY-${p.movement_no}`,
+          type: "Payment",
+          particulars: `Payment via ${pMode}${pNotes}`,
+          dr: paidAmt,
+          cr: 0,
+          status: p.payment_status,
+        });
+      }
+    });
+
+    // Sort chronologically by date
+    rows.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
+
+    // Compute line-by-line running balance
+    let running = 0;
+    return rows.map((r) => {
+      running += r.cr - r.dr;
+      return { ...r, balance: running };
+    });
+  }, [purchases]);
+
   const { register, handleSubmit, watch, setValue, control, reset } = useForm({
     defaultValues: {
       payment_status: totalPending <= 0.01 ? "Paid" : "Paid",
@@ -105,53 +149,62 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
   if (!purchases.length) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ pb: 1, color: "#0f5132", fontWeight: 700 }}>
-        Supplier Ledger & Payment — {supplierName}
+        Supplier Ledger Statement & Payment — {supplierName}
       </DialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
-        {/* Supplier Complete Ledger / Statement Table (Dr / Cr from Nil) */}
+        {/* Supplier Chronological Date-Wise Detailed Ledger Statement */}
         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", mb: 1 }}>
-          Supplier Bill-wise Statement (Dr / Cr Statement)
+          Supplier Date-Wise Detailed Ledger (Debit / Credit Statement from NIL)
         </Typography>
         <Paper variant="outlined" sx={{ mb: 3, borderRadius: "8px", overflow: "hidden" }}>
           <Table size="small">
             <TableHead sx={{ bgcolor: "#f4f9f6" }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Voucher No.</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Stock Items</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Invoice Amt (Cr)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Paid (Dr)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Balance (Payable)</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 120 }}>Voucher No.</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Particulars / Description</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Debit - Paid (Dr)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Credit - Invoice (Cr)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Running Balance</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {purchases.map((p) => {
-                const amt = Number(p.amount || 0);
-                const pd = Number(p.paid_amount || 0);
-                const bal = Math.max(0, amt - pd);
-                return (
-                  <TableRow key={p.id} hover>
-                    <TableCell sx={{ fontSize: 12 }}>{p.movement_date}</TableCell>
-                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main" }}>{p.movement_no}</TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>{p.stock_item_name || DASH}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>{RUPEE}{formatAmount(amt)}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, color: "success.main" }}>{RUPEE}{formatAmount(pd)}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: bal > 0 ? "#dc3545" : "success.main" }}>
-                      {RUPEE}{formatAmount(bal)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {ledgerRows.map((r, idx) => (
+                <TableRow key={idx} hover sx={{ bgcolor: r.type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
+                  <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
+                  <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    <Chip
+                      label={r.type}
+                      size="small"
+                      color={r.type === "Payment" ? "success" : "default"}
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{r.particulars}</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
+                    {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.cr > 0 ? "text.primary" : "text.disabled" }}>
+                    {r.cr > 0 ? `${RUPEE}${formatAmount(r.cr)}` : "—"}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
+                    {RUPEE}{formatAmount(r.balance)}
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
             <TableFooter sx={{ bgcolor: "#f4f9f6" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Total Statement Summary:</TableCell>
-                <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
+                <TableCell colSpan={4} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
                 <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
-                <TableCell align="right" sx={{ fontSize: 14, color: "#dc3545" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
               </TableRow>
             </TableFooter>
           </Table>
@@ -159,7 +212,7 @@ function PaymentDialog({ open, onClose, purchases, isBulk }: PaymentDialogProps)
 
         {/* Record Payment Form */}
         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", mb: 1 }}>
-          Record Payment Details
+          Record New Payment Details
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 6 }}>
