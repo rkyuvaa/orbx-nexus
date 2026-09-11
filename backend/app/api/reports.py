@@ -118,10 +118,10 @@ async def day_book(
     conds_mov = []
     params = {}
     if fd:
-        conds_mov.append("m.movement_date::text::date >= :fd::date")
+        conds_mov.append("m.movement_date >= CAST(:fd AS date)")
         params["fd"] = fd
     if td:
-        conds_mov.append("m.movement_date::text::date <= :td::date")
+        conds_mov.append("m.movement_date <= CAST(:td AS date)")
         params["td"] = td
 
     where_mov = ("WHERE " + " AND ".join(conds_mov)) if conds_mov else ""
@@ -189,9 +189,9 @@ async def day_book(
     # 2. Vouchers (Payment, Receipt, Contra, Journal, Misc. Expenses)
     conds_v = []
     if fd:
-        conds_v.append("v.voucher_date::text::date >= :fd::date")
+        conds_v.append("v.voucher_date >= CAST(:fd AS date)")
     if td:
-        conds_v.append("v.voucher_date::text::date <= :td::date")
+        conds_v.append("v.voucher_date <= CAST(:td AS date)")
     where_v = ("WHERE " + " AND ".join(conds_v)) if conds_v else ""
 
     try:
@@ -230,9 +230,9 @@ async def day_book(
     # 3. Labour Bills
     conds_lb = []
     if fd:
-        conds_lb.append("lb.bill_date::text::date >= :fd::date")
+        conds_lb.append("lb.bill_date >= CAST(:fd AS date)")
     if td:
-        conds_lb.append("lb.bill_date::text::date <= :td::date")
+        conds_lb.append("lb.bill_date <= CAST(:td AS date)")
     where_lb = ("WHERE " + " AND ".join(conds_lb)) if conds_lb else ""
 
     try:
