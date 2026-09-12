@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
@@ -204,6 +204,12 @@ export function SalaryVoucherPage() {
   });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Staff"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Staff")).data });
 
+  const staffMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    ledgers.forEach((l: any) => { map[l.id] = l.name; });
+    return map;
+  }, [ledgers]);
+
   const { register, handleSubmit, reset, control } = useForm({
     defaultValues: { voucher_no: "", voucher_date: today, ledger_id: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), days_worked: 0, basic_salary: 0, allowances: 0, deductions: 0, net_salary: 0, narration: "" },
   });
@@ -213,14 +219,41 @@ export function SalaryVoucherPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["salary-vouchers"] }); setOpen(false); },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/payroll/salary/${id}?fy=${activeFY}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["salary-vouchers"] }); },
+    onError: () => alert("Failed to delete salary voucher."),
+  });
+
   const colDefs: ColDef[] = [
-    { field: "voucher_no", headerName: "Voucher No.", width: 130 },
-    { field: "voucher_date", headerName: "Date", width: 100 },
-    { field: "ledger_id", headerName: "Staff", width: 180 },
-    { field: "month", headerName: "Month", width: 80 },
-    { field: "year", headerName: "Year", width: 80 },
-    { field: "days_worked", headerName: "Days", width: 75 },
+    { field: "voucher_no", headerName: "Voucher No.", width: 140, cellRenderer: (p) => <span style={{ fontWeight: 700 }}>{p.value}</span> },
+    { field: "voucher_date", headerName: "Date", width: 110 },
+    { field: "ledger_id", headerName: "Staff Member", flex: 1, cellRenderer: (p) => <span style={{ fontWeight: 600 }}>{staffMap[p.value] || p.value}</span> },
+    { field: "month", headerName: "Month", width: 80, type: "numericColumn" },
+    { field: "year", headerName: "Year", width: 80, type: "numericColumn" },
+    { field: "days_worked", headerName: "Days", width: 75, type: "numericColumn" },
     { field: "net_salary", headerName: "Net Salary", width: 120, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 90,
+      sortable: false,
+      cellRenderer: (p) => (
+        <Tooltip title="Delete Salary Voucher">
+          <IconButton
+            size="small"
+            color="error"
+            onClick={() => {
+              if (window.confirm(`Are you sure you want to delete Salary Voucher ${p.data.voucher_no}?`)) {
+                deleteMutation.mutate(p.data.id);
+              }
+            }}
+          >
+            <Delete fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ),
+    },
   ];
 
   return (
