@@ -21,6 +21,7 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Grid,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
@@ -457,6 +458,22 @@ export default function ContractorBalancePage() {
     },
   ];
 
+  let totalEarnedVal = 0;
+  let totalPaidVal = 0;
+  if (transactions && transactions.length > 0) {
+    transactions.forEach((tx: any) => {
+      const amt = Math.abs(tx.amount || 0);
+      if (tx.dr_cr === "Cr") {
+        totalEarnedVal += amt;
+      } else {
+        totalPaidVal += amt;
+      }
+    });
+  } else if (selectedContractor) {
+    totalEarnedVal = Math.abs(selectedContractor.job_work_amount || 0) + Math.abs(selectedContractor.advance_received || 0);
+    totalPaidVal = Math.abs(selectedContractor.job_work_paid || 0) + Math.abs(selectedContractor.advance_paid || 0);
+  }
+
   const finalTx = transactions.length > 0 ? transactions[transactions.length - 1] : null;
   const finalBalVal = finalTx ? Math.abs(finalTx.running_balance ?? 0) : Math.abs(selectedContractor?.current_balance ?? 0);
   const isFinalPayable = finalTx ? (finalTx.running_balance ?? 0) >= 0 : (selectedContractor?.current_balance ?? 0) >= 0;
@@ -591,30 +608,45 @@ export default function ContractorBalancePage() {
                 </Table>
               </Paper>
 
-              {/* Dedicated Final Closing Balance Summary Card */}
+              {/* Dedicated 3-Line Financial Summary Card */}
               <Paper
                 variant="outlined"
                 sx={{
-                  p: 2,
+                  p: 2.5,
                   bgcolor: finalBgColor,
                   borderColor: finalBorderColor,
                   borderRadius: "10px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
                 }}
               >
-                <Box>
-                  <Typography variant="overline" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: 1 }}>
-                    Final Closing Balance
-                  </Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800, color: finalColor }}>
-                    ₹{formatAmount(finalBalVal)}{" "}
-                    <span style={{ fontSize: "1rem", fontWeight: 700 }}>
-                      {isFinalPayable ? "Cr — Payable" : "Dr — Receivable"}
-                    </span>
-                  </Typography>
-                </Box>
+                <Grid container spacing={2} sx={{ alignItems: "center" }}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: 0.5, display: "block" }}>
+                      TOTAL EARNED (WORK DONE)
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: "#0a7a50" }}>
+                      ₹{formatAmount(totalEarnedVal)}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: 0.5, display: "block" }}>
+                      TOTAL ADVANCE (PAID)
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: "#b02a37" }}>
+                      ₹{formatAmount(totalPaidVal)}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", letterSpacing: 0.5, display: "block" }}>
+                      BALANCE TO PAY (CLOSING)
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: finalColor }}>
+                      ₹{formatAmount(finalBalVal)}{" "}
+                      <span style={{ fontSize: "0.85rem", fontWeight: 700 }}>
+                        {isFinalPayable ? "Cr — Payable" : "Dr — Receivable"}
+                      </span>
+                    </Typography>
+                  </Grid>
+                </Grid>
               </Paper>
 
               {/* Quick Payment Section */}
