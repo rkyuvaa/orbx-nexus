@@ -1244,17 +1244,25 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
       const tax = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
       const gst = Number(bill.gst_amount || 0);
       const tds = Math.round((tax * 1) / 100 * 100) / 100;
-      const netTaxableReceived = Math.max(0, tax - tds);
 
       setPaymentDate(new Date().toISOString().split("T")[0]);
       setPaymentMode("Bank Transfer");
-      setComponentPreset("TAXABLE");
-      setTaxableAmt(String(tax));
-      setGstAmt("0");
       setTdsPercent(1);
-      setTdsAmt(String(tds));
-      setNetPaidAmt(String(netTaxableReceived));
       setNotes("");
+
+      if (bill.taxable_paid && !bill.gst_paid) {
+        setComponentPreset("GST");
+        setTaxableAmt("0");
+        setGstAmt(String(gst));
+        setTdsAmt("0");
+        setNetPaidAmt(String(gst));
+      } else {
+        setComponentPreset("FULL");
+        setTaxableAmt(String(tax));
+        setGstAmt(String(gst));
+        setTdsAmt(String(tds));
+        setNetPaidAmt(String(Math.max(0, tax + gst - tds)));
+      }
     }
   }, [open, bill]);
 
