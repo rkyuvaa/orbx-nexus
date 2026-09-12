@@ -289,6 +289,142 @@ async def list_bill_payments(
     return [dict(r) for r in res.mappings().all()]
 
 
+class EditLabourBillIn(BaseModel):
+    bill_no: Optional[str] = None
+    bill_date: Optional[str] = None
+    taxable_amount: Optional[float] = None
+    gst_amount: Optional[float] = None
+    total_amount: Optional[float] = None
+    narration: Optional[str] = None
+
+
+@router.patch("/{bill_id}/edit-bill")
+async def edit_bill_details(
+    bill_id: int,
+    body: EditLabourBillIn,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await _ensure_payment_schema(db, schema)
+
+    res = await db.execute(
+        text(f"SELECT * FROM {schema}.labour_bills WHERE id = :id"),
+        {"id": bill_id}
+    )
+    bill = res.mappings().first()
+    if not bill:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Labour bill not found")
+
+    bill_dict = dict(bill)
+    bno = body.bill_no or bill_dict.get("bill_no")
+    bdate = body.bill_date or str(bill_dict.get("bill_date"))
+    tax_amt = body.taxable_amount if body.taxable_amount is not None else float(bill_dict.get("amount") or 0)
+    gst_amt = body.gst_amount if body.gst_amount is not None else float(bill_dict.get("gst_amount") or 0)
+    tot_amt = body.total_amount if body.total_amount is not None else float(bill_dict.get("total_amount") or tax_amt + gst_amt)
+    narr = body.narration if body.narration is not None else bill_dict.get("narration")
+
+    paid_amt = float(bill_dict.get("paid_amount") or 0)
+    new_pending = max(0.0, tot_amt - paid_amt)
+    pstatus = "PAID" if new_pending <= 1.0 else ("PARTIAL" if paid_amt > 0 else "UNPAID")
+    is_paid_bool = True if pstatus == "PAID" else False
+
+    await db.execute(
+        text(f"""
+            UPDATE {schema}.labour_bills SET
+            bill_no = :bno,
+            bill_date = :bdate,
+            amount = :amt,
+            gst_amount = :gamt,
+            total_amount = :tamt,
+            net_amount = :tamt,
+            pending_amount = :pending,
+            payment_status = :pstatus,
+            is_paid = :ispaid,
+            narration = :narr,
+            updated_at = NOW()
+            WHERE id = :id
+        """),
+        {
+            "bno": bno,
+            "bdate": bdate,
+            "amt": tax_amt,
+            "gamt": gst_amt,
+            "tamt": tot_amt,
+            "pending": new_pending,
+            "pstatus": pstatus,
+            "ispaid": is_paid_bool,
+            "narr": narr,
+            "id": bill_id,
+        }
+    )
+    return {"message": "Bill updated successfully", "payment_status": pstatus, "pending_amount": new_pending}
+
+
+@router.delete("/{bill_id}/payments/{payment_id}")
+async def delete_bill_payment(
+    bill_id: int,
+    payment_id: int,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await _ensure_payment_schema(db, schema)
+
+    await db.execute(
+        text(f"DELETE FROM {schema}.labour_bill_payments WHERE id = :pid AND bill_id = :bid"),
+        {"pid": payment_id, "bid": bill_id}
+    )
+
+    res = await db.execute(
+        text(f"SELECT COALESCE(SUM(net_paid_amount), 0) AS total_paid, COALESCE(SUM(tds_amount), 0) AS total_tds FROM {schema}.labour_bill_payments WHERE bill_id = :bid"),
+        {"bid": bill_id}
+    )
+    row = res.mappings().first()
+    sum_paid = float(row.get("total_paid") or 0)
+    sum_tds = float(row.get("total_tds") or 0)
+
+    res_bill = await db.execute(
+        text(f"SELECT * FROM {schema}.labour_bills WHERE id = :id"),
+        {"id": bill_id}
+    )
+    bill = res_bill.mappings().first()
+    if bill:
+        bill_dict = dict(bill)
+        tot = float(bill_dict.get("total_amount") or 0)
+        taxable_val = float(bill_dict.get("amount") or tot)
+        new_pending = max(0.0, tot - sum_paid - sum_tds)
+        pstatus = "PAID" if new_pending <= 1.0 else ("PARTIAL" if sum_paid > 0 else "UNPAID")
+        is_paid_bool = True if pstatus == "PAID" else False
+        tpaid = sum_paid >= taxable_val - sum_tds
+
+        await db.execute(
+            text(f"""
+                UPDATE {schema}.labour_bills SET
+                paid_amount = :paid,
+                pending_amount = :pending,
+                taxable_paid = :tpaid,
+                gst_paid = :ispaid,
+                payment_status = :pstatus,
+                is_paid = :ispaid,
+                updated_at = NOW()
+                WHERE id = :id
+            """),
+            {
+                "paid": sum_paid,
+                "pending": new_pending,
+                "tpaid": tpaid,
+                "pstatus": pstatus,
+                "ispaid": is_paid_bool,
+                "id": bill_id,
+            }
+        )
+    return {"message": "Payment record deleted and bill balance recalculated"}
+
+
 @router.delete("/{bill_id}", status_code=204)
 async def delete_labour_bill(
     bill_id: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")

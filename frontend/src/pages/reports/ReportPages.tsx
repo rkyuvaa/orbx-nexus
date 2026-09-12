@@ -3,10 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, TextField, Paper, Typography, Grid,
   Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, MenuItem, Autocomplete,
-  Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip
+  Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, IconButton, Tooltip
 } from "@mui/material";
 import Print from "@mui/icons-material/Print";
 import Search from "@mui/icons-material/Search";
+import Edit from "@mui/icons-material/Edit";
+import Delete from "@mui/icons-material/Delete";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore } from "../../store";
@@ -1214,6 +1216,7 @@ interface RecordPaymentDialogProps {
 }
 
 function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: RecordPaymentDialogProps) {
+  const qc = useQueryClient();
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentMode, setPaymentMode] = useState("Bank Transfer");
   const [componentPreset, setComponentPreset] = useState<"TAXABLE" | "GST" | "PARTIAL" | "FULL">("TAXABLE");
@@ -1340,6 +1343,18 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
       alert(err.response?.data?.detail || "Failed to record payment.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: number) => {
+    if (!confirm("Are you sure you want to delete this payment installment? The bill balance will be automatically recalculated.")) return;
+    try {
+      await api.delete(`/labour-bills/${bill.id}/payments/${paymentId}?fy=${activeFY}`);
+      qc.invalidateQueries({ queryKey: ["bill-payments", bill?.id] });
+      qc.invalidateQueries({ queryKey: ["receivables"] });
+      onSuccess();
+    } catch (err: any) {
+      alert("Failed to delete payment.");
     }
   };
 
@@ -1558,6 +1573,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
                   <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Mode</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11 }}>Received (₹)</TableCell>
                   <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Notes</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: 11, width: 40 }}>Delete</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1568,6 +1584,13 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
                     <TableCell sx={{ fontSize: 11 }}>{ph.payment_mode}</TableCell>
                     <TableCell align="right" sx={{ fontSize: 11, fontWeight: 700, color: "#0f5132" }}>₹{formatAmount(ph.net_paid_amount)}</TableCell>
                     <TableCell sx={{ fontSize: 11, color: "text.secondary" }}>{ph.notes || "-"}</TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="Delete Installment">
+                        <IconButton size="small" color="error" onClick={() => handleDeletePayment(ph.id)}>
+                          <Delete sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1585,6 +1608,146 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   );
 }
 
+interface EditBillDetailsDialogProps {
+  open: boolean;
+  onClose: () => void;
+  bill: any;
+  activeFY: string;
+  onSuccess: () => void;
+}
+
+function EditBillDetailsDialog({ open, onClose, bill, activeFY, onSuccess }: EditBillDetailsDialogProps) {
+  const [billNo, setBillNo] = useState("");
+  const [billDate, setBillDate] = useState("");
+  const [taxableAmt, setTaxableAmt] = useState("");
+  const [gstAmt, setGstAmt] = useState("");
+  const [totalAmt, setTotalAmt] = useState("");
+  const [narration, setNarration] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && bill) {
+      setBillNo(bill.bill_no || "");
+      setBillDate(bill.bill_date || "");
+      const tax = bill.taxable_amount || bill.amount || 0;
+      const gst = bill.gst_amount || 0;
+      const tot = bill.total_amount || bill.net_amount || (tax + gst);
+      setTaxableAmt(String(tax));
+      setGstAmt(String(gst));
+      setTotalAmt(String(tot));
+      setNarration(bill.narration || "");
+    }
+  }, [open, bill]);
+
+  if (!bill) return null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/labour-bills/${bill.id}/edit-bill?fy=${activeFY}`, {
+        bill_no: billNo,
+        bill_date: billDate,
+        taxable_amount: parseFloat(taxableAmt) || 0,
+        gst_amount: parseFloat(gstAmt) || 0,
+        total_amount: parseFloat(totalAmt) || 0,
+        narration: narration,
+      });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to update bill.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1 }}>
+        Edit Labour Bill — #{bill.bill_no}
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ pt: 2 }}>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="Bill No."
+              fullWidth
+              size="small"
+              value={billNo}
+              onChange={(e) => setBillNo(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="Bill Date"
+              type="date"
+              fullWidth
+              size="small"
+              value={billDate}
+              onChange={(e) => setBillDate(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="Taxable Amount (₹)"
+              type="number"
+              fullWidth
+              size="small"
+              value={taxableAmt}
+              onChange={(e) => setTaxableAmt(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 6 }}>
+            <TextField
+              label="GST Amount (₹)"
+              type="number"
+              fullWidth
+              size="small"
+              value={gstAmt}
+              onChange={(e) => setGstAmt(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              label="Total Bill Amount (₹)"
+              type="number"
+              fullWidth
+              size="small"
+              value={totalAmt}
+              onChange={(e) => setTotalAmt(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ "& input": { fontWeight: 800, color: "#0f5132" } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              label="Narration"
+              fullWidth
+              size="small"
+              multiline
+              rows={2}
+              value={narration}
+              onChange={(e) => setNarration(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
+        <Button onClick={handleSave} variant="contained" color="primary" size="small" disabled={saving}>
+          {saving ? "Saving..." : "Update Bill Details"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export function ReceivablesReport() {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
@@ -1593,6 +1756,7 @@ export function ReceivablesReport() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "received" | "all">("pending");
   const [selectedLedgerId, setSelectedLedgerId] = useState<number | "">("");
   const [activePaymentBill, setActivePaymentBill] = useState<any>(null);
+  const [activeEditBill, setActiveEditBill] = useState<any>(null);
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers-account"],
@@ -1912,41 +2076,48 @@ export function ReceivablesReport() {
                       ₹{formatAmount(tot)}
                     </TableCell>
                     <TableCell align="center" sx={{ p: "5px 10px" }}>
-                      {bill.payment_status === "PAID" || (bill.is_paid && bill.payment_status !== "PARTIAL") ? (
-                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                          <Chip
-                            label="Already Received"
-                            color="success"
-                            size="small"
-                            sx={{ fontWeight: 700, fontSize: 10, height: 22 }}
-                          />
-                          {bill.payment_date && (
-                            <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", mt: 0.25 }}>
-                              {bill.payment_date}
-                            </Typography>
-                          )}
-                        </Box>
-                      ) : (
-                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
-                          {bill.payment_status === "PARTIAL" && (
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
+                        {bill.payment_status === "PAID" || (bill.is_paid && bill.payment_status !== "PARTIAL") ? (
+                          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                             <Chip
-                              label={`GST/Part Pending: ₹${formatAmount(bill.pending_amount)}`}
-                              color="warning"
+                              label="Already Received"
+                              color="success"
                               size="small"
-                              sx={{ fontWeight: 700, fontSize: 9, height: 20 }}
+                              sx={{ fontWeight: 700, fontSize: 10, height: 22 }}
                             />
-                          )}
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color={bill.payment_status === "PARTIAL" ? "warning" : "success"}
-                            onClick={() => setActivePaymentBill(bill)}
-                            sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
-                          >
-                            Record Payment
-                          </Button>
-                        </Box>
-                      )}
+                            {bill.payment_date && (
+                              <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", mt: 0.25 }}>
+                                {bill.payment_date}
+                              </Typography>
+                            )}
+                          </Box>
+                        ) : (
+                          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                            {bill.payment_status === "PARTIAL" && (
+                              <Chip
+                                label={`GST/Part Pending: ₹${formatAmount(bill.pending_amount)}`}
+                                color="warning"
+                                size="small"
+                                sx={{ fontWeight: 700, fontSize: 9, height: 20 }}
+                              />
+                            )}
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color={bill.payment_status === "PARTIAL" ? "warning" : "success"}
+                              onClick={() => setActivePaymentBill(bill)}
+                              sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
+                            >
+                              Record Payment
+                            </Button>
+                          </Box>
+                        )}
+                        <Tooltip title="Edit Bill Details">
+                          <IconButton size="small" color="primary" onClick={() => setActiveEditBill(bill)}>
+                            <Edit sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 );
@@ -1990,6 +2161,15 @@ export function ReceivablesReport() {
         open={!!activePaymentBill}
         onClose={() => setActivePaymentBill(null)}
         bill={activePaymentBill}
+        activeFY={activeFY}
+        onSuccess={() => qc.invalidateQueries({ queryKey: ["receivables"] })}
+      />
+
+      {/* Edit Bill Details Dialog */}
+      <EditBillDetailsDialog
+        open={!!activeEditBill}
+        onClose={() => setActiveEditBill(null)}
+        bill={activeEditBill}
         activeFY={activeFY}
         onSuccess={() => qc.invalidateQueries({ queryKey: ["receivables"] })}
       />
