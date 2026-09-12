@@ -1300,11 +1300,10 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
   // Pending inward vouchers — pre-fetched as soon as a supplier is chosen or when modal opens
   const { data: pendingInwards = [] } = useQuery({
-    queryKey: ["pending-inward", activeFY, pickerLedgerId, editing?.id],
+    queryKey: ["pending-inward", activeFY, pickerLedgerId],
     queryFn: async () => {
       let url = `/stock/inward/pending-outward?fy=${activeFY}`;
       if (pickerLedgerId) url += `&ledger_id=${pickerLedgerId}`;
-      if (editing?.id) url += `&exclude_outward_id=${editing.id}`;
       return (await api.get(url)).data;
     },
     enabled: open && (!!pickerLedgerId || !!editing?.id || selectedInwards.length > 0),
