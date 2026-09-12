@@ -541,6 +541,9 @@ async def stock_in_hand(
             for iid in inw_ids:
                 if iid not in candidate_inwards and (iid, p_id) in inward_quantities:
                     candidate_inwards.append(iid)
+            for (iid, pid) in inward_quantities.keys():
+                if pid == p_id and iid not in candidate_inwards:
+                    candidate_inwards.append(iid)
 
             for iid in candidate_inwards:
                 if remaining_qty <= 0:
