@@ -483,17 +483,8 @@ export default function ContractorBalancePage() {
         maxWidth="lg"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>Transaction Summary - {selectedContractor?.contractor_name}</span>
-          <Button
-            startIcon={<PrintIcon />}
-            variant="outlined"
-            color="primary"
-            size="small"
-            onClick={() => handlePrintContractorStatement(selectedContractor, transactions, companyData, activeFY)}
-          >
-            Print A4 Statement
-          </Button>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Transaction Summary - {selectedContractor?.contractor_name}
         </DialogTitle>
         <DialogContent dividers>
           {isTxLoading ? (
@@ -682,6 +673,22 @@ export default function ContractorBalancePage() {
                     ) : (
                       "Pay"
                     )}
+                  </Button>
+
+                  <Button
+                    variant="outlined"
+                    startIcon={<PrintIcon />}
+                    onClick={() => handlePrintContractorStatement(selectedContractor, transactions, companyData, activeFY)}
+                    sx={{
+                      borderColor: "#023020",
+                      color: "#023020",
+                      fontWeight: 700,
+                      px: 3,
+                      height: 40,
+                      "&:hover": { bgcolor: "rgba(2,48,32,0.06)", borderColor: "#023020" },
+                    }}
+                  >
+                    Print A4 Statement
                   </Button>
                 </Box>
               </Paper>
