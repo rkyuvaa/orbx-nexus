@@ -1506,18 +1506,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     if (!inwardId && enrichedSelectedInwards.length > 0) return 0;
     const initialBal = getProductBalance(productId, typeof processId === "number" ? processId : null, inwardId);
     
-    if (!editing) {
-      const usedQty = lineItems
-        .filter((it) => Number(it.product_id) === productId && (inwardId ? Number(it.inward_id) === inwardId : true))
-        .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
-        
-      return Math.max(0, initialBal - usedQty);
-    }
-
-    // In Edit mode: initialBal already represents the true pre-outward balance returned by backend.
-    // Do not double-subtract lineItems that belong to the voucher currently being edited.
-    return Math.max(0, initialBal);
-  }, [getProductBalance, lineItems, enrichedSelectedInwards, editing]);
+    const usedQty = lineItems
+      .filter((it) => Number(it.product_id) === productId && (inwardId ? Number(it.inward_id) === inwardId : true))
+      .reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+      
+    return Math.max(0, initialBal - usedQty);
+  }, [getProductBalance, lineItems, enrichedSelectedInwards]);
 
   const entryLiveStockBal = useMemo(() => {
     if (!activeInward || !entryProduct) return 0;
