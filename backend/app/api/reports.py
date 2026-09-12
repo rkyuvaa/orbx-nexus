@@ -513,15 +513,18 @@ async def stock_in_hand(
         outward_items = []
         if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
             for item in raw_items:
+                item_inw_id = item.get("inward_id") or so_dict.get("inward_id")
                 outward_items.append({
                     "product_id": item.get("product_id") or so_dict.get("product_id"),
-                    "quantity": float(item.get("quantity") or 0)
+                    "quantity": float(item.get("quantity") or 0),
+                    "inward_id": int(item_inw_id) if item_inw_id else None
                 })
         else:
             if so_dict.get("product_id") or float(so_dict.get("quantity") or 0) > 0:
                 outward_items.append({
                     "product_id": so_dict.get("product_id"),
-                    "quantity": float(so_dict.get("quantity") or 0)
+                    "quantity": float(so_dict.get("quantity") or 0),
+                    "inward_id": int(so_dict["inward_id"]) if so_dict.get("inward_id") else None
                 })
 
         for item in outward_items:
@@ -530,9 +533,16 @@ async def stock_in_hand(
                 continue
             p_id = int(p_id)
             remaining_qty = item["quantity"]
+            item_inw = item.get("inward_id")
 
-            matching_inwards = [iid for iid in inw_ids if (iid, p_id) in inward_quantities]
-            for iid in matching_inwards:
+            candidate_inwards = []
+            if item_inw and (item_inw, p_id) in inward_quantities:
+                candidate_inwards.append(item_inw)
+            for iid in inw_ids:
+                if iid not in candidate_inwards and (iid, p_id) in inward_quantities:
+                    candidate_inwards.append(iid)
+
+            for iid in candidate_inwards:
                 if remaining_qty <= 0:
                     break
                 inw_key = (iid, p_id)
