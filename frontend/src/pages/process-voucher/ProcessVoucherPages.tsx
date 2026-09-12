@@ -1519,8 +1519,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     const inwardId = activeInward.id;
     const productId = entryProduct.id;
     const processId = entryProcess ? entryProcess.id : null;
-    return getProductBalance(productId, typeof processId === "number" ? processId : null, inwardId);
-  }, [activeInward, entryProduct, entryProcess, getProductBalance]);
+    return getLiveStockForProductProcessInward(productId, processId, inwardId);
+  }, [activeInward, entryProduct, entryProcess, getLiveStockForProductProcessInward]);
 
   const { register, handleSubmit, reset, watch, setValue } = useForm({
     defaultValues: {
