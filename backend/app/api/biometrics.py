@@ -134,7 +134,7 @@ async def get_daily_staff_attendance(
 
     result = await db.execute(
         text(
-            f"SELECT l.id AS ledger_id, l.name AS staff_name, l.code AS staff_code, "
+            f"SELECT l.id AS ledger_id, l.name AS staff_name, l.ledger_code AS staff_code, "
             f"be.id AS entry_id, "
             f"COALESCE(be.status, 'Present') AS status, "
             f"COALESCE(be.punch_in::text, '09:00') AS punch_in, "
