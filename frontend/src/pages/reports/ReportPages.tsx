@@ -1217,6 +1217,7 @@ interface RecordPaymentDialogProps {
 
 function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: RecordPaymentDialogProps) {
   const qc = useQueryClient();
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null);
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentMode, setPaymentMode] = useState("Bank Transfer");
   const [componentPreset, setComponentPreset] = useState<"TAXABLE" | "GST" | "PARTIAL" | "FULL">("TAXABLE");
@@ -1239,6 +1240,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
 
   useEffect(() => {
     if (open && bill) {
+      setEditingPaymentId(null);
       const tax = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
       const gst = Number(bill.gst_amount || 0);
       const tds = Math.round((tax * 1) / 100 * 100) / 100;
@@ -1288,6 +1290,18 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
     }
   };
 
+  const handleEditPaymentRow = (ph: any) => {
+    setEditingPaymentId(ph.id);
+    setPaymentDate(ph.payment_date || new Date().toISOString().split("T")[0]);
+    setPaymentMode(ph.payment_mode || "Bank Transfer");
+    setComponentPreset(ph.component || "PARTIAL");
+    setTaxableAmt(String(ph.taxable_amount || 0));
+    setGstAmt(String(ph.gst_amount || 0));
+    setTdsAmt(String(ph.tds_amount || 0));
+    setNetPaidAmt(String(ph.net_paid_amount || 0));
+    setNotes(ph.notes || "");
+  };
+
   const handleTaxableChange = (val: string) => {
     setTaxableAmt(val);
     setComponentPreset("PARTIAL");
@@ -1327,7 +1341,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.post(`/labour-bills/${bill.id}/record-payment?fy=${activeFY}`, {
+      const payload = {
         payment_date: paymentDate,
         payment_mode: paymentMode,
         component: componentPreset,
@@ -1336,11 +1350,17 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
         tds_amount: parseFloat(tdsAmt) || 0,
         net_paid_amount: parseFloat(netPaidAmt) || 0,
         notes: notes || `Payment received (${componentPreset})`,
-      });
+      };
+
+      if (editingPaymentId) {
+        await api.put(`/labour-bills/${bill.id}/payments/${editingPaymentId}?fy=${activeFY}`, payload);
+      } else {
+        await api.post(`/labour-bills/${bill.id}/record-payment?fy=${activeFY}`, payload);
+      }
       onSuccess();
       onClose();
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to record payment.");
+      alert(err.response?.data?.detail || "Failed to save payment entry.");
     } finally {
       setSaving(false);
     }
@@ -1361,7 +1381,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Record Payment — Bill #{bill.bill_no}</span>
+        <span>{editingPaymentId ? `Edit Payment Entry — Bill #${bill.bill_no}` : `Record Payment — Bill #${bill.bill_no}`}</span>
         <Chip
           label={bill.payment_status === "PAID" ? "FULLY PAID" : bill.payment_status === "PARTIAL" ? "PARTIALLY RECEIVED" : "UNPAID"}
           color={bill.payment_status === "PAID" ? "success" : bill.payment_status === "PARTIAL" ? "warning" : "error"}
@@ -1435,12 +1455,12 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
         {/* Editable Bill Breakdown Section */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: "#f8fafc", borderRadius: 2 }}>
           <Typography variant="caption" sx={{ fontWeight: 700, color: "#0f5132", textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
-            Editable Payment Component Amounts
+            Editable Received Payment Amounts
           </Typography>
           <Grid container spacing={1.5}>
             <Grid size={{ xs: 6 }}>
               <TextField
-                label="Taxable Amount to Receive (₹)"
+                label="Taxable Amount Received (₹)"
                 type="number"
                 fullWidth
                 size="small"
@@ -1451,7 +1471,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
             </Grid>
             <Grid size={{ xs: 6 }}>
               <TextField
-                label="GST Amount to Receive (₹)"
+                label="GST Amount Received (₹)"
                 type="number"
                 fullWidth
                 size="small"
@@ -1493,7 +1513,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
               <Divider sx={{ my: 0.5 }} />
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 0.5 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0f5132" }}>
-                  NET PAYMENT RECEIVED IN THIS STAGE:
+                  NET PAYMENT RECEIVED IN THIS ENTRY:
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
                   ₹{formatAmount(parseFloat(netPaidAmt) || 0)}
@@ -1573,23 +1593,30 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
                   <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Mode</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11 }}>Received (₹)</TableCell>
                   <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Notes</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: 11, width: 40 }}>Delete</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700, fontSize: 11, width: 70 }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {paymentHistory.map((ph: any) => (
-                  <TableRow key={ph.id}>
+                  <TableRow key={ph.id} selected={editingPaymentId === ph.id}>
                     <TableCell sx={{ fontSize: 11 }}>{ph.payment_date}</TableCell>
                     <TableCell sx={{ fontSize: 11, fontWeight: 700, color: "primary.main" }}>{ph.component}</TableCell>
                     <TableCell sx={{ fontSize: 11 }}>{ph.payment_mode}</TableCell>
                     <TableCell align="right" sx={{ fontSize: 11, fontWeight: 700, color: "#0f5132" }}>₹{formatAmount(ph.net_paid_amount)}</TableCell>
                     <TableCell sx={{ fontSize: 11, color: "text.secondary" }}>{ph.notes || "-"}</TableCell>
                     <TableCell align="center">
-                      <Tooltip title="Delete Installment">
-                        <IconButton size="small" color="error" onClick={() => handleDeletePayment(ph.id)}>
-                          <Delete sx={{ fontSize: 14 }} />
-                        </IconButton>
-                      </Tooltip>
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Tooltip title="Edit Payment Entry">
+                          <IconButton size="small" color="primary" onClick={() => handleEditPaymentRow(ph)}>
+                            <Edit sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete Installment">
+                          <IconButton size="small" color="error" onClick={() => handleDeletePayment(ph.id)}>
+                            <Delete sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1601,7 +1628,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
         <Button onClick={handleSave} variant="contained" color="success" size="small" disabled={saving}>
-          {saving ? "Saving..." : "Record Payment & Update Status"}
+          {saving ? "Saving..." : editingPaymentId ? "Update Payment Entry" : "Record Payment & Update Status"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -2077,46 +2104,43 @@ export function ReceivablesReport() {
                     </TableCell>
                     <TableCell align="center" sx={{ p: "5px 10px" }}>
                       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
-                        {bill.payment_status === "PAID" || (bill.is_paid && bill.payment_status !== "PARTIAL") ? (
-                          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <Chip
-                              label="Already Received"
-                              color="success"
-                              size="small"
-                              sx={{ fontWeight: 700, fontSize: 10, height: 22 }}
-                            />
-                            {bill.payment_date && (
-                              <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", mt: 0.25 }}>
-                                {bill.payment_date}
-                              </Typography>
-                            )}
-                          </Box>
-                        ) : (
-                          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
-                            {bill.payment_status === "PARTIAL" && (
+                        <Box>
+                          {bill.payment_status === "PAID" || (bill.is_paid && bill.payment_status !== "PARTIAL") ? (
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                               <Chip
-                                label={`GST/Part Pending: ₹${formatAmount(bill.pending_amount)}`}
-                                color="warning"
+                                label="Already Received"
+                                color="success"
                                 size="small"
-                                sx={{ fontWeight: 700, fontSize: 9, height: 20 }}
+                                sx={{ fontWeight: 700, fontSize: 10, height: 22 }}
                               />
-                            )}
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color={bill.payment_status === "PARTIAL" ? "warning" : "success"}
-                              onClick={() => setActivePaymentBill(bill)}
-                              sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
-                            >
-                              Record Payment
-                            </Button>
-                          </Box>
-                        )}
-                        <Tooltip title="Edit Bill Details">
-                          <IconButton size="small" color="primary" onClick={() => setActiveEditBill(bill)}>
-                            <Edit sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Tooltip>
+                              {bill.payment_date && (
+                                <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", mt: 0.25 }}>
+                                  {bill.payment_date}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                              {bill.payment_status === "PARTIAL" && (
+                                <Chip
+                                  label={`GST/Part Pending: ₹${formatAmount(bill.pending_amount)}`}
+                                  color="warning"
+                                  size="small"
+                                  sx={{ fontWeight: 700, fontSize: 9, height: 20 }}
+                                />
+                              )}
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color={bill.payment_status === "PARTIAL" ? "warning" : "success"}
+                                onClick={() => setActivePaymentBill(bill)}
+                                sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
+                              >
+                                Record Payment
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -2161,15 +2185,6 @@ export function ReceivablesReport() {
         open={!!activePaymentBill}
         onClose={() => setActivePaymentBill(null)}
         bill={activePaymentBill}
-        activeFY={activeFY}
-        onSuccess={() => qc.invalidateQueries({ queryKey: ["receivables"] })}
-      />
-
-      {/* Edit Bill Details Dialog */}
-      <EditBillDetailsDialog
-        open={!!activeEditBill}
-        onClose={() => setActiveEditBill(null)}
-        bill={activeEditBill}
         activeFY={activeFY}
         onSuccess={() => qc.invalidateQueries({ queryKey: ["receivables"] })}
       />

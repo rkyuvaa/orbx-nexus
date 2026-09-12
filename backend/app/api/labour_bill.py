@@ -363,6 +363,93 @@ async def edit_bill_details(
     return {"message": "Bill updated successfully", "payment_status": pstatus, "pending_amount": new_pending}
 
 
+@router.put("/{bill_id}/payments/{payment_id}")
+async def update_bill_payment(
+    bill_id: int,
+    payment_id: int,
+    body: LabourBillPaymentIn,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await _ensure_payment_schema(db, schema)
+
+    await db.execute(
+        text(f"""
+            UPDATE {schema}.labour_bill_payments SET
+            payment_date = :pdate,
+            payment_mode = :pmode,
+            component = :comp,
+            taxable_amount = :tamt,
+            gst_amount = :gamt,
+            tds_amount = :tds,
+            net_paid_amount = :npamt,
+            notes = :notes
+            WHERE id = :pid AND bill_id = :bid
+        """),
+        {
+            "pdate": body.payment_date,
+            "pmode": body.payment_mode,
+            "comp": body.component,
+            "tamt": body.taxable_amount,
+            "gamt": body.gst_amount,
+            "tds": body.tds_amount,
+            "npamt": body.net_paid_amount,
+            "notes": body.notes,
+            "pid": payment_id,
+            "bid": bill_id,
+        }
+    )
+
+    res = await db.execute(
+        text(f"SELECT COALESCE(SUM(net_paid_amount), 0) AS total_paid, COALESCE(SUM(tds_amount), 0) AS total_tds FROM {schema}.labour_bill_payments WHERE bill_id = :bid"),
+        {"bid": bill_id}
+    )
+    row = res.mappings().first()
+    sum_paid = float(row.get("total_paid") or 0)
+    sum_tds = float(row.get("total_tds") or 0)
+
+    res_bill = await db.execute(
+        text(f"SELECT * FROM {schema}.labour_bills WHERE id = :id"),
+        {"id": bill_id}
+    )
+    bill = res_bill.mappings().first()
+    if bill:
+        bill_dict = dict(bill)
+        tot = float(bill_dict.get("total_amount") or 0)
+        taxable_val = float(bill_dict.get("amount") or tot)
+        new_pending = max(0.0, tot - sum_paid - sum_tds)
+        pstatus = "PAID" if new_pending <= 1.0 else ("PARTIAL" if sum_paid > 0 else "UNPAID")
+        is_paid_bool = True if pstatus == "PAID" else False
+        tpaid = sum_paid >= taxable_val - sum_tds
+
+        await db.execute(
+            text(f"""
+                UPDATE {schema}.labour_bills SET
+                paid_amount = :paid,
+                pending_amount = :pending,
+                taxable_paid = :tpaid,
+                gst_paid = :ispaid,
+                payment_status = :pstatus,
+                is_paid = :ispaid,
+                payment_date = :pdate,
+                updated_at = NOW()
+                WHERE id = :id
+            """),
+            {
+                "paid": sum_paid,
+                "pending": new_pending,
+                "tpaid": tpaid,
+                "pstatus": pstatus,
+                "ispaid": is_paid_bool,
+                "pdate": body.payment_date,
+                "id": bill_id,
+            }
+        )
+    return {"message": "Payment record updated successfully", "payment_status": pstatus, "pending_amount": new_pending}
+
+
 @router.delete("/{bill_id}/payments/{payment_id}")
 async def delete_bill_payment(
     bill_id: int,
