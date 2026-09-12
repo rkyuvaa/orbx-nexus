@@ -31,6 +31,8 @@ interface StaffRow {
   remarks: string;
 }
 
+const BREADCRUMBS = [{ label: "Salary and Wages" }, { label: "Attendance" }];
+
 export default function BiometricsPage() {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
@@ -187,7 +189,7 @@ export default function BiometricsPage() {
       <PageHeader
         title="Staff Attendance & Wages Register"
         subtitle="Daily staff attendance recording, overtime tracking, and monthly payroll registers"
-        breadcrumbs={[{ label: "Salary and Wages" }, { label: "Attendance" }]}
+        breadcrumbs={BREADCRUMBS}
       />
 
       {/* Main Tabs Navigation */}

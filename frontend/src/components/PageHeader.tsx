@@ -11,10 +11,12 @@ interface PageHeaderProps {
 
 export default function PageHeader({ title, subtitle, breadcrumbs, actions }: PageHeaderProps) {
   const { setHeaderState } = useUIStore();
+  const serializedBc = JSON.stringify(breadcrumbs || []);
 
   useEffect(() => {
     setHeaderState({ title, breadcrumbs });
-  }, [title, breadcrumbs, setHeaderState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, serializedBc, setHeaderState]);
 
   return (
     <Box
