@@ -1440,73 +1440,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       });
     });
 
-    // Add back quantities of the voucher currently being edited, so we display the correct pre-outward balance
-    if (editing) {
-      let editingItems: any[] = [];
-      if (typeof editing.items === "string") {
-        try { editingItems = JSON.parse(editing.items); } catch {}
-      } else if (Array.isArray(editing.items)) {
-        editingItems = editing.items;
-      }
-      if (editingItems.length > 0) {
-        editingItems.forEach((it: any) => {
-          const pid = Number(it.product_id);
-          if (pid) {
-            const targetInwardId = it.inward_id || editing.inward_id || "";
-            if (targetInwardId) {
-              const exactKey = `${targetInwardId}_${pid}_${it.process_id ?? ""}`;
-              const fallbackKey = `${targetInwardId}_${pid}_`;
-              const key = map[exactKey] ? exactKey : fallbackKey;
-              
-              if (!map[key]) {
-                const prod = productMapObj[pid];
-                const inv = enrichedSelectedInwards.find((s) => s.id === Number(targetInwardId));
-                map[key] = {
-                  key,
-                  inwardId: Number(targetInwardId),
-                  inwardNo: inv?.inward_no || `#${targetInwardId}`,
-                  productId: pid,
-                  processId: key === exactKey ? (it.process_id ?? null) : null,
-                  quantity: Number(it.quantity) || 0,
-                  balance: Number(it.quantity) || 0,
-                  productName: prod?.name || `Product #${pid}`,
-                };
-              } else {
-                map[key].balance += Number(it.quantity) || 0;
-              }
-            }
-          }
-        });
-      } else if (editing.product_id) {
-        const pid = Number(editing.product_id);
-        const targetInwardId = editing.inward_id || "";
-        if (targetInwardId) {
-          const exactKey = `${targetInwardId}_${pid}_${editing.process_id ?? ""}`;
-          const fallbackKey = `${targetInwardId}_${pid}_`;
-          const key = map[exactKey] ? exactKey : fallbackKey;
-          
-          if (!map[key]) {
-            const prod = productMapObj[pid];
-            const inv = enrichedSelectedInwards.find((s) => s.id === Number(targetInwardId));
-            map[key] = {
-              key,
-              inwardId: Number(targetInwardId),
-              inwardNo: inv?.inward_no || `#${targetInwardId}`,
-              productId: pid,
-              processId: key === exactKey ? (editing.process_id ?? null) : null,
-              quantity: Number(editing.quantity) || 0,
-              balance: Number(editing.quantity) || 0,
-              productName: prod?.name || `Product #${pid}`,
-            };
-          } else {
-            map[key].balance += Number(editing.quantity) || 0;
-          }
-        }
-      }
-    }
-
     return map;
-  }, [enrichedSelectedInwards, productMapObj, editing]);
+  }, [enrichedSelectedInwards, productMapObj]);
 
   // Line items available for outward = from the selected inward(s)
   const availableLineItems = useMemo(() => {
