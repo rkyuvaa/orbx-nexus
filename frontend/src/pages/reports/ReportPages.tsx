@@ -1216,26 +1216,67 @@ interface RecordPaymentDialogProps {
 function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: RecordPaymentDialogProps) {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentMode, setPaymentMode] = useState("Bank Transfer");
-  const [tdsPercent, setTdsPercent] = useState<number>(1); // Default 1% TDS under Sec 194C
+  const [taxableAmt, setTaxableAmt] = useState<string>("");
+  const [gstAmt, setGstAmt] = useState<string>("");
+  const [tdsPercent, setTdsPercent] = useState<number>(1);
+  const [tdsAmt, setTdsAmt] = useState<string>("");
+  const [netPaidAmt, setNetPaidAmt] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && bill) {
+      const tax = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
+      const gst = Number(bill.gst_amount || 0);
+      const tds = Math.round((tax * 1) / 100 * 100) / 100;
+      const net = Math.max(0, tax + gst - tds);
+
       setPaymentDate(new Date().toISOString().split("T")[0]);
       setPaymentMode("Bank Transfer");
+      setTaxableAmt(String(tax));
+      setGstAmt(String(gst));
       setTdsPercent(1);
+      setTdsAmt(String(tds));
+      setNetPaidAmt(String(net));
       setNotes("");
     }
   }, [open, bill]);
 
   if (!bill) return null;
 
-  const taxableAmt = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
-  const gstAmt = Number(bill.gst_amount || 0);
-  const tdsAmt = Math.round((taxableAmt * (tdsPercent || 0)) / 100 * 100) / 100;
-  const grossBillAmt = Number(bill.total_amount || bill.net_amount || 0);
-  const netReceiptAmt = Math.max(0, grossBillAmt - tdsAmt);
+  const handleTaxableChange = (val: string) => {
+    setTaxableAmt(val);
+    const tax = parseFloat(val) || 0;
+    const gst = parseFloat(gstAmt) || 0;
+    const tds = Math.round((tax * (tdsPercent || 0)) / 100 * 100) / 100;
+    setTdsAmt(String(tds));
+    setNetPaidAmt(String(Math.max(0, tax + gst - tds)));
+  };
+
+  const handleGstChange = (val: string) => {
+    setGstAmt(val);
+    const tax = parseFloat(taxableAmt) || 0;
+    const gst = parseFloat(val) || 0;
+    const tds = parseFloat(tdsAmt) || 0;
+    setNetPaidAmt(String(Math.max(0, tax + gst - tds)));
+  };
+
+  const handleTdsPercentChange = (pct: number) => {
+    setTdsPercent(pct);
+    const tax = parseFloat(taxableAmt) || 0;
+    const gst = parseFloat(gstAmt) || 0;
+    const tds = Math.round((tax * pct) / 100 * 100) / 100;
+    setTdsAmt(String(tds));
+    setNetPaidAmt(String(Math.max(0, tax + gst - tds)));
+  };
+
+  const handleTdsAmtChange = (val: string) => {
+    setTdsAmt(val);
+    const tax = parseFloat(taxableAmt) || 0;
+    const gst = parseFloat(gstAmt) || 0;
+    const tds = parseFloat(val) || 0;
+    setNetPaidAmt(String(Math.max(0, tax + gst - tds)));
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -1261,24 +1302,62 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
           Contractor: {bill.ledger_name}
         </Typography>
 
-        {/* Bill Breakdown (Taxable, GST, TDS, Net Received) */}
+        {/* Editable Bill Breakdown Section */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: "#f8fafc", borderRadius: 2 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: "#0f5132", textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
+            Editable Bill Amounts Breakdown
+          </Typography>
           <Grid container spacing={1.5}>
             <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">Taxable Amount:</Typography>
-              <Typography variant="body1" sx={{ fontWeight: 700 }}>₹{formatAmount(taxableAmt)}</Typography>
+              <TextField
+                label="Taxable Amount (₹)"
+                type="number"
+                fullWidth
+                size="small"
+                value={taxableAmt}
+                onChange={(e) => handleTaxableChange(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
             </Grid>
             <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">GST Amount:</Typography>
-              <Typography variant="body1" sx={{ fontWeight: 700, color: "primary.main" }}>₹{formatAmount(gstAmt)}</Typography>
+              <TextField
+                label="GST Amount (₹)"
+                type="number"
+                fullWidth
+                size="small"
+                value={gstAmt}
+                onChange={(e) => handleGstChange(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
             </Grid>
             <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">Gross Bill Value:</Typography>
-              <Typography variant="body1" sx={{ fontWeight: 700 }}>₹{formatAmount(grossBillAmt)}</Typography>
+              <TextField
+                select
+                label="TDS Deduction (%)"
+                fullWidth
+                size="small"
+                value={tdsPercent}
+                onChange={(e) => handleTdsPercentChange(Number(e.target.value))}
+                slotProps={{ inputLabel: { shrink: true } }}
+              >
+                <MenuItem value={0}>0% (No TDS)</MenuItem>
+                <MenuItem value={1}>1% (Sec 194C - Indv/HUF)</MenuItem>
+                <MenuItem value={2}>2% (Sec 194C - Company/Others)</MenuItem>
+                <MenuItem value={5}>5% (Sec 194J - Professional)</MenuItem>
+                <MenuItem value={10}>10% (Sec 194I - Rent)</MenuItem>
+              </TextField>
             </Grid>
             <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>Less: TDS Amount ({tdsPercent}%):</Typography>
-              <Typography variant="body1" sx={{ fontWeight: 700, color: "error.main" }}>- ₹{formatAmount(tdsAmt)}</Typography>
+              <TextField
+                label="TDS Amount (₹)"
+                type="number"
+                fullWidth
+                size="small"
+                value={tdsAmt}
+                onChange={(e) => handleTdsAmtChange(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{ "& input": { color: "error.main", fontWeight: 700 } }}
+              />
             </Grid>
             <Grid size={{ xs: 12 }}>
               <Divider sx={{ my: 0.5 }} />
@@ -1287,7 +1366,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
                   NET PAYMENT RECEIVED:
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
-                  ₹{formatAmount(netReceiptAmt)}
+                  ₹{formatAmount(parseFloat(netPaidAmt) || 0)}
                 </Typography>
               </Box>
             </Grid>
@@ -1310,23 +1389,6 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
           <Grid size={{ xs: 6 }}>
             <TextField
               select
-              label="TDS Deduction (%)"
-              fullWidth
-              size="small"
-              value={tdsPercent}
-              onChange={(e) => setTdsPercent(Number(e.target.value))}
-              slotProps={{ inputLabel: { shrink: true } }}
-            >
-              <MenuItem value={0}>0% (No TDS)</MenuItem>
-              <MenuItem value={1}>1% (Sec 194C - Indv/HUF)</MenuItem>
-              <MenuItem value={2}>2% (Sec 194C - Company/Others)</MenuItem>
-              <MenuItem value={5}>5% (Sec 194J - Professional)</MenuItem>
-              <MenuItem value={10}>10% (Sec 194I - Rent)</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid size={{ xs: 6 }}>
-            <TextField
-              select
               label="Payment Mode"
               fullWidth
               size="small"
@@ -1340,15 +1402,16 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
               <MenuItem value="UPI">UPI</MenuItem>
             </TextField>
           </Grid>
-          <Grid size={{ xs: 6 }}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               label="Net Paid Amount (₹)"
               type="number"
               fullWidth
               size="small"
-              value={netReceiptAmt}
-              slotProps={{ inputLabel: { shrink: true }, htmlInput: { readOnly: true } }}
-              sx={{ "& .MuiOutlinedInput-root": { bgcolor: "action.disabledBackground" } }}
+              value={netPaidAmt}
+              onChange={(e) => setNetPaidAmt(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ "& input": { fontWeight: 800, color: "#0f5132" } }}
             />
           </Grid>
           <Grid size={{ xs: 12 }}>
