@@ -163,7 +163,7 @@ export default function BiometricsPage() {
     enabled: activeTab === 2,
   });
 
-  const rawColDefs: ColDef[] = [
+  const rawColDefs: ColDef[] = useMemo(() => [
     { field: "entry_date", headerName: "Date", width: 110 },
     { field: "ledger_name", headerName: "Staff Member", flex: 1 },
     { field: "status", headerName: "Status", width: 110,
@@ -180,7 +180,7 @@ export default function BiometricsPage() {
     { field: "hours_worked", headerName: "Work Hrs", width: 100, type: "numericColumn" },
     { field: "ot_hours", headerName: "OT Hrs", width: 90, type: "numericColumn" },
     { field: "device_log_id", headerName: "Remarks / Log", width: 160 },
-  ];
+  ], []);
 
   return (
     <Box>
