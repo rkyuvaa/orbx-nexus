@@ -98,7 +98,8 @@ export const router = createBrowserRouter([
       { path: "billing/receivables", element: <ReceivablesReport /> },
 
       // Payroll
-      { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "HR and Payroll" }, { label: "Contractor" }]} /> },
+      { path: "payroll/attendance", element: <BiometricsPage /> },
+      { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "Salary and Wages" }, { label: "Contractor" }]} /> },
       { path: "payroll/salary", element: <SalaryVoucherPage /> },
 
       // Contractor Voucher

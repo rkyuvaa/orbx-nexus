@@ -125,10 +125,10 @@ const NAV_ITEMS: NavItem[] = [
     label: "Salary and Wages",
     icon: <Group sx={{ fontSize: 20 }} />,
     children: [
+      { label: "Attendance", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Staff Ledgers", path: "/accounts/staff", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Contractor", path: "/payroll/contractors", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Salary Voucher", path: "/payroll/salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Biometrics", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {
