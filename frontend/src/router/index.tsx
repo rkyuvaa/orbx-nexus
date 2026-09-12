@@ -19,7 +19,8 @@ import {
 import {
   DayBookReport, InwardRegisterReport, OutwardRegisterReport,
   LabourBillRegisterReport, TrialBalanceReport, PendingBillsReport,
-  StockInHandReport, StockSummaryReport, ReceivablesReport
+  StockInHandReport, StockSummaryReport, ReceivablesReport,
+  ItemMovementLedgerReport
 } from "../pages/reports/ReportPages";
 import UserManagementPage from "../pages/admin/UserManagementPage";
 import BiometricsPage from "../pages/admin/BiometricsPage";
@@ -132,6 +133,7 @@ export const router = createBrowserRouter([
       { path: "reports/monthly", element: <DayBookReport /> },
       { path: "reports/stock-in-hand", element: <StockInHandReport /> },
       { path: "reports/stock-summary", element: <StockSummaryReport /> },
+      { path: "reports/item-movement-ledger", element: <ItemMovementLedgerReport /> },
 
       // Admin
       { path: "admin/users", element: <UserManagementPage /> },

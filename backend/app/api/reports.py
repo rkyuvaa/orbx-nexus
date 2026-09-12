@@ -609,6 +609,202 @@ async def stock_in_hand(
     return result_list
 
 
+@router.get("/item-movement-ledger")
+async def item_movement_ledger(
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    product_id: Optional[int] = Query(default=None),
+    ledger_id: Optional[int] = Query(default=None),
+    from_date: Optional[str] = Query(default=None),
+    to_date: Optional[str] = Query(default=None),
+):
+    import json
+    schema = s(fy)
+
+    ledgers_res = await db.execute(text("SELECT id, name FROM master.ledgers"))
+    ledger_map = {r["id"]: r["name"] for r in ledgers_res.mappings().all()}
+
+    products_res = await db.execute(text("SELECT id, name, weight FROM master.products"))
+    product_map = {r["id"]: {"name": r["name"], "weight": float(r["weight"] or 0)} for r in products_res.mappings().all()}
+
+    inw_conds = ["1=1"]
+    inw_params: dict = {}
+    if from_date:
+        inw_conds.append("si.inward_date >= :fd")
+        inw_params["fd"] = from_date
+    if to_date:
+        inw_conds.append("si.inward_date <= :td")
+        inw_params["td"] = to_date
+    if ledger_id and ledger_id > 0:
+        inw_conds.append("si.ledger_id = :lid")
+        inw_params["lid"] = ledger_id
+
+    inward_res = await db.execute(
+        text(f"SELECT * FROM {schema}.stock_inward si WHERE {' AND '.join(inw_conds)} ORDER BY si.inward_date ASC, si.id ASC"),
+        inw_params
+    )
+    inward_rows = inward_res.mappings().all()
+
+    out_conds = ["1=1"]
+    out_params: dict = {}
+    if from_date:
+        out_conds.append("so.outward_date >= :fd")
+        out_params["fd"] = from_date
+    if to_date:
+        out_conds.append("so.outward_date <= :td")
+        out_params["td"] = to_date
+    if ledger_id and ledger_id > 0:
+        out_conds.append("so.ledger_id = :lid")
+        out_params["lid"] = ledger_id
+
+    outward_res = await db.execute(
+        text(f"SELECT * FROM {schema}.stock_outward so WHERE {' AND '.join(out_conds)} ORDER BY so.outward_date ASC, so.id ASC"),
+        out_params
+    )
+    outward_rows = outward_res.mappings().all()
+
+    movements = []
+
+    for si in inward_rows:
+        si_dict = dict(si)
+        lid = si_dict.get("ledger_id")
+        party_name = ledger_map.get(lid, "Unknown Supplier")
+        raw_items = si_dict.get("items")
+        if isinstance(raw_items, str):
+            try: raw_items = json.loads(raw_items)
+            except Exception: raw_items = []
+
+        unrolled = []
+        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
+            for it in raw_items:
+                unrolled.append({
+                    "product_id": it.get("product_id"),
+                    "quantity": float(it.get("quantity") or 0),
+                    "weight": float(it.get("weight") or 0),
+                })
+        else:
+            if si_dict.get("product_id") or float(si_dict.get("quantity") or 0) > 0:
+                unrolled.append({
+                    "product_id": si_dict.get("product_id"),
+                    "quantity": float(si_dict.get("quantity") or 0),
+                    "weight": float(si_dict.get("weight") or 0),
+                })
+
+        for it in unrolled:
+            p_id = it["product_id"]
+            if not p_id:
+                continue
+            p_id = int(p_id)
+            if product_id and product_id > 0 and p_id != product_id:
+                continue
+            p_info = product_map.get(p_id, {"name": f"Product #{p_id}", "weight": 0.0})
+            qty = it["quantity"]
+            wt = it["weight"] or p_info["weight"]
+            movements.append({
+                "date": str(si_dict["inward_date"]),
+                "type": "Inward",
+                "voucher_no": si_dict["inward_no"],
+                "ref_no": si_dict.get("ref_no") or si_dict.get("serial_no") or "-",
+                "party_name": party_name,
+                "product_id": p_id,
+                "product_name": p_info["name"],
+                "inward_qty": qty,
+                "inward_weight": qty * wt,
+                "outward_qty": 0.0,
+                "outward_weight": 0.0,
+                "sort_key": f"{si_dict['inward_date']}_0_{si_dict['inward_no']}"
+            })
+
+    for so in outward_rows:
+        so_dict = dict(so)
+        lid = so_dict.get("ledger_id")
+        party_name = ledger_map.get(lid, "Unknown Supplier")
+        raw_items = so_dict.get("items")
+        if isinstance(raw_items, str):
+            try: raw_items = json.loads(raw_items)
+            except Exception: raw_items = []
+
+        unrolled = []
+        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
+            for it in raw_items:
+                unrolled.append({
+                    "product_id": it.get("product_id") or so_dict.get("product_id"),
+                    "quantity": float(it.get("quantity") or 0),
+                    "weight": float(it.get("weight") or 0),
+                })
+        else:
+            if so_dict.get("product_id") or float(so_dict.get("quantity") or 0) > 0:
+                unrolled.append({
+                    "product_id": so_dict.get("product_id"),
+                    "quantity": float(so_dict.get("quantity") or 0),
+                    "weight": float(so_dict.get("weight") or 0),
+                })
+
+        for it in unrolled:
+            p_id = it["product_id"]
+            if not p_id:
+                continue
+            p_id = int(p_id)
+            if product_id and product_id > 0 and p_id != product_id:
+                continue
+            p_info = product_map.get(p_id, {"name": f"Product #{p_id}", "weight": 0.0})
+            qty = it["quantity"]
+            wt = it["weight"] or p_info["weight"]
+            movements.append({
+                "date": str(so_dict["outward_date"]),
+                "type": "Outward",
+                "voucher_no": so_dict["outward_no"],
+                "ref_no": so_dict.get("ref_no") or so_dict.get("serial_no") or "-",
+                "party_name": party_name,
+                "product_id": p_id,
+                "product_name": p_info["name"],
+                "inward_qty": 0.0,
+                "inward_weight": 0.0,
+                "outward_qty": qty,
+                "outward_weight": qty * wt,
+                "sort_key": f"{so_dict['outward_date']}_1_{so_dict['outward_no']}"
+            })
+
+    movements.sort(key=lambda x: x["sort_key"])
+
+    running_qty = 0.0
+    running_weight = 0.0
+    total_in_qty = 0.0
+    total_in_wt = 0.0
+    total_out_qty = 0.0
+    total_out_wt = 0.0
+
+    for m in movements:
+        in_q = m["inward_qty"]
+        in_w = m["inward_weight"]
+        out_q = m["outward_qty"]
+        out_w = m["outward_weight"]
+
+        total_in_qty += in_q
+        total_in_wt += in_w
+        total_out_qty += out_q
+        total_out_wt += out_w
+
+        running_qty += (in_q - out_q)
+        running_weight += (in_w - out_w)
+
+        m["running_balance_qty"] = max(0.0, running_qty)
+        m["running_balance_weight"] = max(0.0, running_weight)
+
+    return {
+        "movements": movements,
+        "summary": {
+            "total_inward_qty": total_in_qty,
+            "total_inward_weight": total_in_wt,
+            "total_outward_qty": total_out_qty,
+            "total_outward_weight": total_out_wt,
+            "closing_qty": max(0.0, running_qty),
+            "closing_weight": max(0.0, running_weight),
+        }
+    }
+
+
 # ─────── Receivables / Payables ───────
 
 @router.get("/ledger-receivables")

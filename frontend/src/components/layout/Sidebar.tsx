@@ -151,6 +151,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Ledger Accounts", path: "/reports/ledger-account", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Stock in Hand", path: "/reports/stock-in-hand", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Item In/Out Ledger", path: "/reports/item-movement-ledger", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Stock Summary", path: "/reports/stock-summary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Inward Register", path: "/reports/inward-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Outward Register", path: "/reports/outward-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },

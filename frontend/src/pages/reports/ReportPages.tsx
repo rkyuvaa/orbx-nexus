@@ -2877,3 +2877,228 @@ export function StockSummaryReport() {
     </Box>
   );
 }
+
+
+export function ItemMovementLedgerReport() {
+  const { activeFY } = useAuthStore();
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(today);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [selectedLedgerId, setSelectedLedgerId] = useState<string>("");
+  const [enabled, setEnabled] = useState(true);
+
+  // Fetch products for dropdown
+  const { data: products = [] } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => (await api.get("/products/")).data,
+  });
+
+  // Fetch ledgers for supplier dropdown
+  const { data: ledgers = [] } = useQuery({
+    queryKey: ["ledgers"],
+    queryFn: async () => (await api.get("/ledgers/")).data,
+  });
+
+  // Fetch report data
+  const { data: reportRes = { movements: [], summary: {} }, isLoading } = useQuery({
+    queryKey: ["report-item-movement", activeFY, fromDate, toDate, selectedProduct?.id, selectedLedgerId, enabled],
+    queryFn: async () => {
+      let url = `/reports/item-movement-ledger?fy=${activeFY}&from_date=${fromDate}&to_date=${toDate}`;
+      if (selectedProduct?.id) url += `&product_id=${selectedProduct.id}`;
+      if (selectedLedgerId) url += `&ledger_id=${selectedLedgerId}`;
+      return (await api.get(url)).data;
+    },
+    enabled,
+  });
+
+  const { data: companyData } = useQuery({
+    queryKey: ["company"],
+    queryFn: async () => (await api.get("/company/")).data,
+  });
+
+  const movements = reportRes.movements || [];
+  const summary = reportRes.summary || {};
+
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const cName = compData?.name || "SRI METAL";
+    const cAddress1 = compData?.address || "";
+    const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
+    const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+
+    const productName = selectedProduct ? selectedProduct.name : "All Items";
+
+    let rowsHtml = "";
+    movements.forEach((m: any, idx: number) => {
+      rowsHtml += `<tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td style="text-align: center; white-space: nowrap;">${m.date}</td>
+        <td style="text-align: center; font-weight: 600; color: ${m.type === "Inward" ? "#0f5132" : "#c53030"};">${m.type}</td>
+        <td style="text-align: center; font-weight: 700; white-space: nowrap;">${m.voucher_no}</td>
+        <td style="text-align: center; white-space: nowrap;">${m.ref_no}</td>
+        <td>${m.party_name}</td>
+        <td style="font-weight: 600;">${m.product_name}</td>
+        <td style="text-align: right; color: #0f5132; font-weight: 600;">${Number(m.inward_qty) > 0 ? formatQty(m.inward_qty) : "-"}</td>
+        <td style="text-align: right; color: #c53030; font-weight: 600;">${Number(m.outward_qty) > 0 ? formatQty(m.outward_qty) : "-"}</td>
+        <td style="text-align: right; font-weight: 700; background-color: #f8fafc;">${formatQty(m.running_balance_qty)}</td>
+      </tr>`;
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Item In/Out Movement Report - ${productName}</title>
+          <style>
+            ${COMMON_PRINT_CSS}
+            @page { size: A4 portrait; margin: 15mm; }
+            table.items-table th, table.items-table td {
+              border: 1px solid #cbd5e1;
+              padding: 5px 7px;
+              white-space: nowrap;
+            }
+            table.items-table th {
+              background-color: #f8fafc;
+              border-bottom: 2px solid #94a3b8;
+            }
+            .totals-row td {
+              font-weight: 700;
+              background-color: #e2e8f0;
+              border-top: 2px solid #0f5132;
+              border-bottom: 2px solid #0f5132;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <div class="logo-wrapper"></div>
+            <div class="company-details">
+              <h1>${cName}</h1>
+              ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
+              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+              ${cTax ? `<p class="gstin">GSTIN: ${cTax}</p>` : ""}
+            </div>
+          </div>
+          
+          <div class="title-section" style="margin-bottom: 15px;">
+            <h2>Item In & Out Movement Ledger</h2>
+            <div>Item: <strong>${productName}</strong> | Period: <strong>${fromDate} to ${toDate}</strong></div>
+          </div>
+
+          <table class="items-table" style="width: 100%;">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                <th style="width: 85px; text-align: center;">Date</th>
+                <th style="width: 75px; text-align: center;">Type</th>
+                <th style="width: 95px; text-align: center;">Voucher No</th>
+                <th style="width: 95px; text-align: center;">Ref No</th>
+                <th style="text-align: left;">Party / Supplier Name</th>
+                <th style="text-align: left;">Product Name</th>
+                <th style="width: 80px; text-align: right;">In Qty</th>
+                <th style="width: 80px; text-align: right;">Out Qty</th>
+                <th style="width: 95px; text-align: right;">Stock Bal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+              <tr class="totals-row">
+                <td colspan="7" style="text-align: right; text-transform: uppercase;">Totals</td>
+                <td style="text-align: right; color: #0f5132;">${formatQty(summary.total_inward_qty)}</td>
+                <td style="text-align: right; color: #c53030;">${formatQty(summary.total_outward_qty)}</td>
+                <td style="text-align: right; font-size: 13px;">${formatQty(summary.closing_qty)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <script>
+            window.onload = function() { window.print(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const processedRows = movements.map((m: any) => [
+    m.date,
+    m.type,
+    m.voucher_no,
+    m.ref_no || "-",
+    m.party_name || "-",
+    m.product_name || "-",
+    Number(m.inward_qty) > 0 ? formatQty(m.inward_qty) : "-",
+    Number(m.outward_qty) > 0 ? formatQty(m.outward_qty) : "-",
+    formatQty(m.running_balance_qty),
+  ]);
+
+  const totalsRows = [
+    ["", "TOTALS", "", "", "", "", formatQty(summary.total_inward_qty || 0), formatQty(summary.total_outward_qty || 0), formatQty(summary.closing_qty || 0)]
+  ];
+
+  return (
+    <Box>
+      <Box className="no-print">
+        <PageHeader title="Item In & Out Movement Ledger" breadcrumbs={[{ label: "Reports" }, { label: "Item In & Out Ledger" }]} />
+        <FilterRow>
+          <Autocomplete
+            size="small"
+            sx={{ minWidth: 260 }}
+            options={products}
+            value={selectedProduct}
+            onChange={(_, val) => setSelectedProduct(val)}
+            getOptionLabel={(p: any) => p.name || ""}
+            renderInput={(params) => <TextField {...params} label="Filter by Product (Item)" placeholder="All Products" />}
+          />
+          <TextField
+            select
+            size="small"
+            label="Supplier"
+            value={selectedLedgerId}
+            onChange={(e) => setSelectedLedgerId(e.target.value)}
+            sx={{ minWidth: 200 }}
+          >
+            <MenuItem value="">All Suppliers</MenuItem>
+            {ledgers.map((l: any) => (
+              <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+            ))}
+          </TextField>
+          <TextField label="From" type="date" size="small" value={fromDate} onChange={(e) => setFromDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 150 }} />
+          <TextField label="To" type="date" size="small" value={toDate} onChange={(e) => setToDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 150 }} />
+          <Button variant="contained" startIcon={<Search />} onClick={() => setEnabled(true)}>Show Report</Button>
+          {movements.length > 0 && (
+            <>
+              <StatPill label="Total In" value={formatQty(summary.total_inward_qty)} color="#0f5132" />
+              <StatPill label="Total Out" value={formatQty(summary.total_outward_qty)} color="#c53030" />
+              <StatPill label="Stock Bal" value={formatQty(summary.closing_qty)} color="#1976d2" />
+              <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print</Button>
+            </>
+          )}
+        </FilterRow>
+      </Box>
+
+      {movements.length > 0 && (
+        <Paper variant="outlined" sx={{ overflow: "auto" }}>
+          <PrintTable
+            title={`Item Movement Ledger ${selectedProduct ? `- ${selectedProduct.name}` : ""}`}
+            columns={["Date", "Type", "Voucher No", "Reference No", "Party / Supplier", "Product Name", "In Qty", "Out Qty", "Stock Bal"]}
+            rows={processedRows}
+            totals={totalsRows}
+          />
+        </Paper>
+      )}
+
+      {movements.length === 0 && enabled && (
+        <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
+          <Typography color="text.secondary">No item movements found for the selected filters.</Typography>
+        </Paper>
+      )}
+    </Box>
+  );
+}
