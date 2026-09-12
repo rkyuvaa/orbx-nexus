@@ -512,6 +512,51 @@ async def delete_bill_payment(
     return {"message": "Payment record deleted and bill balance recalculated"}
 
 
+@router.post("/{bill_id}/reset-payment")
+async def reset_bill_payment(
+    bill_id: int,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await _ensure_payment_schema(db, schema)
+
+    await db.execute(
+        text(f"DELETE FROM {schema}.labour_bill_payments WHERE bill_id = :bid"),
+        {"bid": bill_id}
+    )
+
+    res = await db.execute(
+        text(f"SELECT * FROM {schema}.labour_bills WHERE id = :id"),
+        {"id": bill_id}
+    )
+    bill = res.mappings().first()
+    if not bill:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Labour bill not found")
+
+    bill_dict = dict(bill)
+    tot = float(bill_dict.get("total_amount") or bill_dict.get("net_amount") or 0)
+
+    await db.execute(
+        text(f"""
+            UPDATE {schema}.labour_bills SET
+            paid_amount = 0,
+            pending_amount = :tot,
+            taxable_paid = FALSE,
+            gst_paid = FALSE,
+            payment_status = 'UNPAID',
+            is_paid = FALSE,
+            payment_date = NULL,
+            updated_at = NOW()
+            WHERE id = :id
+        """),
+        {"tot": tot, "id": bill_id}
+    )
+    return {"message": "Bill payment reset back to Pending successfully", "payment_status": "UNPAID", "pending_amount": tot}
+
+
 @router.delete("/{bill_id}", status_code=204)
 async def delete_labour_bill(
     bill_id: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")

@@ -1378,6 +1378,18 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
     }
   };
 
+  const handleResetToPending = async () => {
+    if (!confirm(`Are you sure you want to reset Bill #${bill.bill_no} back to Pending? All payment entries for this bill will be cleared and full bill balance will become receivable again.`)) return;
+    try {
+      await api.post(`/labour-bills/${bill.id}/reset-payment?fy=${activeFY}`);
+      qc.invalidateQueries({ queryKey: ["receivables"] });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      alert("Failed to reset bill payment.");
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1625,11 +1637,16 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
           </Paper>
         )}
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
-        <Button onClick={handleSave} variant="contained" color="success" size="small" disabled={saving}>
-          {saving ? "Saving..." : editingPaymentId ? "Update Payment Entry" : "Record Payment & Update Status"}
+      <DialogActions sx={{ px: 3, pb: 2, display: "flex", justifyContent: "space-between" }}>
+        <Button onClick={handleResetToPending} variant="outlined" color="error" size="small">
+          Reset to Pending
         </Button>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
+          <Button onClick={handleSave} variant="contained" color="success" size="small" disabled={saving}>
+            {saving ? "Saving..." : editingPaymentId ? "Update Payment Entry" : "Record Payment & Update Status"}
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );
@@ -2106,7 +2123,7 @@ export function ReceivablesReport() {
                       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
                         <Box>
                           {bill.payment_status === "PAID" || (bill.is_paid && bill.payment_status !== "PARTIAL") ? (
-                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
                               <Chip
                                 label="Already Received"
                                 color="success"
@@ -2114,10 +2131,19 @@ export function ReceivablesReport() {
                                 sx={{ fontWeight: 700, fontSize: 10, height: 22 }}
                               />
                               {bill.payment_date && (
-                                <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", mt: 0.25 }}>
+                                <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary" }}>
                                   {bill.payment_date}
                                 </Typography>
                               )}
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                onClick={() => setActivePaymentBill(bill)}
+                                sx={{ textTransform: "none", fontSize: 10, py: 0.1, px: 0.8, borderRadius: 1 }}
+                              >
+                                Reset / Edit Payment
+                              </Button>
                             </Box>
                           ) : (
                             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
