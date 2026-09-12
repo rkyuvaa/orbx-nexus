@@ -134,19 +134,159 @@ async def update_labour_bill(
     return {"message": "Updated"}
 
 
+class LabourBillPaymentIn(BaseModel):
+    payment_date: str
+    payment_mode: str = "Bank Transfer"
+    component: str = "PARTIAL" # "TAXABLE", "GST", "PARTIAL", "FULL"
+    taxable_amount: float = 0
+    gst_amount: float = 0
+    tds_amount: float = 0
+    net_paid_amount: float = 0
+    notes: str | None = None
+
+
+async def _ensure_payment_schema(db: DBSession, schema: str):
+    try:
+        await db.execute(text(f"""
+            ALTER TABLE {schema}.labour_bills 
+            ADD COLUMN IF NOT EXISTS paid_amount NUMERIC DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS pending_amount NUMERIC,
+            ADD COLUMN IF NOT EXISTS taxable_paid BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS gst_paid BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'UNPAID';
+        """))
+
+        await db.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {schema}.labour_bill_payments (
+                id SERIAL PRIMARY KEY,
+                bill_id INTEGER NOT NULL REFERENCES {schema}.labour_bills(id) ON DELETE CASCADE,
+                payment_date DATE NOT NULL,
+                payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
+                component VARCHAR(20) DEFAULT 'PARTIAL',
+                taxable_amount NUMERIC DEFAULT 0,
+                gst_amount NUMERIC DEFAULT 0,
+                tds_amount NUMERIC DEFAULT 0,
+                net_paid_amount NUMERIC DEFAULT 0,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+    except Exception as e:
+        print("Error setting up payment schema:", e)
+
+
 @router.patch("/{bill_id}/mark-paid")
 async def mark_paid(
     bill_id: int, payment_date: str, current_user: CurrentUser,
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    await _ensure_payment_schema(db, schema)
     await db.execute(
         text(
-            f"UPDATE {schema}.labour_bills SET is_paid=TRUE, payment_date=:pdate, updated_at=NOW() WHERE id=:id"
+            f"UPDATE {schema}.labour_bills SET is_paid=TRUE, payment_status='PAID', payment_date=:pdate, updated_at=NOW() WHERE id=:id"
         ),
         {"pdate": payment_date, "id": bill_id}
     )
     return {"message": "Marked as paid"}
+
+
+@router.post("/{bill_id}/record-payment")
+async def record_bill_payment(
+    bill_id: int,
+    body: LabourBillPaymentIn,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await _ensure_payment_schema(db, schema)
+
+    res = await db.execute(
+        text(f"SELECT * FROM {schema}.labour_bills WHERE id = :id"),
+        {"id": bill_id}
+    )
+    bill = res.mappings().first()
+    if not bill:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Labour bill not found")
+
+    bill_dict = dict(bill)
+    total_val = float(bill_dict.get("total_amount") or bill_dict.get("net_amount") or 0)
+    current_paid = float(bill_dict.get("paid_amount") or 0)
+    
+    new_paid = current_paid + body.net_paid_amount
+    new_pending = max(0.0, total_val - new_paid - body.tds_amount)
+
+    taxable_val = float(bill_dict.get("amount") or total_val)
+    gst_val = float(bill_dict.get("gst_amount") or 0)
+    
+    taxable_settled = bill_dict.get("taxable_paid") or (body.component in ("TAXABLE", "FULL")) or (new_paid >= taxable_val - body.tds_amount)
+    gst_settled = bill_dict.get("gst_paid") or (body.component in ("GST", "FULL")) or (new_pending <= 1.0)
+    
+    status_str = "PAID" if (new_pending <= 1.0 or body.component == "FULL") else ("PARTIAL" if new_paid > 0 else "UNPAID")
+    is_paid_bool = True if status_str == "PAID" else False
+
+    await db.execute(
+        text(f"""
+            INSERT INTO {schema}.labour_bill_payments 
+            (bill_id, payment_date, payment_mode, component, taxable_amount, gst_amount, tds_amount, net_paid_amount, notes)
+            VALUES (:bid, :pdate, :pmode, :comp, :tamt, :gamt, :tds, :npamt, :notes)
+        """),
+        {
+            "bid": bill_id,
+            "pdate": body.payment_date,
+            "pmode": body.payment_mode,
+            "comp": body.component,
+            "tamt": body.taxable_amount,
+            "gamt": body.gst_amount,
+            "tds": body.tds_amount,
+            "npamt": body.net_paid_amount,
+            "notes": body.notes,
+        }
+    )
+
+    await db.execute(
+        text(f"""
+            UPDATE {schema}.labour_bills SET 
+            paid_amount = :paid,
+            pending_amount = :pending,
+            taxable_paid = :tpaid,
+            gst_paid = :gpaid,
+            payment_status = :pstatus,
+            is_paid = :ispaid,
+            payment_date = :pdate,
+            updated_at = NOW()
+            WHERE id = :id
+        """),
+        {
+            "paid": new_paid,
+            "pending": new_pending,
+            "tpaid": taxable_settled,
+            "gpaid": gst_settled,
+            "pstatus": status_str,
+            "ispaid": is_paid_bool,
+            "pdate": body.payment_date,
+            "id": bill_id,
+        }
+    )
+    return {"message": "Payment recorded successfully", "payment_status": status_str, "pending_amount": new_pending}
+
+
+@router.get("/{bill_id}/payments")
+async def list_bill_payments(
+    bill_id: int,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    await _ensure_payment_schema(db, schema)
+    res = await db.execute(
+        text(f"SELECT * FROM {schema}.labour_bill_payments WHERE bill_id = :bid ORDER BY payment_date DESC, id DESC"),
+        {"bid": bill_id}
+    )
+    return [dict(r) for r in res.mappings().all()]
 
 
 @router.delete("/{bill_id}", status_code=204)

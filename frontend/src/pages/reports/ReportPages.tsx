@@ -1216,6 +1216,7 @@ interface RecordPaymentDialogProps {
 function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: RecordPaymentDialogProps) {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
   const [paymentMode, setPaymentMode] = useState("Bank Transfer");
+  const [componentPreset, setComponentPreset] = useState<"TAXABLE" | "GST" | "PARTIAL" | "FULL">("TAXABLE");
   const [taxableAmt, setTaxableAmt] = useState<string>("");
   const [gstAmt, setGstAmt] = useState<string>("");
   const [tdsPercent, setTdsPercent] = useState<number>(1);
@@ -1224,28 +1225,69 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const { data: paymentHistory = [] } = useQuery({
+    queryKey: ["bill-payments", bill?.id, activeFY],
+    queryFn: async () => {
+      if (!bill?.id) return [];
+      return (await api.get(`/labour-bill/${bill.id}/payments?fy=${activeFY}`)).data;
+    },
+    enabled: open && !!bill?.id,
+  });
+
   useEffect(() => {
     if (open && bill) {
       const tax = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
       const gst = Number(bill.gst_amount || 0);
       const tds = Math.round((tax * 1) / 100 * 100) / 100;
-      const net = Math.max(0, tax + gst - tds);
+      const netTaxableReceived = Math.max(0, tax - tds);
 
       setPaymentDate(new Date().toISOString().split("T")[0]);
       setPaymentMode("Bank Transfer");
+      setComponentPreset("TAXABLE");
       setTaxableAmt(String(tax));
-      setGstAmt(String(gst));
+      setGstAmt("0");
       setTdsPercent(1);
       setTdsAmt(String(tds));
-      setNetPaidAmt(String(net));
+      setNetPaidAmt(String(netTaxableReceived));
       setNotes("");
     }
   }, [open, bill]);
 
   if (!bill) return null;
 
+  const fullTaxable = Number(bill.taxable_amount || bill.amount || bill.total_amount || 0);
+  const fullGst = Number(bill.gst_amount || 0);
+  const fullGross = Number(bill.total_amount || bill.net_amount || 0);
+  const totalPaid = Number(bill.paid_amount || 0);
+  const pendingBal = Math.max(0, fullGross - totalPaid);
+
+  const applyPreset = (preset: "TAXABLE" | "GST" | "PARTIAL" | "FULL") => {
+    setComponentPreset(preset);
+    const tax = fullTaxable;
+    const gst = fullGst;
+    const tds = Math.round((tax * (tdsPercent || 0)) / 100 * 100) / 100;
+
+    if (preset === "TAXABLE") {
+      setTaxableAmt(String(tax));
+      setGstAmt("0");
+      setTdsAmt(String(tds));
+      setNetPaidAmt(String(Math.max(0, tax - tds)));
+    } else if (preset === "GST") {
+      setTaxableAmt("0");
+      setGstAmt(String(gst));
+      setTdsAmt("0");
+      setNetPaidAmt(String(gst));
+    } else if (preset === "FULL") {
+      setTaxableAmt(String(tax));
+      setGstAmt(String(gst));
+      setTdsAmt(String(tds));
+      setNetPaidAmt(String(Math.max(0, pendingBal)));
+    }
+  };
+
   const handleTaxableChange = (val: string) => {
     setTaxableAmt(val);
+    setComponentPreset("PARTIAL");
     const tax = parseFloat(val) || 0;
     const gst = parseFloat(gstAmt) || 0;
     const tds = Math.round((tax * (tdsPercent || 0)) / 100 * 100) / 100;
@@ -1255,6 +1297,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
 
   const handleGstChange = (val: string) => {
     setGstAmt(val);
+    setComponentPreset("PARTIAL");
     const tax = parseFloat(taxableAmt) || 0;
     const gst = parseFloat(val) || 0;
     const tds = parseFloat(tdsAmt) || 0;
@@ -1281,7 +1324,16 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.patch(`/labour-bill/${bill.id}/mark-paid?payment_date=${paymentDate}&fy=${activeFY}`);
+      await api.post(`/labour-bill/${bill.id}/record-payment?fy=${activeFY}`, {
+        payment_date: paymentDate,
+        payment_mode: paymentMode,
+        component: componentPreset,
+        taxable_amount: parseFloat(taxableAmt) || 0,
+        gst_amount: parseFloat(gstAmt) || 0,
+        tds_amount: parseFloat(tdsAmt) || 0,
+        net_paid_amount: parseFloat(netPaidAmt) || 0,
+        notes: notes || `Payment received (${componentPreset})`,
+      });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -1292,9 +1344,15 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1 }}>
-        Record Payment — Bill #{bill.bill_no}
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Record Payment — Bill #{bill.bill_no}</span>
+        <Chip
+          label={bill.payment_status === "PAID" ? "FULLY PAID" : bill.payment_status === "PARTIAL" ? "PARTIALLY RECEIVED" : "UNPAID"}
+          color={bill.payment_status === "PAID" ? "success" : bill.payment_status === "PARTIAL" ? "warning" : "error"}
+          size="small"
+          sx={{ fontWeight: 800, fontSize: 11 }}
+        />
       </DialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
@@ -1302,15 +1360,72 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
           Contractor: {bill.ledger_name}
         </Typography>
 
+        {/* Preset Stage Buttons */}
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2.5, bgcolor: "#f0fdf4", borderColor: "#a5d6a7" }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: "#0f5132", textTransform: "uppercase", display: "block", mb: 1 }}>
+            Select Payment Stage / Preset Shortcut:
+          </Typography>
+          <Grid container spacing={1}>
+            <Grid size={{ xs: 3 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant={componentPreset === "TAXABLE" ? "contained" : "outlined"}
+                color="primary"
+                onClick={() => applyPreset("TAXABLE")}
+                sx={{ textTransform: "none", fontWeight: 700, fontSize: 11, py: 0.75 }}
+              >
+                1. Pay Taxable First
+              </Button>
+            </Grid>
+            <Grid size={{ xs: 3 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant={componentPreset === "GST" ? "contained" : "outlined"}
+                color="secondary"
+                onClick={() => applyPreset("GST")}
+                sx={{ textTransform: "none", fontWeight: 700, fontSize: 11, py: 0.75 }}
+              >
+                2. Pay GST Later
+              </Button>
+            </Grid>
+            <Grid size={{ xs: 3 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant={componentPreset === "PARTIAL" ? "contained" : "outlined"}
+                color="warning"
+                onClick={() => applyPreset("PARTIAL")}
+                sx={{ textTransform: "none", fontWeight: 700, fontSize: 11, py: 0.75 }}
+              >
+                Custom Part
+              </Button>
+            </Grid>
+            <Grid size={{ xs: 3 }}>
+              <Button
+                fullWidth
+                size="small"
+                variant={componentPreset === "FULL" ? "contained" : "outlined"}
+                color="success"
+                onClick={() => applyPreset("FULL")}
+                sx={{ textTransform: "none", fontWeight: 700, fontSize: 11, py: 0.75 }}
+              >
+                Full Settle
+              </Button>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* Editable Bill Breakdown Section */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: "#f8fafc", borderRadius: 2 }}>
           <Typography variant="caption" sx={{ fontWeight: 700, color: "#0f5132", textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
-            Editable Bill Amounts Breakdown
+            Editable Payment Component Amounts
           </Typography>
           <Grid container spacing={1.5}>
             <Grid size={{ xs: 6 }}>
               <TextField
-                label="Taxable Amount (₹)"
+                label="Taxable Amount to Receive (₹)"
                 type="number"
                 fullWidth
                 size="small"
@@ -1321,7 +1436,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
             </Grid>
             <Grid size={{ xs: 6 }}>
               <TextField
-                label="GST Amount (₹)"
+                label="GST Amount to Receive (₹)"
                 type="number"
                 fullWidth
                 size="small"
@@ -1363,7 +1478,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
               <Divider sx={{ my: 0.5 }} />
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 0.5 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0f5132" }}>
-                  NET PAYMENT RECEIVED:
+                  NET PAYMENT RECEIVED IN THIS STAGE:
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
                   ₹{formatAmount(parseFloat(netPaidAmt) || 0)}
@@ -1404,7 +1519,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
           </Grid>
           <Grid size={{ xs: 12 }}>
             <TextField
-              label="Net Paid Amount (₹)"
+              label="Net Amount Received (₹)"
               type="number"
               fullWidth
               size="small"
@@ -1423,16 +1538,47 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Transaction UTR / Cheque No / Notes"
+              placeholder="e.g. Stage 1 Taxable received via NEFT UTR #12345"
               slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
         </Grid>
+
+        {/* Previous Payment History */}
+        {paymentHistory.length > 0 && (
+          <Paper variant="outlined" sx={{ p: 1.5, mt: 3, borderRadius: 2 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", textTransform: "uppercase", display: "block", mb: 1 }}>
+              Previous Payment Installments ({paymentHistory.length})
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: "action.hover" }}>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Stage</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Mode</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, fontSize: 11 }}>Received (₹)</TableCell>
+                  <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>Notes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paymentHistory.map((ph: any) => (
+                  <TableRow key={ph.id}>
+                    <TableCell sx={{ fontSize: 11 }}>{ph.payment_date}</TableCell>
+                    <TableCell sx={{ fontSize: 11, fontWeight: 700, color: "primary.main" }}>{ph.component}</TableCell>
+                    <TableCell sx={{ fontSize: 11 }}>{ph.payment_mode}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 11, fontWeight: 700, color: "#0f5132" }}>₹{formatAmount(ph.net_paid_amount)}</TableCell>
+                    <TableCell sx={{ fontSize: 11, color: "text.secondary" }}>{ph.notes || "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Paper>
+        )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
         <Button onClick={handleSave} variant="contained" color="success" size="small" disabled={saving}>
-          {saving ? "Saving..." : "Record Payment & Mark Paid"}
+          {saving ? "Saving..." : "Record Payment & Update Status"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1766,7 +1912,7 @@ export function ReceivablesReport() {
                       ₹{formatAmount(tot)}
                     </TableCell>
                     <TableCell align="center" sx={{ p: "5px 10px" }}>
-                      {bill.is_paid ? (
+                      {bill.payment_status === "PAID" || (bill.is_paid && bill.payment_status !== "PARTIAL") ? (
                         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                           <Chip
                             label="Already Received"
@@ -1781,15 +1927,25 @@ export function ReceivablesReport() {
                           )}
                         </Box>
                       ) : (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          onClick={() => setActivePaymentBill(bill)}
-                          sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
-                        >
-                          Record Payment
-                        </Button>
+                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5 }}>
+                          {bill.payment_status === "PARTIAL" && (
+                            <Chip
+                              label={`GST/Part Pending: ₹${formatAmount(bill.pending_amount)}`}
+                              color="warning"
+                              size="small"
+                              sx={{ fontWeight: 700, fontSize: 9, height: 20 }}
+                            />
+                          )}
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color={bill.payment_status === "PARTIAL" ? "warning" : "success"}
+                            onClick={() => setActivePaymentBill(bill)}
+                            sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
+                          >
+                            Record Payment
+                          </Button>
+                        </Box>
                       )}
                     </TableCell>
                   </TableRow>
