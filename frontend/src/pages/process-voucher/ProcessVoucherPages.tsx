@@ -1298,8 +1298,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Supplier"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data });
   const { data: allLedgers = [] } = useQuery({ queryKey: ["ledgers-all"], queryFn: async () => (await api.get("/ledgers/")).data });
 
-  // Pending inward vouchers — pre-fetched as soon as a supplier is chosen,
-  // so the picker opens instantly (no loading delay after click)
+  // Pending inward vouchers — pre-fetched as soon as a supplier is chosen or when modal opens
   const { data: pendingInwards = [] } = useQuery({
     queryKey: ["pending-inward", activeFY, pickerLedgerId, editing?.id],
     queryFn: async () => {
@@ -1308,7 +1307,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
       if (editing?.id) url += `&exclude_outward_id=${editing.id}`;
       return (await api.get(url)).data;
     },
-    enabled: !!pickerLedgerId,   // pre-fetch the moment supplier is picked
+    enabled: open && (!!pickerLedgerId || !!editing?.id || selectedInwards.length > 0),
     staleTime: 0,
   });
 
@@ -1363,7 +1362,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
     });
   }, [selectedInwards, pendingInwards]);
 
-  // Map of product quantities in the voucher currently being edited (to add back to stock balance to prevent double-deduction)
+  // Map of product quantities in the voucher currently being edited
   const editingProductQtyMap = useMemo(() => {
     if (!editing) return {};
     const map: Record<number, number> = {};
@@ -1406,13 +1405,13 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
               product_id: Number(it.product_id),
               process_id: it.process_id ? Number(it.process_id) : null,
               quantity: Number(it.quantity) || 0,
-              balance_qty: Number(it.quantity) || 0,
+              balance_qty: Number(inv.balance_qty ?? 0),
             }));
           } else if (inv.product_id) {
             lineItems = [{
               product_id: Number(inv.product_id), process_id: null,
               quantity: Number(inv.quantity || 0),
-              balance_qty: Number(inv.balance_qty || inv.quantity || 0)
+              balance_qty: Number(inv.balance_qty || 0)
             }];
           }
         } catch {}
