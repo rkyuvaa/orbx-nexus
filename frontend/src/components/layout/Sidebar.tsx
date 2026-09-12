@@ -68,22 +68,19 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", path: "/", icon: <Dashboard sx={{ fontSize: 20 }} /> },
   {
-    label: "Masters",
-    icon: <Business sx={{ fontSize: 20 }} />,
-    children: [
-      { label: "Supplier", path: "/master/suppliers", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Product Register", path: "/process/products", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Process Register", path: "/process/processes", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Process Groups", path: "/process/groups", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Unit of Measure", path: "/inventory/uom", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-    ],
-  },
-  {
     label: "Customer Material",
     icon: <Inventory2 sx={{ fontSize: 20 }} />,
     children: [
       { label: "Inward Voucher", path: "/process-voucher/inward", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Outward Voucher", path: "/process-voucher/outward", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+    ],
+  },
+  {
+    label: "Billing",
+    icon: <Assignment sx={{ fontSize: 20 }} />,
+    children: [
+      { label: "Labour Bill", path: "/labour-bill", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Bills Receivable", path: "/billing/receivables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {
@@ -113,16 +110,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Purchase Payables", path: "/purchase/payables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
-
-
-  {
-    label: "Billing",
-    icon: <Assignment sx={{ fontSize: 20 }} />,
-    children: [
-      { label: "Labour Bill", path: "/labour-bill", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Bills Receivable", path: "/billing/receivables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-    ],
-  },
   {
     label: "Accounts",
     icon: <AccountBalance sx={{ fontSize: 20 }} />,
@@ -135,7 +122,7 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
-    label: "HR and Payroll",
+    label: "Salary and Wages",
     icon: <Group sx={{ fontSize: 20 }} />,
     children: [
       { label: "Staff Ledgers", path: "/accounts/staff", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
@@ -144,7 +131,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Biometrics", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
-
   {
     label: "Reports",
     icon: <BarChart sx={{ fontSize: 20 }} />,
@@ -159,6 +145,17 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Staff Salary A/c", path: "/reports/staff-salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Monthly Report", path: "/reports/monthly", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Trial Balance", path: "/reports/trial-balance", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+    ],
+  },
+  {
+    label: "Masters",
+    icon: <Business sx={{ fontSize: 20 }} />,
+    children: [
+      { label: "Supplier", path: "/master/suppliers", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Product Register", path: "/process/products", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Process Register", path: "/process/processes", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Process Groups", path: "/process/groups", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Unit of Measure", path: "/inventory/uom", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {
