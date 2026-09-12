@@ -685,6 +685,36 @@ async def pending_bills(
 
 # ─────── Receivables (Labour Bills) ───────
 
+async def _ensure_payment_schema(db: DBSession, schema: str):
+    try:
+        await db.execute(text(f"""
+            ALTER TABLE {schema}.labour_bills 
+            ADD COLUMN IF NOT EXISTS paid_amount NUMERIC DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS pending_amount NUMERIC,
+            ADD COLUMN IF NOT EXISTS taxable_paid BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS gst_paid BOOLEAN DEFAULT FALSE,
+            ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'UNPAID';
+        """))
+
+        await db.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {schema}.labour_bill_payments (
+                id SERIAL PRIMARY KEY,
+                bill_id INTEGER NOT NULL REFERENCES {schema}.labour_bills(id) ON DELETE CASCADE,
+                payment_date DATE NOT NULL,
+                payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
+                component VARCHAR(20) DEFAULT 'PARTIAL',
+                taxable_amount NUMERIC DEFAULT 0,
+                gst_amount NUMERIC DEFAULT 0,
+                tds_amount NUMERIC DEFAULT 0,
+                net_paid_amount NUMERIC DEFAULT 0,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+    except Exception as e:
+        print("Error setting up payment schema:", e)
+
+
 @router.get("/receivables")
 async def receivables(
     current_user: CurrentUser,
@@ -699,6 +729,7 @@ async def receivables(
     Returns labour bills with aging buckets, date filters, status (pending/received/all) and per-ledger subtotals.
     """
     schema = s(fy)
+    await _ensure_payment_schema(db, schema)
     fd = _norm_date(from_date)
     td = _norm_date(to_date)
 
