@@ -1442,6 +1442,9 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
 export function ReceivablesReport() {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
+  const [fromDate, setFromDate] = useState(firstOfMonth);
+  const [toDate, setToDate] = useState(today);
+  const [statusFilter, setStatusFilter] = useState<"pending" | "received" | "all">("pending");
   const [selectedLedgerId, setSelectedLedgerId] = useState<number | "">("");
   const [activePaymentBill, setActivePaymentBill] = useState<any>(null);
 
@@ -1451,9 +1454,9 @@ export function ReceivablesReport() {
   });
 
   const { data: rawData = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ["receivables", activeFY, selectedLedgerId],
+    queryKey: ["receivables", activeFY, fromDate, toDate, selectedLedgerId, statusFilter],
     queryFn: async () => {
-      let url = `/reports/receivables?fy=${activeFY}`;
+      let url = `/reports/receivables?fy=${activeFY}&from_date=${fromDate}&to_date=${toDate}&status=${statusFilter}`;
       if (selectedLedgerId) url += `&ledger_id=${selectedLedgerId}`;
       return (await api.get(url)).data;
     },
@@ -1572,7 +1575,7 @@ export function ReceivablesReport() {
           ${cGstin ? `<p style="margin:2px 0;font-size:11px;font-weight:700;">${cGstin}</p>` : ""}
         </div>
       </div>
-      <h3 style="text-align:right;border-bottom:1px solid #000;margin-bottom:10px;">Bills Receivable Statement</h3>
+      <h3 style="text-align:right;border-bottom:1px solid #000;margin-bottom:10px;">Bills Receivable Statement (${statusFilter.toUpperCase()})</h3>
       <table>
         <thead><tr>
           <th>Bill No.</th><th>Bill Date</th><th>Days O/S</th><th>Aging</th>
@@ -1600,21 +1603,68 @@ export function ReceivablesReport() {
       <Box className="no-print">
         <PageHeader
           title="Bills Receivable"
-          subtitle="Outstanding labour bill amounts by contractor with Taxable, GST & TDS breakdown"
+          subtitle="Outstanding & Received labour bill amounts with Taxable, GST & TDS breakdown"
           breadcrumbs={[{ label: "Billing" }, { label: "Bills Receivable" }]}
         />
 
         {/* Filters */}
         <FilterRow>
+          <TextField
+            label="From Date"
+            type="date"
+            size="small"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 150 }}
+          />
+          <TextField
+            label="To Date"
+            type="date"
+            size="small"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 150 }}
+          />
           <Autocomplete
             size="small"
             options={ledgers}
             getOptionLabel={(o: any) => o.name}
             value={ledgers.find((l: any) => l.id === selectedLedgerId) || null}
             onChange={(_, val) => setSelectedLedgerId(val ? val.id : "")}
-            renderInput={(params) => <TextField {...params} label="Filter by Contractor" sx={{ minWidth: 260 }} />}
+            renderInput={(params) => <TextField {...params} label="Filter by Contractor" sx={{ minWidth: 230 }} />}
           />
-          <Button variant="outlined" size="small" onClick={() => { setSelectedLedgerId(""); refetch(); }}>Clear</Button>
+          <Box sx={{ display: "flex", gap: 0.5, bgcolor: "rgba(0,0,0,0.04)", p: 0.5, borderRadius: 1.5, border: "1px solid rgba(0,0,0,0.08)" }}>
+            <Button
+              size="small"
+              variant={statusFilter === "pending" ? "contained" : "text"}
+              color="error"
+              onClick={() => setStatusFilter("pending")}
+              sx={{ textTransform: "none", fontWeight: 700, fontSize: "0.78rem", py: 0.5, px: 1.5, borderRadius: 1 }}
+            >
+              Pending to Receive
+            </Button>
+            <Button
+              size="small"
+              variant={statusFilter === "received" ? "contained" : "text"}
+              color="success"
+              onClick={() => setStatusFilter("received")}
+              sx={{ textTransform: "none", fontWeight: 700, fontSize: "0.78rem", py: 0.5, px: 1.5, borderRadius: 1 }}
+            >
+              Already Received
+            </Button>
+            <Button
+              size="small"
+              variant={statusFilter === "all" ? "contained" : "text"}
+              color="primary"
+              onClick={() => setStatusFilter("all")}
+              sx={{ textTransform: "none", fontWeight: 700, fontSize: "0.78rem", py: 0.5, px: 1.5, borderRadius: 1 }}
+            >
+              All
+            </Button>
+          </Box>
+          <Button variant="outlined" size="small" onClick={() => { setFromDate(firstOfMonth); setToDate(today); setSelectedLedgerId(""); setStatusFilter("pending"); refetch(); }}>Clear</Button>
           {rawData.length > 0 && (
             <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print Statement</Button>
           )}
@@ -1624,8 +1674,8 @@ export function ReceivablesReport() {
         {rawData.length > 0 && (
           <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mb: 2 }}>
             <StatPill label="Contractors" value={totalContractors} color="#1565c0" />
-            <StatPill label="Pending Bills" value={totalBills} color="#0288d1" />
-            <StatPill label="Total Outstanding" value={`₹${formatAmount(grandTotal)}`} color="#c62828" />
+            <StatPill label="Bills" value={totalBills} color="#0288d1" />
+            <StatPill label="Total Amount" value={`₹${formatAmount(grandTotal)}`} color="#c62828" />
             {Object.entries(agingTotals).filter(([, v]) => v > 0).map(([bucket, amt]) => (
               <StatPill key={bucket} label={bucket} value={`₹${formatAmount(amt)}`} color={AGING_COLORS[bucket]} />
             ))}
@@ -1641,7 +1691,7 @@ export function ReceivablesReport() {
       )}
       {!isLoading && rawData.length === 0 && (
         <Paper variant="outlined" sx={{ p: 3, textAlign: "center" }}>
-          <Typography color="text.secondary">No outstanding receivables found. All labour bills are paid.</Typography>
+          <Typography color="text.secondary">No bills found for the selected filters.</Typography>
         </Paper>
       )}
       {!isLoading && grouped.length > 0 && grouped.map((grp) => (
@@ -1675,7 +1725,7 @@ export function ReceivablesReport() {
                 <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>GST ({RUPEE})</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>TDS (1%) ({RUPEE})</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Net Total ({RUPEE})</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px", width: 130 }}>Action</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px", width: 140 }}>Action / Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1716,15 +1766,31 @@ export function ReceivablesReport() {
                       ₹{formatAmount(tot)}
                     </TableCell>
                     <TableCell align="center" sx={{ p: "5px 10px" }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        onClick={() => setActivePaymentBill(bill)}
-                        sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
-                      >
-                        Record Payment
-                      </Button>
+                      {bill.is_paid ? (
+                        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <Chip
+                            label="Already Received"
+                            color="success"
+                            size="small"
+                            sx={{ fontWeight: 700, fontSize: 10, height: 22 }}
+                          />
+                          {bill.payment_date && (
+                            <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", mt: 0.25 }}>
+                              {bill.payment_date}
+                            </Typography>
+                          )}
+                        </Box>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="success"
+                          onClick={() => setActivePaymentBill(bill)}
+                          sx={{ textTransform: "none", fontSize: 11, py: 0.25, px: 1.2, borderRadius: 1.5 }}
+                        >
+                          Record Payment
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

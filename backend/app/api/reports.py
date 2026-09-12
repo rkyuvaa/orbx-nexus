@@ -690,17 +690,37 @@ async def receivables(
     current_user: CurrentUser,
     db: DBSession,
     fy: str = Query(default="2026_2027"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
     ledger_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(default="pending"),
 ):
     """
-    Returns unpaid labour bills with aging buckets and per-ledger subtotals.
-    Aging is calculated from bill_date to today.
+    Returns labour bills with aging buckets, date filters, status (pending/received/all) and per-ledger subtotals.
     """
     schema = s(fy)
-    ledger_filter = "AND lb.ledger_id = :lid" if ledger_id else ""
+    fd = _norm_date(from_date)
+    td = _norm_date(to_date)
+
+    conds = ["1=1"]
     params: dict = {}
+
+    if fd:
+        conds.append("lb.bill_date >= CAST(:fd AS date)")
+        params["fd"] = fd
+    if td:
+        conds.append("lb.bill_date <= CAST(:td AS date)")
+        params["td"] = td
     if ledger_id:
+        conds.append("lb.ledger_id = :lid")
         params["lid"] = ledger_id
+
+    if status == "pending":
+        conds.append("lb.is_paid = FALSE")
+    elif status == "received":
+        conds.append("lb.is_paid = TRUE")
+
+    where_str = "WHERE " + " AND ".join(conds)
 
     result = await db.execute(
         text(
@@ -724,7 +744,7 @@ async def receivables(
             f"  (CURRENT_DATE - lb.bill_date::date) AS days_outstanding "
             f"FROM {schema}.labour_bills lb "
             f"LEFT JOIN master.ledgers l ON l.id = lb.ledger_id "
-            f"WHERE lb.is_paid = FALSE {ledger_filter} "
+            f"{where_str} "
             f"ORDER BY l.name ASC, lb.bill_date ASC"
         ),
         params,
