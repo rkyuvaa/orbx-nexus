@@ -167,7 +167,7 @@ async def get_pending_inward_for_outward(
           WHERE jsonb_array_length(COALESCE(hdr_items, '[]'::jsonb)) > 0
             AND NULLIF(item->>'product_id', '') IS NOT NULL
         ),
-        -- Outward items matched by inward_id + product_id, with product_id fallback
+        -- Outward items matched by inward_id + product_id
         out_dispatched AS (
           SELECT
             COALESCE(NULLIF(o_item->>'inward_id', ''), NULLIF(so.inward_id::text, ''))::int AS inward_id,
@@ -182,17 +182,11 @@ async def get_pending_inward_for_outward(
             {exclude_out_filter}
           GROUP BY 1, 2
         ),
-        out_prod_dispatched AS (
-          SELECT product_id, SUM(dispatched) AS total_dispatched
-          FROM out_dispatched
-          GROUP BY product_id
-        ),
         inward_balances AS (
           SELECT il.inward_id,
-            SUM(GREATEST(il.line_qty - COALESCE(od.dispatched, opd.total_dispatched, 0), 0)) AS total_balance
+            SUM(GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0)) AS total_balance
           FROM in_lines il
           LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id AND od.product_id = il.product_id
-          LEFT JOIN out_prod_dispatched opd ON opd.product_id = il.product_id
           GROUP BY il.inward_id
         )
         SELECT si.*,
@@ -204,14 +198,13 @@ async def get_pending_inward_for_outward(
                 'product_id', il.product_id,
                 'process_id', il.process_id,
                 'quantity', il.line_qty,
-                'balance_qty', GREATEST(il.line_qty - COALESCE(od.dispatched, opd.total_dispatched, 0), 0)
+                'balance_qty', GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0)
               )
               ORDER BY il.product_id
             )
             FROM in_lines il
             LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id
               AND od.product_id = il.product_id
-            LEFT JOIN out_prod_dispatched opd ON opd.product_id = il.product_id
             WHERE il.inward_id = si.id
           ), '[]'::jsonb) AS line_items_balance
         FROM {s}.stock_inward si
