@@ -1229,7 +1229,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
     queryKey: ["bill-payments", bill?.id, activeFY],
     queryFn: async () => {
       if (!bill?.id) return [];
-      return (await api.get(`/labour-bill/${bill.id}/payments?fy=${activeFY}`)).data;
+      return (await api.get(`/labour-bills/${bill.id}/payments?fy=${activeFY}`)).data;
     },
     enabled: open && !!bill?.id,
   });
@@ -1324,7 +1324,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.post(`/labour-bill/${bill.id}/record-payment?fy=${activeFY}`, {
+      await api.post(`/labour-bills/${bill.id}/record-payment?fy=${activeFY}`, {
         payment_date: paymentDate,
         payment_mode: paymentMode,
         component: componentPreset,
