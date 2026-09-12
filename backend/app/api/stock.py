@@ -207,7 +207,6 @@ async def get_pending_inward_for_outward(
             LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id
               AND od.product_id = il.product_id
             WHERE il.inward_id = si.id
-              AND GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0) > 0
           ), '[]'::jsonb) AS line_items_balance
         FROM {s}.stock_inward si
         LEFT JOIN inward_balances ib ON ib.inward_id = si.id
