@@ -1301,10 +1301,15 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   // Pending inward vouchers — pre-fetched as soon as a supplier is chosen,
   // so the picker opens instantly (no loading delay after click)
   const { data: pendingInwards = [] } = useQuery({
-    queryKey: ["pending-inward", activeFY, pickerLedgerId],
-    queryFn: async () => (await api.get(`/stock/inward/pending-outward?fy=${activeFY}${pickerLedgerId ? `&ledger_id=${pickerLedgerId}` : ""}`)).data,
+    queryKey: ["pending-inward", activeFY, pickerLedgerId, editing?.id],
+    queryFn: async () => {
+      let url = `/stock/inward/pending-outward?fy=${activeFY}`;
+      if (pickerLedgerId) url += `&ledger_id=${pickerLedgerId}`;
+      if (editing?.id) url += `&exclude_outward_id=${editing.id}`;
+      return (await api.get(url)).data;
+    },
     enabled: !!pickerLedgerId,   // pre-fetch the moment supplier is picked
-    staleTime: 30_000,           // cache 30s so re-opening is instant
+    staleTime: 0,
   });
 
   const sortedPendingInwards = useMemo(() => {

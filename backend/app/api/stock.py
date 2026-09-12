@@ -124,6 +124,7 @@ async def get_pending_inward_for_outward(
     db: DBSession,
     fy: str = Query(default="2026_2027"),
     ledger_id: Optional[int] = Query(None),
+    exclude_outward_id: Optional[int] = Query(None),
 ):
     """Return inward vouchers with per-line-item balance quantities."""
     s = _schema(fy)
@@ -132,6 +133,11 @@ async def get_pending_inward_for_outward(
     if ledger_id:
         ledger_filter = "AND si.ledger_id = :lid"
         params["lid"] = ledger_id
+
+    exclude_out_filter = ""
+    if exclude_outward_id:
+        exclude_out_filter = "AND so.id != :eoid"
+        params["eoid"] = exclude_outward_id
 
     result = await db.execute(
         text(f"""
@@ -174,6 +180,7 @@ async def get_pending_inward_for_outward(
           ) AS o_item ON TRUE
           WHERE COALESCE(NULLIF(o_item->>'inward_id', ''), NULLIF(so.inward_id::text, '')) IS NOT NULL
             AND COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, '')) IS NOT NULL
+            {exclude_out_filter}
           GROUP BY 1, 2
         ),
         inward_balances AS (
