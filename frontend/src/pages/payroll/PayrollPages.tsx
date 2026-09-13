@@ -210,7 +210,7 @@ export function SalaryVoucherPage() {
     return map;
   }, [ledgers]);
 
-  const { register, handleSubmit, reset, control } = useForm({
+  const { register, handleSubmit, reset, control, setValue } = useForm({
     defaultValues: { voucher_no: "", voucher_date: today, ledger_id: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), days_worked: 0, basic_salary: 0, allowances: 0, deductions: 0, net_salary: 0, narration: "" },
   });
 
@@ -297,7 +297,20 @@ export function SalaryVoucherPage() {
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_date")} label="Date *" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12 }}><Controller name="ledger_id" control={control} rules={{ required: "Required" }} render={({ field, fieldState }) => (
-                <LazyAutocomplete options={ledgers} getOptionLabel={(o: any) => o.name} value={ledgers.find((l: any) => l.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label="Staff Member *" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
+                <LazyAutocomplete
+                  options={ledgers}
+                  getOptionLabel={(o: any) => `${o.name}${o.staff_category === "Labour" ? " (Labour - ₹" + (o.hourly_rate || 0) + "/hr)" : ""}`}
+                  value={ledgers.find((l: any) => l.id === field.value) || null}
+                  onChange={(_, v) => {
+                    field.onChange(v ? v.id : "");
+                    if (v) {
+                      const baseAmt = v.staff_category === "Labour" ? Number(v.hourly_rate || 0) : Number(v.basic_salary || 0);
+                      setValue("basic_salary", baseAmt);
+                      setValue("net_salary", baseAmt);
+                    }
+                  }}
+                  renderInput={(params) => <TextField {...params} label="Staff Member *" error={!!fieldState.error} helperText={fieldState.error?.message} />}
+                />
               )} /></Grid>
               <Grid size={{ xs: 3 }}><TextField {...register("month")} label="Month" type="number" fullWidth slotProps={{ htmlInput: { min: 1, max: 12 } }} /></Grid>
               <Grid size={{ xs: 3 }}><TextField {...register("year")} label="Year" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>

@@ -147,7 +147,9 @@ class Ledger(Base):
     designation: Mapped[str | None] = mapped_column(String(100))
     # For Staff
     department: Mapped[str | None] = mapped_column(String(100))
+    staff_category: Mapped[str | None] = mapped_column(String(20), default="Staff")  # Staff (Fixed) or Labour (Hourly)
     basic_salary: Mapped[float | None] = mapped_column(Numeric(15, 2))
+    hourly_rate: Mapped[float | None] = mapped_column(Numeric(15, 2), default=0)
     join_date: Mapped[str | None] = mapped_column(String(10))
     photo: Mapped[str | None] = mapped_column(Text)
     process_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.processes.id"))

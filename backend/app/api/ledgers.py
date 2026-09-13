@@ -48,7 +48,9 @@ class LedgerOut(BaseModel):
     bank_ifsc: str | None = None
     designation: str | None = None
     department: str | None = None
+    staff_category: str | None = "Staff"
     basic_salary: float | None = None
+    hourly_rate: float | None = 0.0
     join_date: str | None = None
     photo: str | None = None
     process_id: int | None = None
@@ -76,7 +78,9 @@ class LedgerCreate(BaseModel):
     bank_ifsc: str | None = None
     designation: str | None = None
     department: str | None = None
+    staff_category: str | None = "Staff"
     basic_salary: float | None = None
+    hourly_rate: float | None = 0.0
     join_date: str | None = None
     photo: str | None = None
     process_id: int | None = None

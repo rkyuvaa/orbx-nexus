@@ -40,7 +40,9 @@ const schema = z.object({
   bank_ifsc: z.string().nullish(),
   designation: z.string().nullish(),
   department: z.string().nullish(),
+  staff_category: z.string().default("Staff"),
   basic_salary: z.coerce.number().nullish(),
+  hourly_rate: z.coerce.number().nullish(),
   join_date: z.string().nullish(),
 });
 
@@ -76,7 +78,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<any>({
     resolver: zodResolver(schema),
-    defaultValues: { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0 },
+    defaultValues: { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0 },
   });
 
   const saveMutation = useMutation({
@@ -121,7 +123,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     } else {
       setPhoto(null);
     }
-    reset(row || { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0 });
+    reset(row || { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0 });
     setOpen(true);
   };
 
@@ -187,8 +189,28 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
         return names.length > 0 ? names.join(", ") : "-";
       }
     },
-    ...(ledgerType === "Staff" ? [{ field: "basic_salary", headerName: "Basic Salary", width: 130,
-        valueFormatter: (p: any) => p.value ? `₹${formatAmount(p.value)}` : "-" }] : []),
+    ...(ledgerType === "Staff" ? [
+      {
+        field: "staff_category",
+        headerName: "Category",
+        width: 110,
+        cellRenderer: (p: any) => {
+          const cat = p.value || "Staff";
+          return <Chip label={cat} size="small" color={cat === "Labour" ? "warning" : "info"} sx={{ fontSize: "0.7rem", fontWeight: 600 }} />;
+        }
+      },
+      {
+        field: "basic_salary",
+        headerName: "Pay Rate",
+        width: 140,
+        valueGetter: (p: any) => {
+          if (p.data?.staff_category === "Labour") {
+            return p.data?.hourly_rate ? `₹${formatAmount(p.data.hourly_rate)} / hr` : "-";
+          }
+          return p.data?.basic_salary ? `₹${formatAmount(p.data.basic_salary)} / mo` : "-";
+        }
+      }
+    ] : []),
     {
       headerName: "Actions", width: 100, sortable: false, filter: false,
       cellRenderer: (p: any) => (
@@ -407,9 +429,25 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
               <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_ifsc")} label="IFSC Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               {isStaff && (
                 <>
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("designation")} label="Designation" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("department")} label="Department" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("basic_salary")} label="Basic Salary" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Controller
+                      name="staff_category"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField {...field} select label="Staff Category *" fullWidth slotProps={{ inputLabel: { shrink: true } }}>
+                          <MenuItem value="Staff">Staff (Fixed Monthly Salary)</MenuItem>
+                          <MenuItem value="Labour">Labour (Hour-wise Salary)</MenuItem>
+                        </TextField>
+                      )}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("designation")} label="Designation" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("department")} label="Department" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+                  {watch("staff_category") === "Labour" ? (
+                    <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("hourly_rate")} label="Hour-wise Salary (₹ / Hour) *" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Hourly rate for labor wage calculation" /></Grid>
+                  ) : (
+                    <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("basic_salary")} label="Fixed Basic Salary (₹ / Month) *" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Monthly fixed basic salary" /></Grid>
+                  )}
                   <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("join_date")} label="Join Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
                 </>
               )}
