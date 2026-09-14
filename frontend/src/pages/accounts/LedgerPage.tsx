@@ -140,7 +140,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const bulkStatusMutation = useMutation({
     mutationFn: async ({ rows, is_active }: { rows: any[]; is_active: boolean }) => {
-      await Promise.all(rows.map((r) => api.put(`/ledgers/${r.id}`, { ...r, is_active })));
+      await Promise.all(rows.map((r) => api.patch(`/ledgers/${r.id}/status`, { is_active })));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
@@ -224,7 +224,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                 e.stopPropagation();
                 const newStatus = e.target.checked;
                 try {
-                  await api.put(`/ledgers/${p.data.id}`, { ...p.data, is_active: newStatus });
+                  await api.patch(`/ledgers/${p.data.id}/status`, { is_active: newStatus });
                   qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
                 } catch (err: any) {
                   const detail = err?.response?.data?.detail;

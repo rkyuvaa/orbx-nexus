@@ -228,7 +228,8 @@ async def update_ledger(ledger_id: int, body: LedgerUpdate, current_user: Curren
     ledger = result.scalar_one_or_none()
     if not ledger:
         raise HTTPException(status_code=404, detail="Ledger not found")
-    for k, v in body.model_dump(exclude_none=True).items():
+    data = body.model_dump(exclude_unset=True)
+    for k, v in data.items():
         setattr(ledger, k, v)
     await db.flush()
     await db.refresh(ledger)
@@ -236,6 +237,22 @@ async def update_ledger(ledger_id: int, body: LedgerUpdate, current_user: Curren
         db=db, user_id=current_user.id, username=current_user.username,
         action="UPDATE", module="Ledgers", record_id=ledger_id
     )
+    return ledger
+
+
+class StatusUpdate(BaseModel):
+    is_active: bool
+
+
+@router.patch("/{ledger_id}/status", response_model=LedgerOut)
+async def update_ledger_status(ledger_id: int, body: StatusUpdate, current_user: CurrentUser, db: DBSession):
+    result = await db.execute(select(Ledger).where(Ledger.id == ledger_id))
+    ledger = result.scalar_one_or_none()
+    if not ledger:
+        raise HTTPException(status_code=404, detail="Ledger not found")
+    ledger.is_active = body.is_active
+    await db.flush()
+    await db.refresh(ledger)
     return ledger
 
 
