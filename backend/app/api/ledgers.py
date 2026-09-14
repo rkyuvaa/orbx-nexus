@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from app.api.deps import CurrentUser, DBSession
-from app.models.master import LedgerGroup, Ledger
+from app.models.master import LedgerGroup, Ledger, Process
 
 router = APIRouter()
 
@@ -211,12 +211,27 @@ async def get_ledger(ledger_id: int, current_user: CurrentUser, db: DBSession):
 
 @router.post("/", response_model=LedgerOut, status_code=201)
 async def create_ledger(body: LedgerCreate, current_user: CurrentUser, db: DBSession):
-    res = await db.execute(select(LedgerGroup.id).where(LedgerGroup.id == body.group_id))
+    data = body.model_dump()
+    if "ledger_code" in data and not data["ledger_code"]:
+        data["ledger_code"] = None
+
+    if "process_id" in data:
+        if not data["process_id"] or data["process_id"] == 0:
+            data["process_id"] = None
+        else:
+            proc_exists = await db.execute(select(Process.id).where(Process.id == data["process_id"]))
+            if not proc_exists.scalar_one_or_none():
+                data["process_id"] = None
+
+    res = await db.execute(select(LedgerGroup.id).where(LedgerGroup.id == data["group_id"]))
     if not res.scalar_one_or_none():
         fallback_group = (await db.execute(select(LedgerGroup.id).order_by(LedgerGroup.id))).scalars().first()
         if fallback_group:
-            body.group_id = fallback_group
-    ledger = Ledger(**body.model_dump())
+            data["group_id"] = fallback_group
+        else:
+            data["group_id"] = 1
+
+    ledger = Ledger(**data)
     db.add(ledger)
     await db.flush()
     await db.refresh(ledger)
@@ -234,10 +249,23 @@ async def update_ledger(ledger_id: int, body: LedgerUpdate, current_user: Curren
     if not ledger:
         raise HTTPException(status_code=404, detail="Ledger not found")
     data = body.model_dump(exclude_unset=True)
+
+    if "ledger_code" in data and not data["ledger_code"]:
+        data["ledger_code"] = None
+
+    if "process_id" in data:
+        if not data["process_id"] or data["process_id"] == 0:
+            data["process_id"] = None
+        else:
+            proc_exists = await db.execute(select(Process.id).where(Process.id == data["process_id"]))
+            if not proc_exists.scalar_one_or_none():
+                data["process_id"] = None
+
     if "group_id" in data and data["group_id"]:
         res = await db.execute(select(LedgerGroup.id).where(LedgerGroup.id == data["group_id"]))
         if not res.scalar_one_or_none():
             data.pop("group_id")
+
     for k, v in data.items():
         setattr(ledger, k, v)
     await db.flush()

@@ -116,10 +116,14 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
         ...data,
         photo,
         ledger_type: ledgerType,
+        ledger_code: data.ledger_code && String(data.ledger_code).trim() !== "" ? String(data.ledger_code).trim() : null,
         group_id: Number(data.group_id) || defaultGroupId,
+        process_id: Number(data.process_id) || null,
+        process_ids: data.process_ids || null,
         opening_balance: data.opening_balance !== "" && data.opening_balance !== null && data.opening_balance !== undefined ? parseFloat(data.opening_balance) : 0,
         basic_salary: data.basic_salary !== "" && data.basic_salary !== null && data.basic_salary !== undefined ? parseFloat(data.basic_salary) : null,
         hourly_rate: data.hourly_rate !== "" && data.hourly_rate !== null && data.hourly_rate !== undefined ? parseFloat(data.hourly_rate) : 0,
+        is_active: data.is_active ?? true,
       };
       const res = editing ? await api.put(`/ledgers/${editing.id}`, payload) : await api.post("/ledgers/", payload);
       const savedLedger = res.data;
