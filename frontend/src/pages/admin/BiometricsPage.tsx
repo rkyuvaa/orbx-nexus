@@ -40,7 +40,8 @@ export default function BiometricsPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [entryDate, setEntryDate] = useState(todayStr);
   const [rows, setRows] = useState<StaffRow[]>([]);
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const autoSaveTimerRef = React.useRef<any>(null);
 
   // Monthly summary tab state
   const [selectedMonth, setSelectedMonth] = useState(_now.getMonth() + 1);
@@ -67,15 +68,16 @@ export default function BiometricsPage() {
         remarks: d.remarks || "",
       }));
       setRows(formatted);
+      setLastSavedTime(null);
     }
   }, [dailyData]);
 
   // 2. Save Daily Attendance Bulk Mutation
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (rowsToSave: StaffRow[]) => {
       const payload = {
         entry_date: entryDate,
-        entries: rows.map((r) => ({
+        entries: rowsToSave.map((r) => ({
           ledger_id: r.ledger_id,
           status: r.status,
           punch_in: r.punch_in,
@@ -87,17 +89,27 @@ export default function BiometricsPage() {
       };
       return (await api.post(`/biometrics/daily-bulk?fy=${activeFY}`, payload)).data;
     },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["daily-staff-attendance"] });
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biometrics"] });
       qc.invalidateQueries({ queryKey: ["attendance-summary"] });
-      setSaveSuccessMsg(data.message || "Daily attendance saved successfully!");
-      setTimeout(() => setSaveSuccessMsg(""), 4000);
-    },
-    onError: (err: any) => {
-      alert("Failed to save attendance. Please try again.");
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSavedTime(timeStr);
     },
   });
+
+  const triggerAutoSave = (updatedRows: StaffRow[], immediate = false) => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    if (immediate) {
+      saveMutation.mutate(updatedRows);
+    } else {
+      autoSaveTimerRef.current = setTimeout(() => {
+        saveMutation.mutate(updatedRows);
+      }, 500);
+    }
+  };
 
   // KPI Stats for Daily Entry
   const kpiStats = useMemo(() => {
@@ -111,43 +123,44 @@ export default function BiometricsPage() {
 
   // Quick Action: Mark All
   const handleMarkAll = (statusVal: string) => {
-    setRows((prev) =>
-      prev.map((r) => ({
-        ...r,
-        status: statusVal,
-        hours_worked: statusVal === "Present" ? 8.0 : statusVal === "Half Day" ? 4.0 : 0.0,
-        punch_in: statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_in || "09:00",
-        punch_out: statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_out || "18:00",
-      }))
-    );
+    const updatedRows = rows.map((r) => ({
+      ...r,
+      status: statusVal,
+      hours_worked: statusVal === "Present" ? 8.0 : statusVal === "Half Day" ? 4.0 : 0.0,
+      punch_in: statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_in || "09:00",
+      punch_out: statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_out || "18:00",
+    }));
+    setRows(updatedRows);
+    triggerAutoSave(updatedRows, true);
   };
 
   // Handle row changes
   const handleRowChange = (index: number, field: keyof StaffRow, val: any) => {
-    setRows((prev) =>
-      prev.map((r, idx) => {
-        if (idx === index) {
-          const updated = { ...r, [field]: val };
-          if (field === "status") {
-            if (val === "Present") {
-              updated.hours_worked = 8.0;
-              if (!updated.punch_in) updated.punch_in = "09:00";
-              if (!updated.punch_out) updated.punch_out = "18:00";
-            } else if (val === "Half Day") {
-              updated.hours_worked = 4.0;
-              if (!updated.punch_in) updated.punch_in = "09:00";
-              if (!updated.punch_out) updated.punch_out = "13:00";
-            } else if (val === "Absent" || val === "On Leave") {
-              updated.hours_worked = 0.0;
-              updated.punch_in = "";
-              updated.punch_out = "";
-            }
+    const isImmediate = field === "status";
+    const updatedRows = rows.map((r, idx) => {
+      if (idx === index) {
+        const updated = { ...r, [field]: val };
+        if (field === "status") {
+          if (val === "Present") {
+            updated.hours_worked = 8.0;
+            if (!updated.punch_in) updated.punch_in = "09:00";
+            if (!updated.punch_out) updated.punch_out = "18:00";
+          } else if (val === "Half Day") {
+            updated.hours_worked = 4.0;
+            if (!updated.punch_in) updated.punch_in = "09:00";
+            if (!updated.punch_out) updated.punch_out = "13:00";
+          } else if (val === "Absent" || val === "On Leave") {
+            updated.hours_worked = 0.0;
+            updated.punch_in = "";
+            updated.punch_out = "";
           }
-          return updated;
         }
-        return r;
-      })
-    );
+        return updated;
+      }
+      return r;
+    });
+    setRows(updatedRows);
+    triggerAutoSave(updatedRows, isImmediate);
   };
 
   // 3. Fetch Monthly Summary Data
@@ -252,33 +265,45 @@ export default function BiometricsPage() {
                 </Box>
               </Grid>
               <Grid size={{ xs: 12, md: 4 }} sx={{ textAlign: { md: "right" } }}>
-                <Button
-                  variant="contained"
-                  size="medium"
-                  startIcon={saveMutation.isPending ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-                  onClick={() => saveMutation.mutate()}
-                  disabled={saveMutation.isPending || rows.length === 0}
-                  sx={{
-                    bgcolor: "#0f5132",
-                    px: 3,
-                    py: 1,
-                    fontWeight: 700,
-                    borderRadius: "6px",
-                    "&:hover": { bgcolor: "#0a3822" }
-                  }}
-                >
-                  {saveMutation.isPending ? "Saving Attendance..." : "Save Daily Attendance"}
-                </Button>
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+                  {saveMutation.isPending ? (
+                    <Chip
+                      icon={<CircularProgress size={14} color="inherit" />}
+                      label="Auto-saving..."
+                      color="primary"
+                      variant="outlined"
+                      sx={{ fontWeight: 700, borderRadius: "6px", px: 1 }}
+                    />
+                  ) : saveMutation.isError ? (
+                    <Chip
+                      icon={<CancelIcon fontSize="small" />}
+                      label="Auto-save failed - Click to retry"
+                      color="error"
+                      variant="outlined"
+                      onClick={() => triggerAutoSave(rows, true)}
+                      sx={{ fontWeight: 700, borderRadius: "6px", px: 1, cursor: "pointer" }}
+                    />
+                  ) : lastSavedTime ? (
+                    <Chip
+                      icon={<CheckCircleIcon fontSize="small" color="success" />}
+                      label={`Auto-saved at ${lastSavedTime}`}
+                      color="success"
+                      variant="outlined"
+                      sx={{ fontWeight: 700, borderRadius: "6px", px: 1, bgcolor: "#f0fdf4" }}
+                    />
+                  ) : (
+                    <Chip
+                      icon={<CheckCircleIcon fontSize="small" color="success" />}
+                      label="Auto-save enabled"
+                      color="default"
+                      variant="outlined"
+                      sx={{ fontWeight: 700, borderRadius: "6px", px: 1 }}
+                    />
+                  )}
+                </Box>
               </Grid>
             </Grid>
           </Paper>
-
-          {/* Success Alert Banner */}
-          {saveSuccessMsg && (
-            <Alert severity="success" sx={{ mb: 2, fontWeight: 600 }}>
-              {saveSuccessMsg}
-            </Alert>
-          )}
 
           {/* KPI Summary Cards */}
           <Grid container spacing={2} sx={{ mb: 2 }}>

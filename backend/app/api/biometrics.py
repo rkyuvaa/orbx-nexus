@@ -153,6 +153,19 @@ async def get_daily_staff_attendance(
     return [dict(r) for r in result.mappings().all()]
 
 
+def parse_time_str(val: Optional[str]) -> Optional[str]:
+    if not val or not isinstance(val, str):
+        return None
+    v = val.strip()
+    if not v:
+        return None
+    if len(v) == 5 and ":" in v:
+        return f"{v}:00"
+    if len(v) == 8 and ":" in v:
+        return v
+    return None
+
+
 @router.post("/daily-bulk", status_code=200)
 async def save_daily_staff_attendance_bulk(
     body: DailyAttendanceBulkIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
@@ -168,22 +181,29 @@ async def save_daily_staff_attendance_bulk(
             text(f"DELETE FROM {schema}.biometric_entries WHERE ledger_id = :lid AND entry_date = :edate"),
             {"lid": entry.ledger_id, "edate": body.entry_date}
         )
-        # Parse time safely
-        pin = entry.punch_in if entry.punch_in and len(entry.punch_in) == 5 else ("09:00" if entry.status in ["Present", "Half Day"] else None)
-        pout = entry.punch_out if entry.punch_out and len(entry.punch_out) == 5 else ("18:00" if entry.status == "Present" else None)
-        hw = entry.hours_worked if entry.status != "Absent" else 0.0
+        
+        pin = parse_time_str(entry.punch_in)
+        pout = parse_time_str(entry.punch_out)
+        if not pin and entry.status in ["Present", "Half Day"]:
+            pin = "09:00:00"
+        if not pout and entry.status == "Present":
+            pout = "18:00:00"
+            
+        hw = float(entry.hours_worked) if entry.hours_worked is not None and entry.status != "Absent" else 0.0
+        ot = float(entry.ot_hours) if entry.ot_hours is not None else 0.0
+        remarks = entry.remarks if entry.remarks else None
         
         await db.execute(
             text(
                 f"INSERT INTO {schema}.biometric_entries "
                 f"(ledger_id, entry_date, punch_in, punch_out, hours_worked, status, ot_hours, device_log_id) "
-                f"VALUES (:lid, :edate, :pin::time, :pout::time, :hw, :status, :ot, :remarks)"
+                f"VALUES (:lid, :edate, CAST(:pin AS time), CAST(:pout AS time), :hw, :status, :ot, :remarks)"
             ),
             {
                 "lid": entry.ledger_id, "edate": body.entry_date,
                 "pin": pin, "pout": pout,
                 "hw": hw, "status": entry.status,
-                "ot": entry.ot_hours or 0.0, "remarks": entry.remarks
+                "ot": ot, "remarks": remarks
             }
         )
     return {"message": f"Saved attendance for {len(body.entries)} staff members on {body.entry_date}"}
