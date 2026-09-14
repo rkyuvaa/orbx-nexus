@@ -140,7 +140,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const bulkStatusMutation = useMutation({
     mutationFn: async ({ rows, is_active }: { rows: any[]; is_active: boolean }) => {
-      await Promise.all(rows.map((r) => api.put(`/ledgers/${r.id}`, { is_active })));
+      await Promise.all(rows.map((r) => api.put(`/ledgers/${r.id}`, { ...r, is_active })));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
@@ -241,10 +241,12 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                 e.stopPropagation();
                 const newStatus = e.target.checked;
                 try {
-                  await api.put(`/ledgers/${p.data.id}`, { is_active: newStatus });
+                  await api.put(`/ledgers/${p.data.id}`, { ...p.data, is_active: newStatus });
                   qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
                 } catch (err: any) {
-                  alert(err?.response?.data?.detail || "Failed to update status");
+                  const detail = err?.response?.data?.detail;
+                  const msg = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d: any) => d.msg).join(", ") : "Failed to update status";
+                  alert(msg);
                 }
               }}
               color="success"
