@@ -225,9 +225,15 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       if (!item.process_id && !item.product_id) return item;
       const proc = processes.find((p: any) => p.id === Number(item.process_id));
       const rate = item.rate !== undefined && item.rate !== "" ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
-      
+
+      const prod = products.find((p: any) => p.id === Number(item.product_id));
+      const defaultWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
+      const weight = item.weight !== undefined && item.weight !== "" ? item.weight : (defaultWeight > 0 ? defaultWeight : "");
+      const weightNum = Number(weight) || 0;
+      const weightFactor = weightNum > 0 ? weightNum : 1;
+
       const rawBal = getRawBalanceQtyForProcess(item.process_id, item.product_id, oids);
-      
+
       const otherRowsUsed = items.reduce((sum, other, oi) => {
         if (oi !== idx) {
           const matchProd = !item.product_id || !other.product_id || Number(other.product_id) === Number(item.product_id);
@@ -237,9 +243,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         }
         return sum;
       }, 0);
-      
+
       const remainingBal = oids.length > 0 ? Math.max(0, rawBal - otherRowsUsed) : rawBal;
-      
+
       let qty = item.quantity;
       if (oids.length > 0 && (typeof qty === "number" || (typeof qty === "string" && qty !== ""))) {
         const numQty = Number(qty) || 0;
@@ -247,11 +253,14 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
           qty = remainingBal;
         }
       }
-      const amount = Number(((Number(qty) || 0) * (Number(rate) || 0)).toFixed(2));
-      
+      const numQty = Number(qty) || 0;
+      const numRate = Number(rate) || 0;
+      const amount = Number((numQty * weightFactor * numRate).toFixed(2));
+
       return {
         ...item,
         rate,
+        weight,
         balance_qty: remainingBal,
         quantity: qty,
         amount
@@ -317,6 +326,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const handleLineChange = (index: number, field: string, val: any) => {
     const updated = [...lineItems];
     updated[index][field] = val;
+    if (field === "product_id") {
+      const prod = products.find((p: any) => p.id === Number(val));
+      if (prod?.weight && parseFloat(prod.weight) > 0) {
+        updated[index].weight = parseFloat(prod.weight);
+      }
+    }
     if (field === "product_id" || field === "process_id") {
       const proc = processes.find((p: any) => p.id === Number(updated[index].process_id));
       if (proc) {
@@ -327,7 +342,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   };
 
   const handleAddLine = () => {
-    const newItems = [...lineItems, { product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }];
+    const newItems = [...lineItems, { product_id: "", process_id: "", quantity: "", weight: "", balance_qty: 0, rate: 0, amount: 0 }];
     setLineItems(recomputeLineItems(newItems));
   };
 
@@ -585,14 +600,15 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                     <Table size="small">
                       <TableHead sx={{ bgcolor: "#f4f9f6" }}>
                         <TableRow>
-                          <TableCell sx={{ width: 50, fontWeight: 700, py: 1, px: 1 }} align="center">S. No</TableCell>
-                          <TableCell sx={{ minWidth: 180, fontWeight: 700, py: 1, px: 1 }}>Product *</TableCell>
-                          <TableCell sx={{ minWidth: 180, fontWeight: 700, py: 1, px: 1 }}>Process *</TableCell>
-                          <TableCell sx={{ width: 130, fontWeight: 700, py: 1, px: 1 }} align="right">Qty *</TableCell>
-                          <TableCell sx={{ width: 110, fontWeight: 700, py: 1, px: 1 }} align="right">Balance Qty</TableCell>
-                          <TableCell sx={{ width: 120, fontWeight: 700, py: 1, px: 1 }} align="right">Rate *</TableCell>
-                          <TableCell sx={{ width: 130, fontWeight: 700, py: 1, px: 1 }} align="right">Amount</TableCell>
-                          <TableCell sx={{ width: 50, py: 1, px: 1 }} align="center">Del</TableCell>
+                          <TableCell sx={{ width: 45, fontWeight: 700, py: 1, px: 1 }} align="center">S. No</TableCell>
+                          <TableCell sx={{ minWidth: 160, fontWeight: 700, py: 1, px: 1 }}>Product *</TableCell>
+                          <TableCell sx={{ width: 110, fontWeight: 700, py: 1, px: 1 }}>Process *</TableCell>
+                          <TableCell sx={{ width: 85, fontWeight: 700, py: 1, px: 1 }} align="right">Qty *</TableCell>
+                          <TableCell sx={{ width: 85, fontWeight: 700, py: 1, px: 1 }} align="right">Balance Qty</TableCell>
+                          <TableCell sx={{ width: 100, fontWeight: 700, py: 1, px: 1 }} align="right">Weight (kg)</TableCell>
+                          <TableCell sx={{ width: 85, fontWeight: 700, py: 1, px: 1 }} align="right">Rate *</TableCell>
+                          <TableCell sx={{ width: 110, fontWeight: 700, py: 1, px: 1 }} align="right">Amount</TableCell>
+                          <TableCell sx={{ width: 45, py: 1, px: 1 }} align="center">Del</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -618,7 +634,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                   ))}
                               </Select>
                             </TableCell>
-                            <TableCell sx={{ py: 0.75, px: 1 }}>
+                            <TableCell sx={{ py: 0.75, px: 1, width: 110 }}>
                               <Select
                                 size="small"
                                 fullWidth
@@ -650,6 +666,17 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 size="small"
                                 type="number"
                                 fullWidth
+                                value={item.weight === undefined || item.weight === null ? "" : item.weight}
+                                onChange={(e) => handleLineChange(idx, "weight", e.target.value)}
+                                placeholder="kg"
+                                slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
+                              />
+                            </TableCell>
+                            <TableCell align="right" sx={{ py: 0.75, px: 1 }}>
+                              <TextField
+                                size="small"
+                                type="number"
+                                fullWidth
                                 value={item.rate}
                                 onChange={(e) => handleLineChange(idx, "rate", e.target.value)}
                                 slotProps={{ htmlInput: { style: { textAlign: "right" } } }}
@@ -667,7 +694,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                         ))}
                         {lineItems.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={8} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                            <TableCell colSpan={9} align="center" sx={{ py: 3, color: "text.secondary" }}>
                               No processes added. Please select Inward Vouchers or add a line manually.
                             </TableCell>
                           </TableRow>
@@ -680,7 +707,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                             <TableCell sx={{ fontWeight: 700 }} align="right">
                               {totalQuantity}
                             </TableCell>
-                            <TableCell colSpan={2}></TableCell>
+                            <TableCell colSpan={3}></TableCell>
                             <TableCell sx={{ fontWeight: 700 }} align="right">
                               ₹{formatAmount(totalAmount)}
                             </TableCell>
