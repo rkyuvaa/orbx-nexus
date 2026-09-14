@@ -112,29 +112,47 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await api.delete(`/ledgers/${id}`);
-      localStorage.removeItem(`ledger_photo_${id}`);
+      const targetRow = ledgers.find((l: any) => l.id === id);
+      const isCurrentlyInactive = statusFilter === "inactive" || (targetRow && targetRow.is_active === false);
+
+      if (isCurrentlyInactive) {
+        await api.delete(`/ledgers/${id}`);
+        localStorage.removeItem(`ledger_photo_${id}`);
+      } else {
+        await api.patch(`/ledgers/${id}/status`, { is_active: false });
+      }
     },
     onSuccess: () => {
-      qc.setQueryData(["ledgers", ledgerType, statusFilter], (old: any[]) => (old || []).filter((item) => item.id !== deleteId));
+      qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
       setDeleteId(null);
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to process delete request");
     },
   });
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (rows: any[]) => {
-      await Promise.all(
-        rows.map(async (r) => {
-          await api.delete(`/ledgers/${r.id}`);
-          localStorage.removeItem(`ledger_photo_${r.id}`);
-        })
-      );
+      if (statusFilter === "inactive") {
+        await Promise.all(
+          rows.map(async (r) => {
+            await api.delete(`/ledgers/${r.id}`);
+            localStorage.removeItem(`ledger_photo_${r.id}`);
+          })
+        );
+      } else {
+        await Promise.all(
+          rows.map(async (r) => {
+            await api.patch(`/ledgers/${r.id}/status`, { is_active: false });
+          })
+        );
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
     },
     onError: (err: any) => {
-      alert(err?.response?.data?.detail || "Failed to delete selected records");
+      alert(err?.response?.data?.detail || "Failed to process bulk delete");
     },
   });
 
@@ -563,11 +581,24 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       </Dialog>
 
       <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs">
-        <DialogTitle>Delete {displayName}?</DialogTitle>
-        <DialogContent><Alert severity="warning">This action cannot be undone.</Alert></DialogContent>
+        <DialogTitle>{statusFilter === "inactive" ? `Permanently Delete ${displayName}?` : `Mark ${displayName} as Inactive?`}</DialogTitle>
+        <DialogContent>
+          <Alert severity={statusFilter === "inactive" ? "error" : "warning"}>
+            {statusFilter === "inactive"
+              ? "This will permanently remove the record from the database."
+              : `This will move the ${displayName.toLowerCase()} to the Inactive tab.`}
+          </Alert>
+        </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button onClick={() => setDeleteId(null)} variant="outlined">Cancel</Button>
-          <Button color="error" variant="contained" onClick={() => deleteMutation.mutate(deleteId!)} disabled={deleteMutation.isPending}>Delete</Button>
+          <Button
+            color={statusFilter === "inactive" ? "error" : "warning"}
+            variant="contained"
+            onClick={() => deleteMutation.mutate(deleteId!)}
+            disabled={deleteMutation.isPending}
+          >
+            {statusFilter === "inactive" ? "Permanently Delete" : "Mark Inactive"}
+          </Button>
         </DialogActions>
       </Dialog>
 
