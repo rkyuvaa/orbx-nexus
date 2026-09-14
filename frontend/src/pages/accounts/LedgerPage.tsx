@@ -206,27 +206,10 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       }
     },
     { field: "ledger_code", headerName: "Code", width: 100 },
-    { field: "opening_balance", headerName: "Opening Bal.", width: 130, type: "numericColumn",
-      valueFormatter: (p) => `₹${formatAmount(p.value)}` },
-    { field: "balance_type", headerName: "Type", width: 80,
-      cellRenderer: (p: any) => <Chip label={p.value} size="small" color={p.value === "Dr" ? "info" : "warning"} sx={{ fontSize: "0.7rem" }} /> },
-    { field: "mobile", headerName: "Mobile", width: 130 },
-    {
-      field: "process_ids",
-      headerName: "Processes",
-      width: 180,
-      valueGetter: (p: any) => {
-        const raw = p.data?.process_ids || (p.data?.process_id ? String(p.data.process_id) : "");
-        if (!raw) return "-";
-        const ids = String(raw).split(",").map((x) => Number(x.trim())).filter(Boolean);
-        const names = ids.map((id) => processes.find((proc: any) => proc.id === id)?.name).filter(Boolean);
-        return names.length > 0 ? names.join(", ") : "-";
-      }
-    },
     {
       field: "is_active",
       headerName: "Status",
-      width: 130,
+      width: 120,
       cellRenderer: (p: any) => {
         const active = p.data?.is_active ?? true;
         return (
@@ -263,6 +246,23 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
             </Typography>
           </Box>
         );
+      }
+    },
+    { field: "opening_balance", headerName: "Opening Bal.", width: 130, type: "numericColumn",
+      valueFormatter: (p) => `₹${formatAmount(p.value)}` },
+    { field: "balance_type", headerName: "Type", width: 80,
+      cellRenderer: (p: any) => <Chip label={p.value} size="small" color={p.value === "Dr" ? "info" : "warning"} sx={{ fontSize: "0.7rem" }} /> },
+    { field: "mobile", headerName: "Mobile", width: 130 },
+    {
+      field: "process_ids",
+      headerName: "Processes",
+      width: 180,
+      valueGetter: (p: any) => {
+        const raw = p.data?.process_ids || (p.data?.process_id ? String(p.data.process_id) : "");
+        if (!raw) return "-";
+        const ids = String(raw).split(",").map((x) => Number(x.trim())).filter(Boolean);
+        const names = ids.map((id) => processes.find((proc: any) => proc.id === id)?.name).filter(Boolean);
+        return names.length > 0 ? names.join(", ") : "-";
       }
     },
     {
