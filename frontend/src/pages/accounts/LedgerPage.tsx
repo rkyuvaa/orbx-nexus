@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography, Divider, Autocomplete
+  TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography, Divider, Autocomplete,
+  ToggleButton, ToggleButtonGroup
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
 import Edit from "@mui/icons-material/Edit";
@@ -44,6 +45,7 @@ const schema = z.object({
   basic_salary: z.coerce.number().nullish(),
   hourly_rate: z.coerce.number().nullish(),
   join_date: z.string().nullish(),
+  is_active: z.boolean().default(true),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -65,10 +67,13 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active");
+
+  const queryParam = statusFilter === "active" ? "&is_active=true" : statusFilter === "inactive" ? "&is_active=false" : "";
 
   const { data: ledgers = [], isLoading, refetch } = useQuery({
-    queryKey: ["ledgers", ledgerType],
-    queryFn: async () => (await api.get(`/ledgers/?ledger_type=${ledgerType}&is_active=true`)).data,
+    queryKey: ["ledgers", ledgerType, statusFilter],
+    queryFn: async () => (await api.get(`/ledgers/?ledger_type=${ledgerType}${queryParam}`)).data,
   });
 
   const { data: processes = [] } = useQuery({
@@ -78,7 +83,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<any>({
     resolver: zodResolver(schema),
-    defaultValues: { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0 },
+    defaultValues: { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0, is_active: true },
   });
 
   const saveMutation = useMutation({
@@ -111,7 +116,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       localStorage.removeItem(`ledger_photo_${id}`);
     },
     onSuccess: () => {
-      qc.setQueryData(["ledgers", ledgerType], (old: any[]) => (old || []).filter((item) => item.id !== deleteId));
+      qc.setQueryData(["ledgers", ledgerType, statusFilter], (old: any[]) => (old || []).filter((item) => item.id !== deleteId));
       setDeleteId(null);
     },
   });
@@ -123,7 +128,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     } else {
       setPhoto(null);
     }
-    reset(row || { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0 });
+    reset(row ? { ...row, is_active: row.is_active ?? true } : { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0, is_active: true });
     setOpen(true);
   };
 
@@ -212,6 +217,22 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       }
     ] : []),
     {
+      field: "is_active",
+      headerName: "Status",
+      width: 100,
+      cellRenderer: (p: any) => {
+        const active = p.data?.is_active ?? true;
+        return (
+          <Chip
+            label={active ? "Active" : "Inactive"}
+            size="small"
+            color={active ? "success" : "default"}
+            sx={{ fontSize: "0.7rem", fontWeight: 600 }}
+          />
+        );
+      }
+    },
+    {
       headerName: "Actions", width: 100, sortable: false, filter: false,
       cellRenderer: (p: any) => (
         <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
@@ -229,6 +250,28 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <PageHeader title={title} subtitle={`Manage ${displayName.toLowerCase()} accounts`} breadcrumbs={breadcrumbs} />
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 0.5, py: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+          Status:
+        </Typography>
+        <ToggleButtonGroup
+          size="small"
+          value={statusFilter}
+          exclusive
+          onChange={(_, val) => { if (val) setStatusFilter(val); }}
+          sx={{ height: 32 }}
+        >
+          <ToggleButton value="active" sx={{ textTransform: "none", px: 2, py: 0.2, fontSize: "0.75rem", fontWeight: 600 }}>
+            Active
+          </ToggleButton>
+          <ToggleButton value="inactive" sx={{ textTransform: "none", px: 2, py: 0.2, fontSize: "0.75rem", fontWeight: 600 }}>
+            Inactive
+          </ToggleButton>
+          <ToggleButton value="all" sx={{ textTransform: "none", px: 2, py: 0.2, fontSize: "0.75rem", fontWeight: 600 }}>
+            All
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
       <OrbxGrid
         rowData={ledgers}
         columnDefs={colDefs}
@@ -427,6 +470,26 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
               <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_name")} label="Bank Name" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_account_no")} label="Account No." fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("bank_ifsc")} label="IFSC Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="is_active"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      select
+                      label="Status *"
+                      fullWidth
+                      value={field.value !== false ? "true" : "false"}
+                      onChange={(e) => field.onChange(e.target.value === "true")}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="true">Active</MenuItem>
+                      <MenuItem value="false">Inactive</MenuItem>
+                    </TextField>
+                  )}
+                />
+              </Grid>
               {isStaff && (
                 <>
                   <Grid size={{ xs: 12, sm: 4 }}>

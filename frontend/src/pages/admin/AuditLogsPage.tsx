@@ -5,6 +5,7 @@ import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore } from "../../store";
+import { formatDateTime } from "../../utils/format";
 
 export default function AuditLogsPage() {
   const { activeFY } = useAuthStore();
@@ -14,7 +15,7 @@ export default function AuditLogsPage() {
   });
 
   const colDefs: ColDef[] = [
-    { field: "created_at", headerName: "Timestamp", width: 180, valueFormatter: (p) => p.value ? new Date(p.value).toLocaleString() : "-" },
+    { field: "created_at", headerName: "Timestamp", width: 180, valueFormatter: (p) => formatDateTime(p.value) },
     { field: "username", headerName: "User", width: 140 },
     { field: "module", headerName: "Module", width: 150 },
     {

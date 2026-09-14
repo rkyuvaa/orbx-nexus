@@ -85,6 +85,7 @@ class LedgerCreate(BaseModel):
     photo: str | None = None
     process_id: int | None = None
     process_ids: str | None = None
+    is_active: bool = True
 
 
 class LedgerUpdate(LedgerCreate):

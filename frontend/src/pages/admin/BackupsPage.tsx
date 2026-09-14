@@ -15,6 +15,7 @@ import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { alpha } from "@mui/material/styles";
+import { formatDateTime } from "../../utils/format";
 
 const ACCENT = "#00a86b";
 
@@ -133,7 +134,7 @@ export default function BackupsPage() {
       field: "created_at",
       headerName: "Created At",
       width: 180,
-      valueFormatter: (p) => new Date(p.value).toLocaleString(),
+      valueFormatter: (p) => formatDateTime(p.value),
     },
     {
       field: "size_bytes",

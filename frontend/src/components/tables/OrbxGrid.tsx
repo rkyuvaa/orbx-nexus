@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Box, Card, TextField, InputAdornment, Button, IconButton, Tooltip, useTheme,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
-  TableSortLabel, Paper, LinearProgress, Typography, TableFooter
+  TableSortLabel, Paper, LinearProgress, Typography, TableFooter, Checkbox, Chip
 } from "@mui/material";
 import Search from "@mui/icons-material/Search";
 import Download from "@mui/icons-material/Download";
@@ -12,8 +12,11 @@ import FilterList from "@mui/icons-material/FilterList";
 import Print from "@mui/icons-material/Print";
 import Visibility from "@mui/icons-material/Visibility";
 import PictureAsPdf from "@mui/icons-material/PictureAsPdf";
+import SelectAll from "@mui/icons-material/SelectAll";
+import Deselect from "@mui/icons-material/Deselect";
 import { useUIStore } from "../../store";
 import { getPageSizeCSS } from "../../utils/printStyles";
+import { formatDate } from "../../utils/format";
 
 export interface ColDef<T = any> {
   field?: string;
@@ -43,6 +46,11 @@ export interface OrbxGridProps<T = any> {
   showSearch?: boolean;
   showExport?: boolean;
   summaryCards?: React.ReactNode;
+  enableSelection?: boolean;
+  selectedRows?: T[];
+  onSelectionChange?: (selectedRows: T[]) => void;
+  rowKey?: (row: T) => string | number;
+  bulkActions?: (selectedRows: T[], clearSelection: () => void) => React.ReactNode;
 }
 
 export default function OrbxGrid<T = any>({
@@ -57,6 +65,11 @@ export default function OrbxGrid<T = any>({
   showSearch = true,
   showExport = true,
   summaryCards,
+  enableSelection = true,
+  selectedRows,
+  onSelectionChange,
+  rowKey,
+  bulkActions,
 }: OrbxGridProps<T>) {
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(0);
@@ -68,10 +81,26 @@ export default function OrbxGrid<T = any>({
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState<Set<string | number>>(new Set());
 
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
   const { headerState } = useUIStore();
+
+  const getRowKey = (row: T): string | number => {
+    if (rowKey) return rowKey(row);
+    if ((row as any)?.id !== undefined && (row as any)?.id !== null) return (row as any).id;
+    if ((row as any)?.code) return (row as any).code;
+    return JSON.stringify(row);
+  };
+
+  useEffect(() => {
+    if (selectedRows) {
+      const set = new Set<string | number>();
+      selectedRows.forEach((r) => set.add(getRowKey(r)));
+      setSelectedKeys(set);
+    }
+  }, [selectedRows]);
 
   const dateFieldKey = useMemo(() => {
     if (rowData.length === 0) return null;
@@ -104,8 +133,16 @@ export default function OrbxGrid<T = any>({
     if (typeof rawVal === "boolean") {
       return rawVal ? "Yes" : "No";
     }
-    if (rawVal === null || rawVal === undefined) {
+    if (rawVal === null || rawVal === undefined || rawVal === "") {
       return "-";
+    }
+    if (
+      typeof rawVal === "string" &&
+      (col.field?.toLowerCase().includes("date") ||
+        col.headerName?.toLowerCase().includes("date") ||
+        /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/.test(rawVal))
+    ) {
+      return formatDate(rawVal);
     }
     return String(rawVal);
   };
@@ -191,6 +228,60 @@ export default function OrbxGrid<T = any>({
 
     return result;
   }, [rowData, searchText, orderBy, order, columnDefs, dateFieldKey, fromDate, toDate]);
+
+  const processedKeys = useMemo(() => processedRows.map(getRowKey), [processedRows]);
+
+  const allSelected = useMemo(() => {
+    if (processedKeys.length === 0) return false;
+    return processedKeys.every((k) => selectedKeys.has(k));
+  }, [processedKeys, selectedKeys]);
+
+  const someSelected = useMemo(() => {
+    if (allSelected) return false;
+    return processedKeys.some((k) => selectedKeys.has(k));
+  }, [processedKeys, selectedKeys, allSelected]);
+
+  const toggleSelectAll = () => {
+    const next = new Set(selectedKeys);
+    if (allSelected) {
+      processedKeys.forEach((k) => next.delete(k));
+    } else {
+      processedKeys.forEach((k) => next.add(k));
+    }
+    setSelectedKeys(next);
+    if (onSelectionChange) {
+      onSelectionChange(rowData.filter((r) => next.has(getRowKey(r))));
+    }
+  };
+
+  const handleSelectRow = (row: T, e?: React.ChangeEvent<HTMLInputElement> | React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const key = getRowKey(row);
+    const next = new Set(selectedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    setSelectedKeys(next);
+    if (onSelectionChange) {
+      onSelectionChange(rowData.filter((r) => next.has(getRowKey(r))));
+    }
+  };
+
+  const clearSelection = () => {
+    const next = new Set<string | number>();
+    setSelectedKeys(next);
+    if (onSelectionChange) onSelectionChange([]);
+  };
+
+  const selectAll = () => {
+    const next = new Set(processedKeys);
+    setSelectedKeys(next);
+    if (onSelectionChange) {
+      onSelectionChange(rowData.filter((r) => next.has(getRowKey(r))));
+    }
+  };
 
   // Paginated Rows
   const paginatedRows = useMemo(() => {
@@ -436,6 +527,57 @@ export default function OrbxGrid<T = any>({
               justifyContent: "flex-end",
             }}
           >
+            {enableSelection && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 1, flexWrap: "nowrap" }}>
+                <Tooltip title="Select all visible records">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<SelectAll sx={{ fontSize: 16 }} />}
+                    onClick={selectAll}
+                    sx={{
+                      borderRadius: "8px",
+                      textTransform: "none",
+                      fontSize: "0.75rem",
+                      py: 0.4,
+                      px: 1.2,
+                      borderColor: "divider",
+                    }}
+                  >
+                    Select All
+                  </Button>
+                </Tooltip>
+                {selectedKeys.size > 0 && (
+                  <>
+                    <Tooltip title="Deselect all records">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={<Deselect sx={{ fontSize: 16 }} />}
+                        onClick={clearSelection}
+                        sx={{
+                          borderRadius: "8px",
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          py: 0.4,
+                          px: 1.2,
+                        }}
+                      >
+                        Deselect All
+                      </Button>
+                    </Tooltip>
+                    <Chip
+                      label={`${selectedKeys.size} selected`}
+                      size="small"
+                      color="primary"
+                      sx={{ fontWeight: 600, fontSize: "0.75rem", borderRadius: "6px" }}
+                    />
+                    {bulkActions && bulkActions(rowData.filter((r) => selectedKeys.has(getRowKey(r))), clearSelection)}
+                  </>
+                )}
+              </Box>
+            )}
 
 
             <Tooltip title="Print Preview">
@@ -572,6 +714,29 @@ export default function OrbxGrid<T = any>({
                   },
                 }}
               >
+                {enableSelection && (
+                  <TableCell
+                    padding="checkbox"
+                    sx={{
+                      backgroundColor: isDark ? "#123524 !important" : "#E6EBE8 !important",
+                      borderColor: "divider",
+                      width: 48,
+                      textAlign: "center",
+                    }}
+                  >
+                    <Checkbox
+                      size="small"
+                      indeterminate={someSelected}
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      sx={{
+                        p: 0.5,
+                        color: isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)",
+                        "&.Mui-checked, &.MuiCheckbox-indeterminate": { color: "#16C47F" },
+                      }}
+                    />
+                  </TableCell>
+                )}
                 {columnDefs.map((col, idx) => {
                   const isSortable = col.sortable !== false && col.field;
                   const align = getColAlignment(col);
@@ -610,43 +775,68 @@ export default function OrbxGrid<T = any>({
             </TableHead>
             <TableBody>
               {paginatedRows.length > 0 ? (
-                paginatedRows.map((row, rIdx) => (
-                  <TableRow
-                    key={rIdx}
-                    hover
-                    onClick={() => onRowClicked?.(row)}
-                    sx={{
-                      cursor: onRowClicked ? "pointer" : "default",
-                      backgroundColor: rIdx % 2 === 0 ? "background.paper" : isDark ? "#112119" : "#F4F6F5",
-                      "&:hover": {
-                        backgroundColor: isDark ? "rgba(22, 196, 127, 0.08) !important" : "rgba(22, 196, 127, 0.04) !important",
-                      },
-                      "& td": {
-                        borderColor: "divider",
-                        py: 0.8,
-                        fontSize: "0.825rem",
-                        whiteSpace: "nowrap",
-                      },
-                    }}
-                  >
-                    {columnDefs.map((col, cIdx) => (
-                      <TableCell
-                        key={cIdx}
-                        align={getColAlignment(col)}
-                        style={{
-                           width: col.width,
-                           minWidth: col.minWidth || col.width || 80,
-                           maxWidth: col.maxWidth,
-                        }}
-                      >
-                        {renderCellContent(row, col)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                paginatedRows.map((row, rIdx) => {
+                  const key = getRowKey(row);
+                  const isSelected = selectedKeys.has(key);
+                  return (
+                    <TableRow
+                      key={rIdx}
+                      hover
+                      selected={isSelected}
+                      onClick={() => onRowClicked?.(row)}
+                      sx={{
+                        cursor: onRowClicked ? "pointer" : "default",
+                        backgroundColor: isSelected
+                          ? (isDark ? "rgba(22, 196, 127, 0.15) !important" : "rgba(22, 196, 127, 0.08) !important")
+                          : (rIdx % 2 === 0 ? "background.paper" : isDark ? "#112119" : "#F4F6F5"),
+                        "&:hover": {
+                          backgroundColor: isDark ? "rgba(22, 196, 127, 0.2) !important" : "rgba(22, 196, 127, 0.12) !important",
+                        },
+                        "& td": {
+                          borderColor: "divider",
+                          py: 0.8,
+                          fontSize: "0.825rem",
+                          whiteSpace: "nowrap",
+                        },
+                      }}
+                    >
+                      {enableSelection && (
+                        <TableCell
+                          padding="checkbox"
+                          onClick={(e) => e.stopPropagation()}
+                          sx={{ width: 48, textAlign: "center" }}
+                        >
+                          <Checkbox
+                            size="small"
+                            checked={isSelected}
+                            onChange={(e) => handleSelectRow(row, e)}
+                            sx={{
+                              p: 0.5,
+                              color: isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)",
+                              "&.Mui-checked": { color: "#16C47F" },
+                            }}
+                          />
+                        </TableCell>
+                      )}
+                      {columnDefs.map((col, cIdx) => (
+                        <TableCell
+                          key={cIdx}
+                          align={getColAlignment(col)}
+                          style={{
+                            width: col.width,
+                            minWidth: col.minWidth || col.width || 80,
+                            maxWidth: col.maxWidth,
+                          }}
+                        >
+                          {renderCellContent(row, col)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={columnDefs.length || 1} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={(columnDefs.length || 1) + (enableSelection ? 1 : 0)} align="center" sx={{ py: 6 }}>
                     <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
                       {loading ? "Loading data..." : "No Rows To Show"}
                     </Typography>
@@ -676,6 +866,16 @@ export default function OrbxGrid<T = any>({
                     },
                   }}
                 >
+                  {enableSelection && (
+                    <TableCell
+                      padding="checkbox"
+                      sx={{
+                        backgroundColor: isDark ? "#0f2b1d" : "#e1ebe6",
+                        borderColor: "divider",
+                        width: 48,
+                      }}
+                    />
+                  )}
                   {columnDefs.map((col, cIdx) => {
                     const isFirst = cIdx === 0;
                     const align = getColAlignment(col);

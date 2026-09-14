@@ -77,7 +77,14 @@ async def get_audit_logs(
         ),
         params
     )
-    return [dict(r) for r in result.mappings().all()]
+    rows = []
+    for r in result.mappings().all():
+        d = dict(r)
+        if d.get("created_at") and hasattr(d["created_at"], "isoformat"):
+            dt = d["created_at"]
+            d["created_at"] = dt.isoformat() + ("Z" if dt.tzinfo is None else "")
+        rows.append(d)
+    return rows
 
 
 @router.post("/log")
