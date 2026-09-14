@@ -20,15 +20,21 @@ import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { formatAmount } from "../../utils/format";
 
+const optionalNumber = z.preprocess((val) => {
+  if (val === "" || val === null || val === undefined) return null;
+  const num = Number(val);
+  return isNaN(num) ? null : num;
+}, z.number().nullish());
+
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
   ledger_code: z.string().nullish(),
-  ledger_type: z.string(),
-  opening_balance: z.coerce.number().default(0),
-  balance_type: z.string(),
+  ledger_type: z.string().nullish(),
+  opening_balance: optionalNumber,
+  balance_type: z.string().nullish(),
   phone: z.string().nullish(),
   mobile: z.string().nullish(),
-  process_id: z.coerce.number().nullish(),
+  process_id: optionalNumber,
   process_ids: z.any().nullish(),
   address: z.string().nullish(),
   city: z.string().nullish(),
@@ -41,9 +47,9 @@ const schema = z.object({
   bank_ifsc: z.string().nullish(),
   designation: z.string().nullish(),
   department: z.string().nullish(),
-  staff_category: z.string().default("Staff"),
-  basic_salary: z.coerce.number().nullish(),
-  hourly_rate: z.coerce.number().nullish(),
+  staff_category: z.string().nullish(),
+  basic_salary: optionalNumber,
+  hourly_rate: optionalNumber,
   join_date: z.string().nullish(),
   is_active: z.boolean().default(true),
 });
@@ -367,7 +373,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       />
 
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit, (errs) => console.error("Form validation errors:", errs))}>
           <DialogTitle>{editing ? `Edit ${displayName}` : `Add ${displayName}`}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
