@@ -88,11 +88,34 @@ class LedgerCreate(BaseModel):
     is_active: bool = True
 
 
-class LedgerUpdate(LedgerCreate):
+class LedgerUpdate(BaseModel):
     name: str | None = None
+    ledger_code: str | None = None
     group_id: int | None = None
-    is_active: bool | None = None
+    ledger_type: str | None = None
+    opening_balance: float | None = None
+    balance_type: str | None = None
+    phone: str | None = None
+    mobile: str | None = None
+    address: str | None = None
+    city: str | None = None
+    pincode: str | None = None
+    state: str | None = None
+    gstin: str | None = None
+    pan: str | None = None
+    bank_name: str | None = None
+    bank_account_no: str | None = None
+    bank_ifsc: str | None = None
+    designation: str | None = None
+    department: str | None = None
+    staff_category: str | None = None
+    basic_salary: float | None = None
+    hourly_rate: float | None = None
+    join_date: str | None = None
     photo: str | None = None
+    process_id: int | None = None
+    process_ids: str | None = None
+    is_active: bool | None = None
 
 
 from app.api.audit import log_audit_event
@@ -166,7 +189,10 @@ async def list_ledgers(
     if group_id:
         q = q.where(Ledger.group_id == group_id)
     if is_active is not None:
-        q = q.where(Ledger.is_active == is_active)
+        if is_active:
+            q = q.where((Ledger.is_active == True) | (Ledger.is_active.is_(None)))
+        else:
+            q = q.where(Ledger.is_active == False)
     if search:
         q = q.where(Ledger.name.ilike(f"%{search}%"))
     q = q.order_by(Ledger.name)
