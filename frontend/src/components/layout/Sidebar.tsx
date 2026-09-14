@@ -92,6 +92,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Advance Payment", path: "/contractor/advance-payment", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Advance Receipt", path: "/contractor/advance-receipt", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Job Work Payment", path: "/contractor/payment", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Contractor", path: "/payroll/contractors", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {
@@ -127,7 +128,6 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Attendance", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Staff Ledgers", path: "/accounts/staff", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Contractor", path: "/payroll/contractors", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Salary Voucher", path: "/payroll/salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
