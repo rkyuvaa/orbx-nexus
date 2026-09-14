@@ -211,6 +211,11 @@ async def get_ledger(ledger_id: int, current_user: CurrentUser, db: DBSession):
 
 @router.post("/", response_model=LedgerOut, status_code=201)
 async def create_ledger(body: LedgerCreate, current_user: CurrentUser, db: DBSession):
+    res = await db.execute(select(LedgerGroup.id).where(LedgerGroup.id == body.group_id))
+    if not res.scalar_one_or_none():
+        fallback_group = (await db.execute(select(LedgerGroup.id).order_by(LedgerGroup.id))).scalars().first()
+        if fallback_group:
+            body.group_id = fallback_group
     ledger = Ledger(**body.model_dump())
     db.add(ledger)
     await db.flush()
@@ -229,6 +234,10 @@ async def update_ledger(ledger_id: int, body: LedgerUpdate, current_user: Curren
     if not ledger:
         raise HTTPException(status_code=404, detail="Ledger not found")
     data = body.model_dump(exclude_unset=True)
+    if "group_id" in data and data["group_id"]:
+        res = await db.execute(select(LedgerGroup.id).where(LedgerGroup.id == data["group_id"]))
+        if not res.scalar_one_or_none():
+            data.pop("group_id")
     for k, v in data.items():
         setattr(ledger, k, v)
     await db.flush()

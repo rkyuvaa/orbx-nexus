@@ -81,6 +81,24 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     queryFn: async () => (await api.get("/products/processes/all")).data,
   });
 
+  const { data: groups = [] } = useQuery({
+    queryKey: ["ledger-groups"],
+    queryFn: async () => (await api.get("/ledgers/groups")).data,
+  });
+
+  const defaultGroupId = useMemo(() => {
+    if (!groups || groups.length === 0) return 1;
+    if (ledgerType === "Staff") {
+      const found = groups.find((g: any) => g.name.toLowerCase().includes("staff") || g.name.toLowerCase().includes("salary"));
+      return found ? found.id : groups[0].id;
+    }
+    if (ledgerType === "Contractor") {
+      const found = groups.find((g: any) => g.name.toLowerCase().includes("contractor") || g.name.toLowerCase().includes("payable"));
+      return found ? found.id : groups[0].id;
+    }
+    return groups[0].id;
+  }, [groups, ledgerType]);
+
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<any>({
     resolver: zodResolver(schema),
     defaultValues: { ledger_type: ledgerType, balance_type: "Dr", opening_balance: 0, staff_category: "Staff", hourly_rate: 0, is_active: true },
@@ -88,7 +106,15 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
-      const payload = { ...data, photo, ledger_type: ledgerType, group_id: 157 };
+      const payload = {
+        ...data,
+        photo,
+        ledger_type: ledgerType,
+        group_id: Number(data.group_id) || defaultGroupId,
+        opening_balance: data.opening_balance !== "" && data.opening_balance !== null && data.opening_balance !== undefined ? parseFloat(data.opening_balance) : 0,
+        basic_salary: data.basic_salary !== "" && data.basic_salary !== null && data.basic_salary !== undefined ? parseFloat(data.basic_salary) : null,
+        hourly_rate: data.hourly_rate !== "" && data.hourly_rate !== null && data.hourly_rate !== undefined ? parseFloat(data.hourly_rate) : 0,
+      };
       const res = editing ? await api.put(`/ledgers/${editing.id}`, payload) : await api.post("/ledgers/", payload);
       const savedLedger = res.data;
       if (photo) {
@@ -105,7 +131,8 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       }, 100);
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || err?.message || "Failed to save supplier";
+      const detail = err?.response?.data?.detail;
+      const msg = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d: any) => d.msg).join(", ") : err?.message || "Failed to save record";
       alert(msg);
     },
   });
