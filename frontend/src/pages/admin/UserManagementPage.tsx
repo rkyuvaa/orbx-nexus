@@ -67,7 +67,36 @@ export default function UserManagementPage() {
     { field: "full_name", headerName: "Full Name", flex: 1 },
     { field: "email", headerName: "Email", flex: 1 },
     { field: "role", headerName: "Role", width: 100, cellRenderer: (p: any) => <Chip label={p.value} size="small" color={p.value === "Admin" ? "warning" : "default"} sx={{ fontSize: "0.7rem" }} /> },
-    { field: "is_active", headerName: "Active", width: 90, cellRenderer: (p: any) => <Chip label={p.value ? "Active" : "Inactive"} size="small" color={p.value ? "success" : "error"} sx={{ fontSize: "0.7rem" }} /> },
+    {
+      field: "is_active",
+      headerName: "Status",
+      width: 130,
+      cellRenderer: (p: any) => {
+        const active = p.data?.is_active ?? true;
+        return (
+          <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", alignItems: "center", gap: 0.5, height: "100%" }}>
+            <Switch
+              size="small"
+              checked={active}
+              onChange={async (e) => {
+                e.stopPropagation();
+                const newStatus = e.target.checked;
+                try {
+                  await api.put(`/auth/users/${p.data.id}`, { is_active: newStatus });
+                  qc.invalidateQueries({ queryKey: ["users"] });
+                } catch (err: any) {
+                  alert(err?.response?.data?.detail || "Failed to update user status");
+                }
+              }}
+              color="success"
+            />
+            <Typography variant="caption" sx={{ fontWeight: 600, color: active ? "success.main" : "text.secondary", fontSize: "0.75rem" }}>
+              {active ? "Active" : "Inactive"}
+            </Typography>
+          </Box>
+        );
+      }
+    },
     { headerName: "Actions", width: 150, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => { setEditing(p.data); reset({ ...p.data, password: "" }); setOpen(true); }}><Edit fontSize="small" /></IconButton></Tooltip>

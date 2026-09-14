@@ -142,7 +142,7 @@ export default function OrbxGrid<T = any>({
       return col.valueFormatter({ value: rawVal, data: row });
     }
     if (typeof rawVal === "boolean") {
-      return rawVal ? "Yes" : "No";
+      return rawVal ? "Active" : "Inactive";
     }
     if (rawVal === null || rawVal === undefined || rawVal === "") {
       return "-";

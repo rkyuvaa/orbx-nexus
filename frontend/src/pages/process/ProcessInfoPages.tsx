@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Grid, IconButton, Tooltip, Chip, MenuItem, Switch, FormControlLabel,
-  Autocomplete
+  Autocomplete, Typography
 } from "@mui/material";
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
@@ -26,14 +26,12 @@ export function ProductRegisterPage() {
   const { register, handleSubmit, reset, control } = useForm({ defaultValues: { name: "", product_code: "", description: "", uom_id: "", weight: "" } });
 
   const saveMutation = useMutation({
-    mutationFn: (data: any) => {
-      const payload = {
-        ...data,
-        weight: data.weight !== "" && data.weight !== null && data.weight !== undefined ? parseFloat(data.weight) : 0.0,
-      };
+    mutationFn: (formData: any) => {
+      const payload = { ...formData, uom_id: Number(formData.uom_id) || 1, weight: parseFloat(formData.weight) || 0 };
       return editing ? api.put(`/products/${editing.id}`, payload) : api.post("/products/", payload);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["products"] }); setOpen(false); },
+    onError: (err: any) => alert(err?.response?.data?.detail || "Failed to save product"),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/products/${id}`),
@@ -51,7 +49,36 @@ export function ProductRegisterPage() {
     { field: "product_code", headerName: "Code", width: 100 },
     { field: "weight", headerName: "Weight (kg)", width: 140, type: "numericColumn", valueFormatter: (p: any) => (p.value && parseFloat(p.value) > 0 ? `${parseFloat(p.value)} kg` : "-") },
     { field: "description", headerName: "Description", flex: 1 },
-    { field: "is_active", headerName: "Active", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Yes" : "No"} color={p.value ? "success" : "default"} sx={{ fontSize: "0.7rem" }} /> },
+    {
+      field: "is_active",
+      headerName: "Status",
+      width: 130,
+      cellRenderer: (p: any) => {
+        const active = p.data?.is_active ?? true;
+        return (
+          <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", alignItems: "center", gap: 0.5, height: "100%" }}>
+            <Switch
+              size="small"
+              checked={active}
+              onChange={async (e) => {
+                e.stopPropagation();
+                const newStatus = e.target.checked;
+                try {
+                  await api.put(`/products/${p.data.id}`, { ...p.data, is_active: newStatus });
+                  qc.invalidateQueries({ queryKey: ["products"] });
+                } catch (err: any) {
+                  alert(err?.response?.data?.detail || "Failed to update product status");
+                }
+              }}
+              color="success"
+            />
+            <Typography variant="caption" sx={{ fontWeight: 600, color: active ? "success.main" : "text.secondary", fontSize: "0.75rem" }}>
+              {active ? "Active" : "Inactive"}
+            </Typography>
+          </Box>
+        );
+      }
+    },
     { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
@@ -176,7 +203,36 @@ export function ProcessRegisterPage() {
     { field: "name", headerName: "Process Name", flex: 2 },
     { field: "company_rate", headerName: "Company Rate", width: 140, type: "numericColumn", valueFormatter: (p: any) => p.value !== undefined ? `₹${parseFloat(p.value).toFixed(2)}` : "-" },
     { field: "contractor_rate", headerName: "Contractor Rate", width: 140, type: "numericColumn", valueFormatter: (p: any) => p.value !== undefined ? `₹${parseFloat(p.value).toFixed(2)}` : "-" },
-    { field: "is_active", headerName: "Status", width: 110, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Active" : "Inactive"} color={p.value ? "success" : "default"} sx={{ fontSize: "0.75rem", fontWeight: 600 }} /> },
+    {
+      field: "is_active",
+      headerName: "Status",
+      width: 130,
+      cellRenderer: (p: any) => {
+        const active = p.data?.is_active ?? true;
+        return (
+          <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", alignItems: "center", gap: 0.5, height: "100%" }}>
+            <Switch
+              size="small"
+              checked={active}
+              onChange={async (e) => {
+                e.stopPropagation();
+                const newStatus = e.target.checked;
+                try {
+                  await api.put(`/products/processes/${p.data.id}`, { is_active: newStatus });
+                  qc.invalidateQueries({ queryKey: ["processes"] });
+                } catch (err: any) {
+                  alert(err?.response?.data?.detail || "Failed to update process status");
+                }
+              }}
+              color="success"
+            />
+            <Typography variant="caption" sx={{ fontWeight: 600, color: active ? "success.main" : "text.secondary", fontSize: "0.75rem" }}>
+              {active ? "Active" : "Inactive"}
+            </Typography>
+          </Box>
+        );
+      }
+    },
     { field: "gst_percent", headerName: "GST %", width: 90, type: "numericColumn", valueFormatter: (p: any) => `${p.value || 0}%` },
     { field: "sequence", headerName: "Seq.", width: 70, type: "numericColumn" },
     { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
@@ -583,7 +639,36 @@ export function ProcessGroupsPage() {
     },
     { field: "company_rate", headerName: "Company Rate", width: 130, type: "numericColumn", valueFormatter: (p: any) => p.value !== undefined ? `₹${parseFloat(p.value).toFixed(2)}` : "-" },
     { field: "contractor_rate", headerName: "Contractor Rate", width: 130, type: "numericColumn", valueFormatter: (p: any) => p.value !== undefined ? `₹${parseFloat(p.value).toFixed(2)}` : "-" },
-    { field: "is_active", headerName: "Status", width: 110, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Active" : "Inactive"} color={p.value ? "success" : "default"} sx={{ fontSize: "0.75rem", fontWeight: 600 }} /> },
+    {
+      field: "is_active",
+      headerName: "Status",
+      width: 130,
+      cellRenderer: (p: any) => {
+        const active = p.data?.is_active ?? true;
+        return (
+          <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", alignItems: "center", gap: 0.5, height: "100%" }}>
+            <Switch
+              size="small"
+              checked={active}
+              onChange={async (e) => {
+                e.stopPropagation();
+                const newStatus = e.target.checked;
+                try {
+                  await api.put(`/products/processes/${p.data.id}`, { is_active: newStatus });
+                  qc.invalidateQueries({ queryKey: ["processes"] });
+                } catch (err: any) {
+                  alert(err?.response?.data?.detail || "Failed to update process group status");
+                }
+              }}
+              color="success"
+            />
+            <Typography variant="caption" sx={{ fontWeight: 600, color: active ? "success.main" : "text.secondary", fontSize: "0.75rem" }}>
+              {active ? "Active" : "Inactive"}
+            </Typography>
+          </Box>
+        );
+      }
+    },
     { headerName: "Actions", width: 100, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
