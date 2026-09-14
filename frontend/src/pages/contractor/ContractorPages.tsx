@@ -223,12 +223,14 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     const oids = overrideOids !== undefined ? overrideOids : selectedOutwardIds;
     return items.map((item, idx) => {
       if (!item.process_id && !item.product_id) return item;
-      const proc = processes.find((p: any) => p.id === Number(item.process_id));
+      const proc = processes.find((p: any) => Number(p.id) === Number(item.process_id));
       const rate = item.rate !== undefined && item.rate !== "" ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
 
-      const prod = products.find((p: any) => p.id === Number(item.product_id));
-      const defaultWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
-      const weight = item.weight !== undefined && item.weight !== "" ? item.weight : (defaultWeight > 0 ? defaultWeight : "");
+      const prod = products.find((p: any) => Number(p.id) === Number(item.product_id));
+      const masterWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
+      const weight = (item.weight !== undefined && item.weight !== "" && Number(item.weight) > 0)
+        ? item.weight
+        : (masterWeight > 0 ? masterWeight : "");
       const weightNum = Number(weight) || 0;
       const weightFactor = weightNum > 0 ? weightNum : 1;
 
@@ -327,13 +329,13 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     const updated = [...lineItems];
     updated[index][field] = val;
     if (field === "product_id") {
-      const prod = products.find((p: any) => p.id === Number(val));
+      const prod = products.find((p: any) => Number(p.id) === Number(val));
       if (prod?.weight && parseFloat(prod.weight) > 0) {
         updated[index].weight = parseFloat(prod.weight);
       }
     }
     if (field === "product_id" || field === "process_id") {
-      const proc = processes.find((p: any) => p.id === Number(updated[index].process_id));
+      const proc = processes.find((p: any) => Number(p.id) === Number(updated[index].process_id));
       if (proc) {
         updated[index].rate = proc.contractor_rate || 0;
       }
@@ -436,14 +438,29 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         }
       }
       if (parsedItems && parsedItems.length > 0) {
-        setLineItems(parsedItems.map(it => ({
-          ...it,
-          product_id: it.product_id || row.product_id || "",
-          balance_qty: getRawBalanceQtyForProcess(it.process_id, it.product_id || row.product_id) + (Number(it.quantity) || 0)
+        setLineItems(recomputeLineItems(parsedItems.map(it => {
+          const prod = products.find((p: any) => Number(p.id) === Number(it.product_id || row.product_id));
+          const masterWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
+          return {
+            ...it,
+            product_id: it.product_id || row.product_id || "",
+            weight: it.weight && parseFloat(it.weight) > 0 ? parseFloat(it.weight) : (masterWeight > 0 ? masterWeight : ""),
+            balance_qty: getRawBalanceQtyForProcess(it.process_id, it.product_id || row.product_id) + (Number(it.quantity) || 0)
+          };
         })));
       } else {
         const bal = getRawBalanceQtyForProcess(row.process_id, row.product_id) + (Number(row.quantity) || 0);
-        setLineItems([{ product_id: row.product_id || "", process_id: row.process_id || "", quantity: row.quantity || 0, balance_qty: bal, rate: row.rate || 0, amount: row.amount || 0 }]);
+        const prod = products.find((p: any) => Number(p.id) === Number(row.product_id));
+        const masterWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
+        setLineItems(recomputeLineItems([{
+          product_id: row.product_id || "",
+          process_id: row.process_id || "",
+          quantity: row.quantity || 0,
+          weight: row.weight && parseFloat(row.weight) > 0 ? parseFloat(row.weight) : (masterWeight > 0 ? masterWeight : ""),
+          balance_qty: bal,
+          rate: row.rate || 0,
+          amount: row.amount || 0
+        }]));
       }
     } else {
       setEditing(null);
