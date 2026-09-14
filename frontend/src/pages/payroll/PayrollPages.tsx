@@ -225,6 +225,18 @@ export function SalaryVoucherPage() {
     onError: () => alert("Failed to delete salary voucher."),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (rows: any[]) => {
+      await Promise.all(rows.map((r) => api.delete(`/payroll/salary/${r.id}`)));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["salary-vouchers"] });
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to delete selected salary vouchers");
+    },
+  });
+
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 140, cellRenderer: (p) => <span style={{ fontWeight: 700 }}>{p.value}</span> },
     { field: "voucher_date", headerName: "Date", width: 110 },
@@ -264,6 +276,9 @@ export function SalaryVoucherPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await bulkDeleteMutation.mutateAsync(rows);
+        }}
         onAdd={async () => {
           let nextNo = "";
           try {

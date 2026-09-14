@@ -49,6 +49,16 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (rows: any[]) => {
+      await Promise.all(rows.map((r) => api.delete(`/vouchers/${r.id}?fy=${activeFY}`)));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["vouchers"] }),
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to delete selected vouchers");
+    },
+  });
+
   const handlePrintSingleVoucher = async (row: any) => {
     let voucherData = row;
     if (!voucherData.lines || voucherData.lines.length === 0) {
@@ -313,6 +323,9 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
         onRefresh={refetch}
         onAdd={handleOpenNewVoucher}
         addLabel={voucherType === "Misc. Expenses" ? "New Expense Entry" : `New ${voucherType}`}
+        onBulkDelete={async (rows) => {
+          await bulkDeleteMutation.mutateAsync(rows);
+        }}
       />
       <AccountsVoucherDialog
         open={open}
