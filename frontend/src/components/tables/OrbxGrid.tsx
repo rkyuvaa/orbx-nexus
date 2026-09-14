@@ -2,7 +2,8 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Box, Card, TextField, InputAdornment, Button, IconButton, Tooltip, useTheme,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
-  TableSortLabel, Paper, LinearProgress, Typography, TableFooter, Checkbox, Chip
+  TableSortLabel, Paper, LinearProgress, Typography, TableFooter, Checkbox, Chip,
+  Dialog, DialogTitle, DialogContent, DialogActions, Alert
 } from "@mui/material";
 import Search from "@mui/icons-material/Search";
 import Download from "@mui/icons-material/Download";
@@ -14,6 +15,9 @@ import Visibility from "@mui/icons-material/Visibility";
 import PictureAsPdf from "@mui/icons-material/PictureAsPdf";
 import SelectAll from "@mui/icons-material/SelectAll";
 import Deselect from "@mui/icons-material/Deselect";
+import Block from "@mui/icons-material/Block";
+import CheckCircle from "@mui/icons-material/CheckCircle";
+import Delete from "@mui/icons-material/Delete";
 import { useUIStore } from "../../store";
 import { getPageSizeCSS } from "../../utils/printStyles";
 import { formatDate } from "../../utils/format";
@@ -51,6 +55,8 @@ export interface OrbxGridProps<T = any> {
   onSelectionChange?: (selectedRows: T[]) => void;
   rowKey?: (row: T) => string | number;
   bulkActions?: (selectedRows: T[], clearSelection: () => void) => React.ReactNode;
+  onBulkDelete?: (selectedRows: T[]) => void | Promise<void>;
+  onBulkStatusChange?: (selectedRows: T[], is_active: boolean) => void | Promise<void>;
 }
 
 export default function OrbxGrid<T = any>({
@@ -70,6 +76,8 @@ export default function OrbxGrid<T = any>({
   onSelectionChange,
   rowKey,
   bulkActions,
+  onBulkDelete,
+  onBulkStatusChange,
 }: OrbxGridProps<T>) {
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(0);
@@ -82,6 +90,9 @@ export default function OrbxGrid<T = any>({
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<Set<string | number>>(new Set());
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmStatusTarget, setConfirmStatusTarget] = useState<boolean | null>(null);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -573,6 +584,48 @@ export default function OrbxGrid<T = any>({
                       color="primary"
                       sx={{ fontWeight: 600, fontSize: "0.75rem", borderRadius: "6px" }}
                     />
+                    {onBulkStatusChange && (
+                      <>
+                        <Tooltip title="Mark selected records as Inactive">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            startIcon={<Block sx={{ fontSize: 16 }} />}
+                            onClick={() => setConfirmStatusTarget(false)}
+                            sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
+                          >
+                            Mark Inactive
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="Mark selected records as Active">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            startIcon={<CheckCircle sx={{ fontSize: 16 }} />}
+                            onClick={() => setConfirmStatusTarget(true)}
+                            sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
+                          >
+                            Mark Active
+                          </Button>
+                        </Tooltip>
+                      </>
+                    )}
+                    {onBulkDelete && (
+                      <Tooltip title="Delete selected records">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="error"
+                          startIcon={<Delete sx={{ fontSize: 16 }} />}
+                          onClick={() => setConfirmDeleteOpen(true)}
+                          sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
+                        >
+                          Delete Selected ({selectedKeys.size})
+                        </Button>
+                      </Tooltip>
+                    )}
                     {bulkActions && bulkActions(rowData.filter((r) => selectedKeys.has(getRowKey(r))), clearSelection)}
                   </>
                 )}
@@ -943,6 +996,83 @@ export default function OrbxGrid<T = any>({
           }}
         />
       </Card>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Delete Selected Records?</DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mb: 1 }}>
+            Are you sure you want to delete <strong>{selectedKeys.size}</strong> selected record(s)?
+            <br />
+            This action cannot be undone.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setConfirmDeleteOpen(false)} variant="outlined" disabled={bulkProcessing}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={bulkProcessing}
+            onClick={async () => {
+              if (!onBulkDelete) return;
+              setBulkProcessing(true);
+              try {
+                const rows = rowData.filter((r) => selectedKeys.has(getRowKey(r)));
+                await onBulkDelete(rows);
+                clearSelection();
+              } catch (e: any) {
+                alert(e?.message || "Failed to delete selected records");
+              } finally {
+                setBulkProcessing(false);
+                setConfirmDeleteOpen(false);
+              }
+            }}
+          >
+            {bulkProcessing ? "Deleting..." : `Delete ${selectedKeys.size} Records`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Status Change Dialog */}
+      <Dialog open={confirmStatusTarget !== null} onClose={() => setConfirmStatusTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          {confirmStatusTarget === false ? "Mark Selected as Inactive?" : "Mark Selected as Active?"}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity={confirmStatusTarget === false ? "warning" : "info"} sx={{ mb: 1 }}>
+            Are you sure you want to set <strong>{selectedKeys.size}</strong> selected record(s) to{" "}
+            <strong>{confirmStatusTarget === false ? "Inactive" : "Active"}</strong>?
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setConfirmStatusTarget(null)} variant="outlined" disabled={bulkProcessing}>
+            Cancel
+          </Button>
+          <Button
+            color={confirmStatusTarget === false ? "warning" : "success"}
+            variant="contained"
+            disabled={bulkProcessing}
+            onClick={async () => {
+              if (onBulkStatusChange === undefined || confirmStatusTarget === null) return;
+              setBulkProcessing(true);
+              try {
+                const rows = rowData.filter((r) => selectedKeys.has(getRowKey(r)));
+                await onBulkStatusChange(rows, confirmStatusTarget);
+                clearSelection();
+              } catch (e: any) {
+                alert(e?.message || "Failed to update status of selected records");
+              } finally {
+                setBulkProcessing(false);
+                setConfirmStatusTarget(null);
+              }
+            }}
+          >
+            {bulkProcessing ? "Updating..." : confirmStatusTarget === false ? "Set Inactive" : "Set Active"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -121,6 +121,35 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (rows: any[]) => {
+      await Promise.all(
+        rows.map(async (r) => {
+          await api.delete(`/ledgers/${r.id}`);
+          localStorage.removeItem(`ledger_photo_${r.id}`);
+        })
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to delete selected records");
+    },
+  });
+
+  const bulkStatusMutation = useMutation({
+    mutationFn: async ({ rows, is_active }: { rows: any[]; is_active: boolean }) => {
+      await Promise.all(rows.map((r) => api.put(`/ledgers/${r.id}`, { is_active })));
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to update status of selected records");
+    },
+  });
+
   const handleOpen = (row?: any) => {
     setEditing(row || null);
     if (row?.id) {
@@ -280,6 +309,12 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
         onRefresh={refetch}
         onAdd={() => handleOpen()}
         addLabel={`Add ${displayName}`}
+        onBulkDelete={async (rows) => {
+          await bulkDeleteMutation.mutateAsync(rows);
+        }}
+        onBulkStatusChange={async (rows, is_active) => {
+          await bulkStatusMutation.mutateAsync({ rows, is_active });
+        }}
       />
 
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
