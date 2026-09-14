@@ -344,32 +344,6 @@ export default function ContractorBalancePage() {
       minWidth: 200,
     },
     {
-      field: "opening_balance",
-      headerName: "Opening Balance",
-      width: 160,
-      type: "numericColumn",
-      cellRenderer: (p: any) => {
-        const val: number = p.value ?? 0;
-        const bt: string = p.data?.balance_type ?? "Cr";
-        return (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, justifyContent: "flex-end", height: "100%" }}>
-            <span>₹{formatAmount(Math.abs(val))}</span>
-            <Chip
-              label={bt}
-              size="small"
-              sx={{
-                height: 18,
-                fontSize: 10,
-                fontWeight: 700,
-                bgcolor: bt === "Cr" ? "rgba(22,196,127,0.15)" : "rgba(220,53,69,0.12)",
-                color: bt === "Cr" ? "#0a7a50" : "#b02a37",
-              }}
-            />
-          </Box>
-        );
-      },
-    },
-    {
       field: "advance_paid",
       headerName: "Advance Paid",
       width: 140,
