@@ -170,6 +170,7 @@ async def contractor_balance_summary(
             + COALESCE(ap.advance_received,0)
         )                               AS current_balance
     FROM master.ledgers l
+    LEFT JOIN master.ledger_groups lg ON lg.id = l.group_id
     LEFT JOIN LATERAL (
         SELECT
             SUM(CASE WHEN entry_type = 'Register' THEN amount ELSE 0 END) AS job_work_amount,
@@ -184,7 +185,7 @@ async def contractor_balance_summary(
         FROM {schema}.advance_payments
         WHERE ledger_id = l.id AND ledger_type = 'Contractor'
     ) ap ON TRUE
-    WHERE l.ledger_type = 'Contractor' AND l.is_active = TRUE
+    WHERE (l.ledger_type = 'Contractor' OR lg.name LIKE '%Contractor%') AND l.is_active = TRUE
     ORDER BY l.name
     """
     result = await db.execute(text(query))

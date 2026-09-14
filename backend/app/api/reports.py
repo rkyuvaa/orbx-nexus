@@ -1063,7 +1063,7 @@ async def staff_salary_account(
     ledger_id: Optional[int] = Query(None), month: Optional[int] = Query(None), year: Optional[int] = Query(None)
 ):
     schema = s(fy)
-    conds = ["l.ledger_type = 'Staff'"]
+    conds = ["(l.ledger_type = 'Staff' OR lg.name LIKE '%Staff%' OR lg.name LIKE '%Salary%')"]
     params: dict = {}
     if ledger_id:
         conds.append("sv.ledger_id = :lid")
@@ -1079,6 +1079,7 @@ async def staff_salary_account(
             f"SELECT sv.*, l.name AS ledger_name "
             f"FROM {schema}.salary_vouchers sv "
             f"JOIN master.ledgers l ON l.id = sv.ledger_id "
+            f"LEFT JOIN master.ledger_groups lg ON lg.id = l.group_id "
             f"WHERE {' AND '.join(conds)} ORDER BY sv.voucher_date DESC"
         ),
         params

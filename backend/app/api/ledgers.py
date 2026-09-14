@@ -185,7 +185,21 @@ async def list_ledgers(
 ):
     q = select(Ledger)
     if ledger_type:
-        q = q.where(Ledger.ledger_type == ledger_type)
+        if ledger_type == "Staff":
+            q = q.join(LedgerGroup, Ledger.group_id == LedgerGroup.id, isouter=True)
+            q = q.where(
+                (Ledger.ledger_type == "Staff")
+                | (LedgerGroup.name.ilike("%Staff%"))
+                | (LedgerGroup.name.ilike("%Salary%"))
+            )
+        elif ledger_type == "Contractor":
+            q = q.join(LedgerGroup, Ledger.group_id == LedgerGroup.id, isouter=True)
+            q = q.where(
+                (Ledger.ledger_type == "Contractor")
+                | (LedgerGroup.name.ilike("%Contractor%"))
+            )
+        else:
+            q = q.where(Ledger.ledger_type == ledger_type)
     if group_id:
         q = q.where(Ledger.group_id == group_id)
     if is_active is not None:
