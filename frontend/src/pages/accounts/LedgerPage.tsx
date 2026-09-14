@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, MenuItem, Grid, IconButton, Chip, Tooltip, Alert, Typography, Divider, Autocomplete,
-  ToggleButton, ToggleButtonGroup
+  ToggleButton, ToggleButtonGroup, Switch
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
 import Edit from "@mui/icons-material/Edit";
@@ -223,41 +223,43 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
         return names.length > 0 ? names.join(", ") : "-";
       }
     },
-    ...(ledgerType === "Staff" ? [
-      {
-        field: "staff_category",
-        headerName: "Category",
-        width: 110,
-        cellRenderer: (p: any) => {
-          const cat = p.value || "Staff";
-          return <Chip label={cat} size="small" color={cat === "Labour" ? "warning" : "info"} sx={{ fontSize: "0.7rem", fontWeight: 600 }} />;
-        }
-      },
-      {
-        field: "basic_salary",
-        headerName: "Pay Rate",
-        width: 140,
-        valueGetter: (p: any) => {
-          if (p.data?.staff_category === "Labour") {
-            return p.data?.hourly_rate ? `₹${formatAmount(p.data.hourly_rate)} / hr` : "-";
-          }
-          return p.data?.basic_salary ? `₹${formatAmount(p.data.basic_salary)} / mo` : "-";
-        }
-      }
-    ] : []),
     {
       field: "is_active",
       headerName: "Status",
-      width: 100,
+      width: 130,
       cellRenderer: (p: any) => {
         const active = p.data?.is_active ?? true;
         return (
-          <Chip
-            label={active ? "Active" : "Inactive"}
-            size="small"
-            color={active ? "success" : "default"}
-            sx={{ fontSize: "0.7rem", fontWeight: 600 }}
-          />
+          <Box
+            onClick={(e) => e.stopPropagation()}
+            sx={{ display: "flex", alignItems: "center", gap: 0.5, height: "100%" }}
+          >
+            <Switch
+              size="small"
+              checked={active}
+              onChange={async (e) => {
+                e.stopPropagation();
+                const newStatus = e.target.checked;
+                try {
+                  await api.put(`/ledgers/${p.data.id}`, { is_active: newStatus });
+                  qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+                } catch (err: any) {
+                  alert(err?.response?.data?.detail || "Failed to update status");
+                }
+              }}
+              color="success"
+            />
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 600,
+                color: active ? "success.main" : "text.secondary",
+                fontSize: "0.75rem",
+              }}
+            >
+              {active ? "Active" : "Inactive"}
+            </Typography>
+          </Box>
         );
       }
     },
