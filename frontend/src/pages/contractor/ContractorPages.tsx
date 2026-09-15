@@ -32,6 +32,38 @@ const getChildProcessIds = (proc: any, processes: any[]): number[] => {
   return ids;
 };
 
+// Helper to parse items array (JSON string or array) from an inward voucher record
+const getVoucherItems = (v: any): any[] => {
+  if (!v) return [];
+  let items: any[] = [];
+  if (Array.isArray(v.items)) {
+    items = v.items;
+  } else if (typeof v.items === "string" && v.items.trim() !== "") {
+    try {
+      items = JSON.parse(v.items);
+    } catch (e) {}
+  }
+  if (Array.isArray(items) && items.length > 0) {
+    return items.map((it) => ({
+      product_id: it.product_id || it.stock_item_id || v.product_id,
+      quantity: Number(it.quantity ?? it.qty ?? 0),
+      weight: Number(it.weight ?? it.total_weight ?? 0),
+      process_id: it.process_id || v.process_id,
+    }));
+  }
+  if (v.product_id || v.stock_item_id) {
+    return [
+      {
+        product_id: v.product_id || v.stock_item_id,
+        quantity: Number(v.quantity ?? 0),
+        weight: Number(v.total_weight ?? v.weight ?? 0),
+        process_id: v.process_id,
+      },
+    ];
+  }
+  return [];
+};
+
 // True when an outward voucher item's process (possibly a group) covers the given (child) process
 const dispatchCoversProcess = (itemProcId: any, targetProcId: any, processes: any[]) => {
   if (itemProcId === null || itemProcId === undefined || itemProcId === "") return false;
@@ -134,13 +166,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     selectedOutwardIds.forEach((id: number) => {
       const v = outwardVouchers.find((inv: any) => inv.id === id);
       if (v) {
-        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
-          v.items.forEach((item: any) => {
-            if (item.product_id) resolvedIds.add(Number(item.product_id));
-          });
-        } else if (v.product_id) {
-          resolvedIds.add(Number(v.product_id));
-        }
+        const vItems = getVoucherItems(v);
+        vItems.forEach((item: any) => {
+          if (item.product_id) resolvedIds.add(Number(item.product_id));
+        });
       }
     });
     
@@ -157,16 +186,13 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     oids.forEach((id: number) => {
       const v = outwardVouchers.find((inv: any) => inv.id === id);
       if (v) {
-        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
-          v.items.forEach((item: any) => {
-            const matchProd = !productId || !item.product_id || Number(item.product_id) === Number(productId);
-            if (matchProd) {
-              totalDispatched += Number(item.quantity) || 0;
-            }
-          });
-        } else if (!v.product_id || !productId || Number(v.product_id) === Number(productId)) {
-          totalDispatched += Number(v.quantity) || Number(v.total_weight) || 0;
-        }
+        const vItems = getVoucherItems(v);
+        vItems.forEach((item: any) => {
+          const matchProd = !productId || Number(item.product_id) === Number(productId);
+          if (matchProd) {
+            totalDispatched += Number(item.quantity) || 0;
+          }
+        });
       }
     });
 
@@ -180,9 +206,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
             entryItems = typeof entry.items === "string" ? JSON.parse(entry.items) : entry.items;
           } catch (e) {}
         }
-        if (entryItems && entryItems.length > 0) {
+        if (Array.isArray(entryItems) && entryItems.length > 0) {
           entryItems.forEach((it: any) => {
-            const matchProd = !productId || !it.product_id || Number(it.product_id) === Number(productId);
+            const matchProd = !productId || Number(it.product_id) === Number(productId);
             if (matchProd) {
               const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
               const intersects = entryOids.some((id: number) => oids.includes(id));
@@ -191,7 +217,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               }
             }
           });
-        } else if (!productId || !entry.product_id || Number(entry.product_id) === Number(productId)) {
+        } else if (!productId || Number(entry.product_id) === Number(productId)) {
           const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
           const intersects = entryOids.some((id: number) => oids.includes(id));
           if (intersects) {
@@ -238,7 +264,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
 
       const otherRowsUsed = items.reduce((sum, other, oi) => {
         if (oi !== idx) {
-          const matchProd = !item.product_id || !other.product_id || Number(other.product_id) === Number(item.product_id);
+          const matchProd = item.product_id && other.product_id && Number(other.product_id) === Number(item.product_id);
           if (matchProd) {
             return sum + (Number(other.quantity) || 0);
           }
@@ -254,6 +280,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         if (numQty > remainingBal) {
           qty = remainingBal;
         }
+      } else if (oids.length > 0 && (qty === "" || qty === 0 || qty === undefined || qty === null)) {
+        qty = remainingBal;
       }
       const numQty = Number(qty) || 0;
       const numRate = Number(rate) || 0;
@@ -278,19 +306,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     selectedOutwardIds.forEach((id: number) => {
       const v = outwardVouchers.find((inv: any) => inv.id === id);
       if (v) {
-        if (v.items && Array.isArray(v.items) && v.items.length > 0) {
-          v.items.forEach((item: any) => {
-            const procId = Number(item.process_id);
-            const proc = processes.find((p: any) => p.id === procId);
-            const childIds = proc ? getChildProcessIds(proc, processes) : [];
-            if (childIds.length > 0) {
-              childIds.forEach((cid: number) => resolvedIds.add(cid));
-            } else if (proc) {
-              resolvedIds.add(proc.id);
-            }
-          });
-        } else if (v.process_id) {
-          const procId = Number(v.process_id);
+        const vItems = getVoucherItems(v);
+        vItems.forEach((item: any) => {
+          const procId = Number(item.process_id);
           const proc = processes.find((p: any) => p.id === procId);
           const childIds = proc ? getChildProcessIds(proc, processes) : [];
           if (childIds.length > 0) {
@@ -298,7 +316,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
           } else if (proc) {
             resolvedIds.add(proc.id);
           }
-        }
+        });
       }
     });
     
@@ -324,6 +342,78 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     }
     return selectedOutwardIds.length > 0 && outwardProcesses.length > 0 ? outwardProcesses : processes;
   }, [selectedOutwardIds, outwardProcesses, processes, contractorProcessIds]);
+
+  const buildLineItemsFromOutwardIds = (oids: number[], currentItems: any[] = []) => {
+    if (oids.length === 0) return currentItems;
+
+    const voucherItemsMap: Record<number, any> = {};
+
+    oids.forEach((id: number) => {
+      const v = outwardVouchers.find((inv: any) => inv.id === id);
+      if (v) {
+        const vItems = getVoucherItems(v);
+        vItems.forEach((it: any) => {
+          const pid = Number(it.product_id);
+          if (pid) {
+            if (!voucherItemsMap[pid]) {
+              voucherItemsMap[pid] = {
+                product_id: pid,
+                process_id: it.process_id || "",
+                weight: it.weight || "",
+              };
+            }
+          }
+        });
+      }
+    });
+
+    const productIds = Object.keys(voucherItemsMap).map(Number);
+    if (productIds.length === 0) return currentItems;
+
+    const nextItems: any[] = [];
+
+    // Keep user edited items if product is in selected inward vouchers
+    currentItems.forEach((existing: any) => {
+      if (existing.product_id && productIds.includes(Number(existing.product_id))) {
+        nextItems.push(existing);
+      }
+    });
+
+    // Add missing items for products in selected inward vouchers
+    productIds.forEach((pid) => {
+      const exists = nextItems.some((it) => Number(it.product_id) === pid);
+      if (!exists) {
+        const vItem = voucherItemsMap[pid];
+        const prod = products.find((p: any) => Number(p.id) === pid);
+        const masterWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
+        const weight = vItem.weight && parseFloat(vItem.weight) > 0 ? parseFloat(vItem.weight) : (masterWeight > 0 ? masterWeight : "");
+
+        let procId = vItem.process_id || "";
+        if (!procId && contractorProcessIds.length > 0) {
+          procId = contractorProcessIds[0];
+        }
+        if (!procId && availableProcesses.length > 0) {
+          procId = availableProcesses[0].id;
+        }
+
+        const proc = processes.find((p: any) => Number(p.id) === Number(procId));
+        const rate = proc ? proc.contractor_rate || 0 : 0;
+        const rawBal = getRawBalanceQtyForProcess(procId, pid, oids);
+
+        nextItems.push({
+          product_id: pid,
+          process_id: procId,
+          quantity: rawBal,
+          weight,
+          balance_qty: rawBal,
+          rate,
+          amount: 0
+        });
+      }
+    });
+
+    return recomputeLineItems(nextItems, oids);
+  };
 
   const handleLineChange = (index: number, field: string, val: any) => {
     const updated = [...lineItems];
@@ -589,7 +679,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                         onChange={(_, v) => {
                           const ids = v ? (v as any[]).map((x) => x.id) : [];
                           field.onChange(ids);
-                          setLineItems((prev) => recomputeLineItems(prev, ids));
+                          setLineItems((prev) => buildLineItemsFromOutwardIds(ids, prev));
                         }}
                         renderInput={(params) => <TextField {...params} label="Inward Vouchers / Receipts *" required={field.value?.length === 0} />}
                       />
