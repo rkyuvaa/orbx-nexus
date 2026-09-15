@@ -250,11 +250,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     return items.map((item, idx) => {
       if (!item.process_id && !item.product_id) return item;
       const proc = processes.find((p: any) => Number(p.id) === Number(item.process_id));
-      const rate = item.rate !== undefined && item.rate !== "" ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
+      const rate = item.rate !== undefined && item.rate !== "" && item.rate !== null ? item.rate : (proc ? proc.contractor_rate || 0 : 0);
 
       const prod = products.find((p: any) => Number(p.id) === Number(item.product_id));
       const masterWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
-      const weight = (item.weight !== undefined && item.weight !== "" && Number(item.weight) > 0)
+      const weight = (item.weight !== undefined && item.weight !== "" && item.weight !== null && Number(item.weight) > 0)
         ? item.weight
         : (masterWeight > 0 ? masterWeight : "");
       const weightNum = Number(weight) || 0;
@@ -275,14 +275,15 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
       const remainingBal = oids.length > 0 ? Math.max(0, rawBal - otherRowsUsed) : rawBal;
 
       let qty = item.quantity;
-      if (oids.length > 0 && (typeof qty === "number" || (typeof qty === "string" && qty !== ""))) {
-        const numQty = Number(qty) || 0;
-        if (numQty > remainingBal) {
+      if (oids.length > 0 && qty !== undefined && qty !== null && qty !== "") {
+        const numQty = Number(qty);
+        if (!isNaN(numQty) && numQty > remainingBal) {
           qty = remainingBal;
         }
-      } else if (oids.length > 0 && (qty === "" || qty === 0 || qty === undefined || qty === null)) {
+      } else if (oids.length > 0 && (qty === undefined || qty === null || qty === "")) {
         qty = remainingBal;
       }
+
       const numQty = Number(qty) || 0;
       const numRate = Number(rate) || 0;
       const amount = Number((numQty * weightFactor * numRate).toFixed(2));
@@ -368,15 +369,10 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     });
 
     const productIds = Object.keys(voucherItemsMap).map(Number);
-    if (productIds.length === 0) return currentItems;
 
-    const nextItems: any[] = [];
-
-    // Keep user edited items if product is in selected inward vouchers
-    currentItems.forEach((existing: any) => {
-      if (existing.product_id && productIds.includes(Number(existing.product_id))) {
-        nextItems.push(existing);
-      }
+    // Keep ALL current user items intact (preserving existing rows as-is)
+    const nextItems = currentItems.filter((item) => {
+      return item.product_id || item.process_id || item.quantity;
     });
 
     // Add missing items for products in selected inward vouchers
