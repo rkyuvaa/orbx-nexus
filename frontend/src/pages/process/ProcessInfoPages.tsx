@@ -27,11 +27,23 @@ export function ProductRegisterPage() {
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
-      const payload = { ...formData, uom_id: Number(formData.uom_id) || 1, weight: parseFloat(formData.weight) || 0 };
+      const uomId = formData.uom_id ? Number(formData.uom_id) : null;
+      const payload = {
+        name: formData.name ? String(formData.name).trim() : "",
+        product_code: formData.product_code && String(formData.product_code).trim() !== "" ? String(formData.product_code).trim() : null,
+        description: formData.description || null,
+        uom_id: uomId && uomId > 0 ? uomId : null,
+        weight: formData.weight !== "" && formData.weight !== null && formData.weight !== undefined ? parseFloat(formData.weight) : 0,
+        is_active: formData.is_active ?? true,
+      };
       return editing ? api.put(`/products/${editing.id}`, payload) : api.post("/products/", payload);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["products"] }); setOpen(false); },
-    onError: (err: any) => alert(err?.response?.data?.detail || "Failed to save product"),
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      const msg = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d: any) => typeof d === "string" ? d : (d.msg || JSON.stringify(d))).join(", ") : (err?.message || "Failed to save product");
+      alert(msg);
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/products/${id}`),
@@ -40,7 +52,7 @@ export function ProductRegisterPage() {
 
   const handleOpen = (row?: any) => {
     setEditing(row || null);
-    reset(row || { name: "", product_code: "", description: "", uom_id: "", weight: "" });
+    reset(row ? { ...row, uom_id: row.uom_id || "" } : { name: "", product_code: "", description: "", uom_id: "", weight: "" });
     setOpen(true);
   };
 

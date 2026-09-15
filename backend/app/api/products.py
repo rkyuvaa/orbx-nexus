@@ -46,6 +46,16 @@ class ProductCreate(BaseModel):
     description: str | None = None
     uom_id: int | None = None
     weight: float | None = 0.0
+    is_active: bool = True
+
+
+class ProductUpdate(BaseModel):
+    name: str | None = None
+    product_code: str | None = None
+    description: str | None = None
+    uom_id: int | None = None
+    weight: float | None = 0.0
+    is_active: bool | None = None
 
 
 class ProcessOut(BaseModel):
@@ -284,7 +294,31 @@ async def get_product(product_id: int, current_user: CurrentUser, db: DBSession)
 
 @router.post("/", response_model=ProductOut, status_code=201)
 async def create_product(body: ProductCreate, current_user: CurrentUser, db: DBSession):
-    p = Product(**body.model_dump())
+    data = body.model_dump()
+    if "product_code" in data:
+        if not data["product_code"] or not str(data["product_code"]).strip():
+            data["product_code"] = None
+        else:
+            data["product_code"] = str(data["product_code"]).strip()
+            code_exists = await db.execute(
+                select(Product.id).where(Product.product_code == data["product_code"])
+            )
+            if code_exists.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product code '{data['product_code']}' already exists"
+                )
+
+    if "uom_id" in data and data["uom_id"]:
+        uom_exists = await db.execute(
+            select(UnitOfMeasure.id).where(UnitOfMeasure.id == data["uom_id"])
+        )
+        if not uom_exists.scalar_one_or_none():
+            data["uom_id"] = None
+    elif "uom_id" in data:
+        data["uom_id"] = None
+
+    p = Product(**data)
     db.add(p)
     await db.flush()
     await db.refresh(p)
@@ -292,13 +326,43 @@ async def create_product(body: ProductCreate, current_user: CurrentUser, db: DBS
 
 
 @router.put("/{product_id}", response_model=ProductOut)
-async def update_product(product_id: int, body: ProductCreate, current_user: CurrentUser, db: DBSession):
+async def update_product(product_id: int, body: ProductUpdate, current_user: CurrentUser, db: DBSession):
     result = await db.execute(select(Product).where(Product.id == product_id))
     p = result.scalar_one_or_none()
     if not p:
-        raise HTTPException(status_code=404)
-    for k, v in body.model_dump().items():
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    data = body.model_dump(exclude_unset=True)
+
+    if "product_code" in data:
+        if not data["product_code"] or not str(data["product_code"]).strip():
+            data["product_code"] = None
+        else:
+            data["product_code"] = str(data["product_code"]).strip()
+            code_exists = await db.execute(
+                select(Product.id).where(
+                    Product.product_code == data["product_code"],
+                    Product.id != product_id
+                )
+            )
+            if code_exists.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product code '{data['product_code']}' already exists"
+                )
+
+    if "uom_id" in data and data["uom_id"]:
+        uom_exists = await db.execute(
+            select(UnitOfMeasure.id).where(UnitOfMeasure.id == data["uom_id"])
+        )
+        if not uom_exists.scalar_one_or_none():
+            data["uom_id"] = None
+    elif "uom_id" in data and not data["uom_id"]:
+        data["uom_id"] = None
+
+    for k, v in data.items():
         setattr(p, k, v)
+
     await db.flush()
     await db.refresh(p)
     return p
