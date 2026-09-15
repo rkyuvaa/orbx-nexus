@@ -727,10 +727,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                                 displayEmpty
                               >
                                 <MenuItem value=""><em>Select Product</em></MenuItem>
-                                {inwardProducts
+                                {products
                                   .filter((p: any) => {
                                     if (Number(p.id) === Number(item.product_id)) return true;
-                                    return getProductRemainingBalance(p.id, idx) > 0;
+                                    if (selectedOutwardIds.length === 0) return true;
+                                    return getProductRemainingBalance(p.id, idx) > 0 || inwardProducts.some((ip: any) => ip.id === p.id);
                                   })
                                   .map((p: any) => (
                                     <MenuItem key={p.id} value={p.id}>{p.name} {p.product_code ? `(${p.product_code})` : ""}</MenuItem>
