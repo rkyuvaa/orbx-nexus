@@ -307,6 +307,9 @@ export default function LocationsPage() {
           columnDefs={locationColDefs}
           loading={isLocsLoading}
           onRefresh={refetchLocs}
+          onBulkDelete={async (rows) => {
+            await Promise.all(rows.map((r) => deleteLocMutation.mutateAsync(r.id)));
+          }}
           onAdd={() => {
             setEditingLoc(null);
             resetLoc({
@@ -384,6 +387,9 @@ export default function LocationsPage() {
             columnDefs={movementColDefs}
             loading={isMovementsLoading}
             onRefresh={refetchMovements}
+            onBulkDelete={async (rows) => {
+              await Promise.all(rows.map((r) => deleteMoveMutation.mutateAsync(r.id)));
+            }}
           />
         </Box>
       )}

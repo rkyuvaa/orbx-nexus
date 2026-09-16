@@ -9,6 +9,7 @@ import Add from "@mui/icons-material/Add";
 import Edit from "@mui/icons-material/Edit";
 import Refresh from "@mui/icons-material/Refresh";
 import LockOutlined from "@mui/icons-material/LockOutlined";
+import Delete from "@mui/icons-material/Delete";
 import { useForm } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
@@ -37,6 +38,11 @@ export default function UserManagementPage() {
   const saveMutation = useMutation({
     mutationFn: (data: any) => editing ? api.put(`/auth/users/${editing.id}`, data) : api.post("/auth/users", data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); setOpen(false); },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/auth/users/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 
   const permMutation = useMutation({
@@ -97,10 +103,11 @@ export default function UserManagementPage() {
         );
       }
     },
-    { headerName: "Actions", width: 150, sortable: false, filter: false, cellRenderer: (p: any) => (
+    { headerName: "Actions", width: 170, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => { setEditing(p.data); reset({ ...p.data, password: "" }); setOpen(true); }}><Edit fontSize="small" /></IconButton></Tooltip>
         <Tooltip title="Permissions"><Button size="small" startIcon={<LockOutlined />} onClick={() => handleOpenPerm(p.data)} sx={{ fontSize: "0.7rem" }}>Perms</Button></Tooltip>
+        <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { if (window.confirm(`Delete user "${p.data.username}"?`)) deleteMutation.mutate(p.data.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
       </Box>
     )},
   ];
@@ -114,6 +121,13 @@ export default function UserManagementPage() {
         loading={isLoading}
         height={400}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
+        onBulkStatusChange={async (rows, is_active) => {
+          await Promise.all(rows.map((r) => api.put(`/auth/users/${r.id}`, { ...r, is_active })));
+          refetch();
+        }}
         onAdd={() => { setEditing(null); reset({ username: "", password: "", full_name: "", email: "", role: "User" }); setOpen(true); }}
         addLabel="Add User"
       />

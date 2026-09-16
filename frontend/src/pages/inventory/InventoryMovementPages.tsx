@@ -871,6 +871,9 @@ export function InventoryInwardPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => { setEditing(null); setOpen(true); }}
         addLabel="New Purchase"
       />
@@ -1025,6 +1028,9 @@ export function InventoryOutwardPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => { setEditing(null); setOpen(true); }}
         addLabel="New Outward"
         summaryCards={summaryCards}

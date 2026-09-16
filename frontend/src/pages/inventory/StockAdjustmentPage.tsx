@@ -102,6 +102,9 @@ export default function StockAdjustmentPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={() => refetch()}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="New Adjustment"
       />

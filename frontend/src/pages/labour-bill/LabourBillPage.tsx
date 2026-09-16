@@ -1517,6 +1517,10 @@ export default function LabourBillPage() {
 
         onRefresh={refetch}
 
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
+
         onAdd={() => handleOpen()}
 
         addLabel="New Bill"

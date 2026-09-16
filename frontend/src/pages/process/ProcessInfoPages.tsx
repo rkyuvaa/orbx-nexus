@@ -107,6 +107,9 @@ export function ProductRegisterPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="Add Product"
       />
@@ -269,6 +272,9 @@ export function ProcessRegisterPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="Add Process"
       />
@@ -514,6 +520,9 @@ export function UoMPage() {
         loading={isLoading}
         height={400}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="Add UoM"
       />
@@ -701,6 +710,9 @@ export function ProcessGroupsPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="Add Group"
       />

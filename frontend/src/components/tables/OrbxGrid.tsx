@@ -56,6 +56,7 @@ export interface OrbxGridProps<T = any> {
   rowKey?: (row: T) => string | number;
   bulkActions?: (selectedRows: T[], clearSelection: () => void) => React.ReactNode;
   onBulkDelete?: (selectedRows: T[]) => void | Promise<void>;
+  onDeleteRow?: (row: T) => void | Promise<void>;
   onBulkStatusChange?: (selectedRows: T[], is_active: boolean) => void | Promise<void>;
 }
 
@@ -77,6 +78,7 @@ export default function OrbxGrid<T = any>({
   rowKey,
   bulkActions,
   onBulkDelete,
+  onDeleteRow,
   onBulkStatusChange,
 }: OrbxGridProps<T>) {
   const [searchText, setSearchText] = useState("");
@@ -584,42 +586,48 @@ export default function OrbxGrid<T = any>({
                       color="primary"
                       sx={{ fontWeight: 600, fontSize: "0.75rem", borderRadius: "6px" }}
                     />
-                    <Tooltip title="Mark selected records as Inactive">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<Block sx={{ fontSize: 16 }} />}
-                        onClick={() => setConfirmStatusTarget(false)}
-                        sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
-                      >
-                        Mark Inactive
-                      </Button>
-                    </Tooltip>
-                    <Tooltip title="Mark selected records as Active">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="success"
-                        startIcon={<CheckCircle sx={{ fontSize: 16 }} />}
-                        onClick={() => setConfirmStatusTarget(true)}
-                        sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
-                      >
-                        Mark Active
-                      </Button>
-                    </Tooltip>
-                    <Tooltip title="Delete selected records">
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="error"
-                        startIcon={<Delete sx={{ fontSize: 16 }} />}
-                        onClick={() => setConfirmDeleteOpen(true)}
-                        sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
-                      >
-                        Delete Selected ({selectedKeys.size})
-                      </Button>
-                    </Tooltip>
+                    {onBulkStatusChange && (
+                      <>
+                        <Tooltip title="Mark selected records as Inactive">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            startIcon={<Block sx={{ fontSize: 16 }} />}
+                            onClick={() => setConfirmStatusTarget(false)}
+                            sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
+                          >
+                            Mark Inactive
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="Mark selected records as Active">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            startIcon={<CheckCircle sx={{ fontSize: 16 }} />}
+                            onClick={() => setConfirmStatusTarget(true)}
+                            sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
+                          >
+                            Mark Active
+                          </Button>
+                        </Tooltip>
+                      </>
+                    )}
+                    {(onBulkDelete || onDeleteRow) && (
+                      <Tooltip title="Delete selected records">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="error"
+                          startIcon={<Delete sx={{ fontSize: 16 }} />}
+                          onClick={() => setConfirmDeleteOpen(true)}
+                          sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
+                        >
+                          Delete Selected ({selectedKeys.size})
+                        </Button>
+                      </Tooltip>
+                    )}
                     {bulkActions && bulkActions(rowData.filter((r) => selectedKeys.has(getRowKey(r))), clearSelection)}
                   </>
                 )}
@@ -1010,11 +1018,17 @@ export default function OrbxGrid<T = any>({
             variant="contained"
             disabled={bulkProcessing}
             onClick={async () => {
-              if (!onBulkDelete) return;
+              if (!onBulkDelete && !onDeleteRow) return;
               setBulkProcessing(true);
               try {
                 const rows = rowData.filter((r) => selectedKeys.has(getRowKey(r)));
-                await onBulkDelete(rows);
+                if (onBulkDelete) {
+                  await onBulkDelete(rows);
+                } else if (onDeleteRow) {
+                  for (const row of rows) {
+                    await onDeleteRow(row);
+                  }
+                }
                 clearSelection();
               } catch (e: any) {
                 alert(e?.message || "Failed to delete selected records");

@@ -77,6 +77,10 @@ export default function AccountsGroupPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.filter((r) => !r.is_system).map((r) => api.delete(`/ledgers/groups/${r.id}`)));
+          refetch();
+        }}
         onAdd={() => handleOpen()}
         addLabel="Add Group"
       />

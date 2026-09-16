@@ -288,6 +288,9 @@ export function InwardVoucherPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={() => refetch()}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="New Inward"
       />
@@ -1128,6 +1131,9 @@ export function OutwardVoucherPage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={() => refetch()}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
+        }}
         onAdd={() => handleOpen()}
         addLabel="New Outward"
       />

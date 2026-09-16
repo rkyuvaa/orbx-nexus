@@ -260,7 +260,15 @@ export default function BackupsPage() {
         </CardContent>
       </Card>
 
-      <OrbxGrid rowData={backups} columnDefs={colDefs} loading={isLoading} height={420} />
+      <OrbxGrid
+        rowData={backups}
+        columnDefs={colDefs}
+        loading={isLoading}
+        height={420}
+        onBulkDelete={async (rows) => {
+          await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.filename)));
+        }}
+      />
 
       {/* Restore Confirmation Dialog */}
       <Dialog open={Boolean(selectedBackupToRestore)} onClose={() => setSelectedBackupToRestore(null)}>
