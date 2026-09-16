@@ -1503,7 +1503,7 @@ export default function LabourBillPage() {
 
         title="Labour Bill"
 
-        breadcrumbs={[{ label: "Labour Bill" }]}
+        breadcrumbs={[{ label: "Billing" }]}
 
       />
 

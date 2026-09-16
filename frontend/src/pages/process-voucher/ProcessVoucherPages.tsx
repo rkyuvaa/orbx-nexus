@@ -281,7 +281,7 @@ export function InwardVoucherPage() {
     <Box>
       <PageHeader
         title="Inward Voucher"
-        breadcrumbs={[{ label: "Process Voucher" }, { label: "Inward Voucher" }]}
+        breadcrumbs={[{ label: "Customer Material" }]}
       />
       <OrbxGrid
         rowData={items}
@@ -1125,7 +1125,7 @@ export function OutwardVoucherPage() {
 
   return (
     <Box>
-      <PageHeader title="Outward Voucher" subtitle="Record outgoing process work" breadcrumbs={[{ label: "Customer Material" }, { label: "Outward Voucher" }]} />
+      <PageHeader title="Outward Voucher" subtitle="Record outgoing process work" breadcrumbs={[{ label: "Customer Material" }]} />
       <OrbxGrid
         rowData={items}
         columnDefs={colDefs}

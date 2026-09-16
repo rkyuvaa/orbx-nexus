@@ -624,7 +624,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
 
   return (
     <Box>
-      <PageHeader title={TITLES[type]} breadcrumbs={[{ label: "Contractor Voucher" }, { label: BREADCRUMBS[type] }]} />
+      <PageHeader title={TITLES[type]} breadcrumbs={[{ label: "Contractor Work" }]} />
       <OrbxGrid
         rowData={data}
         columnDefs={colDefs}

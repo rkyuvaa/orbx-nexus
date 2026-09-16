@@ -459,7 +459,7 @@ export default function ContractorBalancePage() {
     <Box>
       <PageHeader
         title="Contractor Balance"
-        breadcrumbs={[{ label: "Contractor Voucher" }, { label: "Contractor Balance" }]}
+        breadcrumbs={[{ label: "Contractor Work" }]}
       />
       <OrbxGrid
         rowData={filteredData}

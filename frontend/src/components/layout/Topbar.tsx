@@ -10,7 +10,7 @@ import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
 import NavigateNext from "@mui/icons-material/NavigateNext";
 import MenuIcon from "@mui/icons-material/Menu";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { alpha, useTheme } from "@mui/material/styles";
 import { useAuthStore, useUIStore } from "../../store";
@@ -29,7 +29,15 @@ export default function Topbar() {
 
   const logoSrc = themeMode === "dark" ? "/logo-dark.svg" : "/logo-light.svg";
   const isMobile = useMediaQuery("(max-width: 600px)");
-  const sidebarWidth = sidebarOpen ? 240 : (isMobile ? 0 : 64);
+
+  const filteredBreadcrumbs = useMemo(() => {
+    if (!headerState.breadcrumbs) return [];
+    const titleLower = headerState.title ? headerState.title.trim().toLowerCase() : "";
+    return headerState.breadcrumbs.filter((bc) => {
+      if (!bc.label) return false;
+      return bc.label.trim().toLowerCase() !== titleLower;
+    });
+  }, [headerState.breadcrumbs, headerState.title]);
 
   return (
     <AppBar
@@ -57,7 +65,6 @@ export default function Topbar() {
       >
         <Box
           sx={{
-            width: sidebarWidth > 0 ? sidebarWidth - 12 : "auto",
             display: "flex",
             alignItems: "center",
             gap: 1.5,
@@ -81,15 +88,15 @@ export default function Topbar() {
             <MenuIcon sx={{ fontSize: 20 }} />
           </IconButton>
           {/* Left Section: Logo & Product Branding */}
-          <Box sx={{ display: "flex", alignItems: "center", height: 42 }}>
-            <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 42 }} />
+          <Box sx={{ display: "flex", alignItems: "center", height: 38 }}>
+            <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 38, cursor: "pointer" }} onClick={() => navigate("/")} />
           </Box>
         </Box>
 
         <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: "divider" }} />
 
-        {/* Navigation Breadcrumb (Only Navigation path) */}
-        <Box sx={{ display: "flex", alignItems: "center" }}>
+        {/* Navigation Breadcrumb */}
+        <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
           <Breadcrumbs
             separator={<NavigateNext sx={{ fontSize: 14, color: "text.disabled" }} />}
             sx={{ "& .MuiBreadcrumbs-separator": { mx: 0.5 } }}
@@ -102,7 +109,7 @@ export default function Topbar() {
             >
               Home
             </Link>
-            {headerState.breadcrumbs?.map((bc) => (
+            {filteredBreadcrumbs.map((bc) => (
               <Link
                 key={bc.label}
                 underline="hover"
@@ -116,7 +123,7 @@ export default function Topbar() {
             {headerState.title && (
               <Typography
                 color="text.primary"
-                sx={{ fontSize: "15px", fontWeight: 700 }}
+                sx={{ fontSize: "0.85rem", fontWeight: 700, whiteSpace: "nowrap" }}
               >
                 {headerState.title}
               </Typography>
