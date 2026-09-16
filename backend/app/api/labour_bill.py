@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional
+import json
 
 from app.api.deps import CurrentUser, DBSession
 
@@ -38,6 +39,156 @@ def s(fy: str) -> str:
     return f"fy_{fy}"
 
 
+async def _validate_inwards_completed(
+    db: DBSession, schema: str, inward_id: Optional[int], outward_ids: Optional[list[int]]
+):
+    inward_ids_to_check: set[int] = set()
+    if inward_id:
+        inward_ids_to_check.add(inward_id)
+
+    if outward_ids and len(outward_ids) > 0:
+        res = await db.execute(
+            text(
+                f"SELECT inward_id, inward_ids, items FROM {schema}.stock_outward "
+                f"WHERE id = ANY(:oids)"
+            ),
+            {"oids": list(outward_ids)},
+        )
+        for row in res.mappings().all():
+            if row.get("inward_id"):
+                inward_ids_to_check.add(row["inward_id"])
+            raw_iids = row.get("inward_ids")
+            if raw_iids:
+                if isinstance(raw_iids, list):
+                    for i in raw_iids:
+                        if isinstance(i, int):
+                            inward_ids_to_check.add(i)
+                elif isinstance(raw_iids, str):
+                    try:
+                        parsed = json.loads(raw_iids)
+                        if isinstance(parsed, list):
+                            for i in parsed:
+                                if isinstance(i, int):
+                                    inward_ids_to_check.add(i)
+                    except Exception:
+                        pass
+            items = row.get("items")
+            if items:
+                if isinstance(items, list):
+                    for it in items:
+                        if isinstance(it, dict) and it.get("inward_id"):
+                            try:
+                                inward_ids_to_check.add(int(it["inward_id"]))
+                            except Exception:
+                                pass
+                elif isinstance(items, str):
+                    try:
+                        parsed = json.loads(items)
+                        if isinstance(parsed, list):
+                            for it in parsed:
+                                if isinstance(it, dict) and it.get("inward_id"):
+                                    inward_ids_to_check.add(int(it["inward_id"]))
+                    except Exception:
+                        pass
+
+    if not inward_ids_to_check:
+        return
+
+    for inw_id in inward_ids_to_check:
+        inw_res = await db.execute(
+            text(f"SELECT * FROM {schema}.stock_inward WHERE id = :id"),
+            {"id": inw_id},
+        )
+        inw_row = inw_res.mappings().first()
+        if not inw_row:
+            continue
+        inward_no = inw_row.get("inward_no") or f"#{inw_id}"
+
+        # Calculate live balance quantity for this inward
+        bal_res = await db.execute(
+            text(f"""
+            WITH i_lines AS (
+              SELECT si.id AS inward_id,
+                si.product_id AS hdr_product_id,
+                si.process_id AS hdr_process_id,
+                si.quantity AS hdr_qty,
+                si.items AS hdr_items
+              FROM {schema}.stock_inward si WHERE si.id = :iid
+            ),
+            in_lines AS (
+              SELECT inward_id,
+                hdr_product_id AS product_id,
+                hdr_qty AS line_qty,
+                hdr_process_id AS process_id
+              FROM i_lines
+              WHERE jsonb_array_length(COALESCE(hdr_items, '[]'::jsonb)) = 0
+                AND hdr_product_id IS NOT NULL
+              UNION ALL
+              SELECT inward_id,
+                NULLIF(item->>'product_id', '')::int AS product_id,
+                COALESCE(NULLIF(item->>'quantity', ''), '0')::numeric AS line_qty,
+                COALESCE(NULLIF(item->>'process_id', ''), hdr_process_id) AS process_id
+              FROM i_lines,
+                jsonb_array_elements(COALESCE(hdr_items, '[]'::jsonb)) AS item
+              WHERE jsonb_array_length(COALESCE(hdr_items, '[]'::jsonb)) > 0
+                AND NULLIF(item->>'product_id', '') IS NOT NULL
+            ),
+            out_dispatched AS (
+              SELECT
+                COALESCE(NULLIF(o_item->>'inward_id', ''), NULLIF(so.inward_id::text, ''))::int AS inward_id,
+                COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, ''))::int AS product_id,
+                SUM(COALESCE(NULLIF(o_item->>'quantity', ''), NULLIF(so.quantity::text, ''), '0')::numeric) AS dispatched
+              FROM {schema}.stock_outward so
+              LEFT JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0
+                  THEN so.items ELSE NULL END
+              ) AS o_item ON TRUE
+              WHERE (
+                so.inward_id = :iid
+                OR COALESCE(NULLIF(o_item->>'inward_id', ''), '')::text = :iid_str
+                OR (so.inward_ids IS NOT NULL AND jsonb_typeof(so.inward_ids) = 'array' AND :iid_str = ANY(ARRAY(SELECT jsonb_array_elements_text(so.inward_ids))))
+              )
+              AND COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, '')) IS NOT NULL
+              GROUP BY 1, 2
+            ),
+            inward_balances AS (
+              SELECT il.inward_id,
+                SUM(GREATEST(il.line_qty - COALESCE(od.dispatched, 0), 0)) AS total_balance
+              FROM in_lines il
+              LEFT JOIN out_dispatched od ON od.inward_id = il.inward_id AND od.product_id = il.product_id
+              GROUP BY il.inward_id
+            )
+            SELECT COALESCE(ib.total_balance, (SELECT COALESCE(SUM(line_qty), 0) FROM in_lines)) AS balance_qty,
+              (SELECT COUNT(*) FROM out_dispatched) AS dispatched_count
+            FROM {schema}.stock_inward si
+            LEFT JOIN inward_balances ib ON ib.inward_id = si.id
+            WHERE si.id = :iid
+            """),
+            {"iid": inw_id, "iid_str": str(inw_id)},
+        )
+        bal_row = bal_res.mappings().first()
+        if not bal_row:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Inward voucher '{inward_no}' was not found in database.",
+            )
+
+        dispatched_cnt = float(bal_row.get("dispatched_count") or 0)
+        bal_qty = float(bal_row.get("balance_qty") or 0)
+
+        if dispatched_cnt == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Inward voucher '{inward_no}' has no outward dispatches. Labour Bills can only be raised for fully completed inwards.",
+            )
+
+        if bal_qty > 0.0001:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Inward voucher '{inward_no}' is not fully completed (Remaining Balance Qty: {bal_qty:g}). Labour Bills can only be raised for fully completed inwards.",
+            )
+
+
 @router.get("/")
 async def list_labour_bills(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
@@ -71,9 +222,9 @@ async def create_labour_bill(
     body: LabourBillIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids)
     from app.services.sequences import generate_and_increment_sequence
     bill_no = await generate_and_increment_sequence(db, "labour_bill")
-    import json
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
@@ -106,7 +257,7 @@ async def update_labour_bill(
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
-    import json
+    await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids)
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"

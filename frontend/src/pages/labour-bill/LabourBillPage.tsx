@@ -128,8 +128,8 @@ export default function LabourBillPage() {
     queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data
   });
   const { data: inwardVouchers = [] } = useQuery<any>({
-    queryKey: ["inward-vouchers-list"],
-    queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data
+    queryKey: ["inward-vouchers-list", activeFY],
+    queryFn: async () => (await api.get(`/stock/inward/pending-outward?fy=${activeFY}`)).data
   });
 
 
@@ -1646,7 +1646,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const eligibleInwardNumbers = useMemo(() => {
     if (!selectedLedger) return [];
     const supplierInwards = inwardVouchers.filter((inv: any) => inv.ledger_id === Number(selectedLedger));
-    const selectedInwardIds = new Set(selectedInwards.map((i: any) => i.id));
 
     const isLinked = (out: any, inwId: number) => {
       if (Number(out.inward_id) === inwId) return true;
@@ -1674,6 +1673,19 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         const unbilledOutwardCount = unbilledOutwards.length;
         const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => sum + Number(o.total_weight || o.weight || 0), 0);
         const outwardNos = unbilledOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
+
+        const overallBal = Number(inv.balance_qty ?? 0);
+        let lineItemsAllZero = true;
+        if (inv.line_items_balance) {
+          try {
+            const lBalArray = typeof inv.line_items_balance === "string" ? JSON.parse(inv.line_items_balance) : inv.line_items_balance;
+            if (Array.isArray(lBalArray) && lBalArray.length > 0) {
+              lineItemsAllZero = lBalArray.every((it: any) => Number(it.balance_qty || 0) <= 0.0001);
+            }
+          } catch {}
+        }
+        const isFullyCompleted = linkedOutwards.length > 0 && overallBal <= 0.0001 && lineItemsAllZero;
+
         return {
           ...inv,
           linkedOutwards,
@@ -1681,7 +1693,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           unbilledOutwardCount,
           unbilledWeight,
           outwardNos,
-          isOutwardCompleted: linkedOutwards.length > 0,
+          isOutwardCompleted: isFullyCompleted,
           hasUnbilledOutward: unbilledOutwardCount > 0,
         };
       })
@@ -2127,13 +2139,13 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                         );
                       })
                     }
-                    noOptionsText="No pending outward-completed inwards for this supplier"
+                    noOptionsText="No completed Inwards are available for Labour Billing."
                     renderInput={(params: any) => (
                       <TextField
                         {...params}
                         label="Select Inward Number(s) *"
                         placeholder="Tick checkboxes to select inward numbers..."
-                        helperText={`${eligibleInwardNumbers.length} eligible inward record(s) available — tick checkboxes to select multiple`}
+                        helperText={`${eligibleInwardNumbers.length} completed inward record(s) available — tick checkboxes to select multiple`}
                       />
                     )}
                   />
