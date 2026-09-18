@@ -129,22 +129,23 @@ async def get_daily_staff_attendance(
     schema = s(fy)
     try:
         await db.execute(text(f"ALTER TABLE {schema}.biometric_entries ADD COLUMN IF NOT EXISTS ot_hours numeric(5,2) DEFAULT 0"))
+        await db.commit()
     except Exception:
-        pass
+        await db.rollback()
 
     result = await db.execute(
         text(
             f"SELECT l.id AS ledger_id, l.name AS staff_name, l.ledger_code AS staff_code, "
             f"be.id AS entry_id, "
             f"COALESCE(be.status, 'Present') AS status, "
-            f"COALESCE(be.punch_in::text, '09:00') AS punch_in, "
-            f"COALESCE(be.punch_out::text, '18:00') AS punch_out, "
-            f"COALESCE(be.hours_worked, 8.0) AS hours_worked, "
+            f"be.punch_in::text AS punch_in, "
+            f"be.punch_out::text AS punch_out, "
+            f"be.hours_worked, "
             f"COALESCE(be.ot_hours, 0.0) AS ot_hours, "
             f"be.device_log_id AS remarks "
             f"FROM master.ledgers l "
             f"LEFT JOIN master.ledger_groups lg ON lg.id = l.group_id "
-            f"LEFT JOIN {schema}.biometric_entries be ON be.ledger_id = l.id AND be.entry_date = :edate "
+            f"LEFT JOIN {schema}.biometric_entries be ON be.ledger_id = l.id AND be.entry_date = CAST(:edate AS date) "
             f"WHERE (l.ledger_type = 'Staff' OR lg.name LIKE '%Staff%' OR lg.name LIKE '%Salary%') AND l.is_active = TRUE "
             f"ORDER BY l.name ASC"
         ),
@@ -159,10 +160,16 @@ def parse_time_str(val: Optional[str]) -> Optional[str]:
     v = val.strip()
     if not v:
         return None
-    if len(v) == 5 and ":" in v:
-        return f"{v}:00"
-    if len(v) == 8 and ":" in v:
-        return v
+    parts = v.split(":")
+    if len(parts) >= 2:
+        try:
+            h = int(parts[0])
+            m = int(parts[1])
+            s = int(parts[2]) if len(parts) > 2 else 0
+            if 0 <= h <= 23 and 0 <= m <= 59 and 0 <= s <= 59:
+                return f"{h:02d}:{m:02d}:{s:02d}"
+        except (ValueError, TypeError):
+            pass
     return None
 
 
@@ -173,12 +180,13 @@ async def save_daily_staff_attendance_bulk(
     schema = s(fy)
     try:
         await db.execute(text(f"ALTER TABLE {schema}.biometric_entries ADD COLUMN IF NOT EXISTS ot_hours numeric(5,2) DEFAULT 0"))
+        await db.commit()
     except Exception:
-        pass
+        await db.rollback()
 
     for entry in body.entries:
         await db.execute(
-            text(f"DELETE FROM {schema}.biometric_entries WHERE ledger_id = :lid AND entry_date = :edate"),
+            text(f"DELETE FROM {schema}.biometric_entries WHERE ledger_id = :lid AND entry_date = CAST(:edate AS date)"),
             {"lid": entry.ledger_id, "edate": body.entry_date}
         )
         
@@ -189,7 +197,7 @@ async def save_daily_staff_attendance_bulk(
         if not pout and entry.status == "Present":
             pout = "18:00:00"
             
-        hw = float(entry.hours_worked) if entry.hours_worked is not None and entry.status != "Absent" else 0.0
+        hw = float(entry.hours_worked) if entry.hours_worked is not None and entry.status not in ["Absent", "On Leave"] else 0.0
         ot = float(entry.ot_hours) if entry.ot_hours is not None else 0.0
         remarks = entry.remarks if entry.remarks else None
         
@@ -197,7 +205,7 @@ async def save_daily_staff_attendance_bulk(
             text(
                 f"INSERT INTO {schema}.biometric_entries "
                 f"(ledger_id, entry_date, punch_in, punch_out, hours_worked, status, ot_hours, device_log_id) "
-                f"VALUES (:lid, :edate, CAST(:pin AS time), CAST(:pout AS time), :hw, :status, :ot, :remarks)"
+                f"VALUES (:lid, CAST(:edate AS date), :pin, :pout, :hw, :status, :ot, :remarks)"
             ),
             {
                 "lid": entry.ledger_id, "edate": body.entry_date,
@@ -206,4 +214,5 @@ async def save_daily_staff_attendance_bulk(
                 "ot": ot, "remarks": remarks
             }
         )
+    await db.commit()
     return {"message": f"Saved attendance for {len(body.entries)} staff members on {body.entry_date}"}

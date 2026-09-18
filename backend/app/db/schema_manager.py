@@ -221,6 +221,7 @@ CREATE TABLE IF NOT EXISTS {schema}.biometric_entries (
     punch_in TIME,
     punch_out TIME,
     hours_worked NUMERIC(5,2),
+    ot_hours NUMERIC(5,2) DEFAULT 0,
     status VARCHAR(20) DEFAULT 'Present',  -- Present, Absent, Half Day, Holiday
     device_log_id VARCHAR(100),
     created_at TIMESTAMP DEFAULT NOW()

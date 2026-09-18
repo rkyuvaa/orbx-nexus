@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Box, Button, TextField, Paper, Typography, Grid, Table, TableHead,
   TableBody, TableRow, TableCell, Chip, Tab, Tabs, MenuItem, Select,
-  CircularProgress, Alert, Tooltip
+  CircularProgress, Alert, Tooltip, Snackbar
 } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -41,6 +41,7 @@ export default function BiometricsPage() {
   const [entryDate, setEntryDate] = useState(todayStr);
   const [rows, setRows] = useState<StaffRow[]>([]);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [snackMsg, setSnackMsg] = useState<{ severity: "success" | "error" | "info"; text: string } | null>(null);
   const autoSaveTimerRef = React.useRef<any>(null);
 
   // Monthly summary tab state
@@ -56,19 +57,25 @@ export default function BiometricsPage() {
   // Populate editable rows when dailyData changes
   useEffect(() => {
     if (dailyData && Array.isArray(dailyData)) {
-      const formatted = dailyData.map((d: any) => ({
-        ledger_id: d.ledger_id,
-        staff_name: d.staff_name,
-        staff_code: d.staff_code || "",
-        status: d.status || "Present",
-        punch_in: d.punch_in ? d.punch_in.substring(0, 5) : "09:00",
-        punch_out: d.punch_out ? d.punch_out.substring(0, 5) : "18:00",
-        hours_worked: Number(d.hours_worked ?? 8.0),
-        ot_hours: Number(d.ot_hours ?? 0.0),
-        remarks: d.remarks || "",
-      }));
+      const formatted = dailyData.map((d: any) => {
+        const isRecorded = !!d.entry_id;
+        const defaultPunchIn = isRecorded ? "" : "09:00";
+        const defaultPunchOut = isRecorded ? "" : "18:00";
+        const defaultHours = isRecorded ? 0.0 : 8.0;
+
+        return {
+          ledger_id: d.ledger_id,
+          staff_name: d.staff_name,
+          staff_code: d.staff_code || "",
+          status: d.status || "Present",
+          punch_in: d.punch_in ? d.punch_in.substring(0, 5) : (d.status === "Present" && !isRecorded ? defaultPunchIn : ""),
+          punch_out: d.punch_out ? d.punch_out.substring(0, 5) : (d.status === "Present" && !isRecorded ? defaultPunchOut : (d.status === "Half Day" && !isRecorded ? "13:00" : "")),
+          hours_worked: d.hours_worked !== null && d.hours_worked !== undefined ? Number(d.hours_worked) : (d.status === "Present" ? defaultHours : (d.status === "Half Day" ? 4.0 : 0.0)),
+          ot_hours: Number(d.ot_hours ?? 0.0),
+          remarks: d.remarks || "",
+        };
+      });
       setRows(formatted);
-      setLastSavedTime(null);
     }
   }, [dailyData]);
 
@@ -80,8 +87,8 @@ export default function BiometricsPage() {
         entries: rowsToSave.map((r) => ({
           ledger_id: r.ledger_id,
           status: r.status,
-          punch_in: r.punch_in,
-          punch_out: r.punch_out,
+          punch_in: r.punch_in || null,
+          punch_out: r.punch_out || null,
           hours_worked: Number(r.hours_worked || 0),
           ot_hours: Number(r.ot_hours || 0),
           remarks: r.remarks || "",
@@ -89,12 +96,19 @@ export default function BiometricsPage() {
       };
       return (await api.post(`/biometrics/daily-bulk?fy=${activeFY}`, payload)).data;
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ["daily-staff-attendance"] });
       qc.invalidateQueries({ queryKey: ["biometrics"] });
       qc.invalidateQueries({ queryKey: ["attendance-summary"] });
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastSavedTime(timeStr);
+      setSnackMsg({ severity: "success", text: res?.message || `Attendance saved successfully for ${rows.length} staff members!` });
+    },
+    onError: (err: any) => {
+      console.error("Save attendance error:", err);
+      const detail = err?.response?.data?.detail || err?.message || "Failed to save attendance";
+      setSnackMsg({ severity: "error", text: `Failed to save attendance: ${detail}` });
     },
   });
 
@@ -240,8 +254,25 @@ export default function BiometricsPage() {
                   slotProps={{ inputLabel: { shrink: true } }}
                 />
               </Grid>
-              <Grid size={{ xs: 12, md: 5 }}>
-                <Box sx={{ display: "flex", gap: 1 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="small"
+                    startIcon={saveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                    disabled={saveMutation.isPending || rows.length === 0}
+                    onClick={() => saveMutation.mutate(rows)}
+                    sx={{
+                      fontWeight: 700,
+                      borderRadius: "6px",
+                      bgcolor: "#0f5132",
+                      "&:hover": { bgcolor: "#0b3d26" },
+                      px: 2,
+                    }}
+                  >
+                    {saveMutation.isPending ? "Saving..." : "Save Attendance"}
+                  </Button>
                   <Button
                     variant="outlined"
                     color="success"
@@ -264,12 +295,12 @@ export default function BiometricsPage() {
                   </Button>
                 </Box>
               </Grid>
-              <Grid size={{ xs: 12, md: 4 }} sx={{ textAlign: { md: "right" } }}>
+              <Grid size={{ xs: 12, md: 3 }} sx={{ textAlign: { md: "right" } }}>
                 <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
                   {saveMutation.isPending ? (
                     <Chip
                       icon={<CircularProgress size={14} color="inherit" />}
-                      label="Auto-saving..."
+                      label="Saving..."
                       color="primary"
                       variant="outlined"
                       sx={{ fontWeight: 700, borderRadius: "6px", px: 1 }}
@@ -277,16 +308,16 @@ export default function BiometricsPage() {
                   ) : saveMutation.isError ? (
                     <Chip
                       icon={<CancelIcon fontSize="small" />}
-                      label="Auto-save failed - Click to retry"
+                      label="Save failed - Retry"
                       color="error"
                       variant="outlined"
-                      onClick={() => triggerAutoSave(rows, true)}
+                      onClick={() => saveMutation.mutate(rows)}
                       sx={{ fontWeight: 700, borderRadius: "6px", px: 1, cursor: "pointer" }}
                     />
                   ) : lastSavedTime ? (
                     <Chip
                       icon={<CheckCircleIcon fontSize="small" color="success" />}
-                      label={`Auto-saved at ${lastSavedTime}`}
+                      label={`Saved at ${lastSavedTime}`}
                       color="success"
                       variant="outlined"
                       sx={{ fontWeight: 700, borderRadius: "6px", px: 1, bgcolor: "#f0fdf4" }}
@@ -294,7 +325,7 @@ export default function BiometricsPage() {
                   ) : (
                     <Chip
                       icon={<CheckCircleIcon fontSize="small" color="success" />}
-                      label="Auto-save enabled"
+                      label="Ready"
                       color="default"
                       variant="outlined"
                       sx={{ fontWeight: 700, borderRadius: "6px", px: 1 }}
@@ -464,6 +495,48 @@ export default function BiometricsPage() {
               </Table>
             )}
           </Paper>
+
+          {/* Bottom Save Bar */}
+          {rows.length > 0 && (
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                mt: 2,
+                borderRadius: "8px",
+                bgcolor: "#fcfdfc",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 1
+              }}
+            >
+              <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 600 }}>
+                Total {rows.length} staff records for {entryDate}
+                {lastSavedTime && ` • Last saved at ${lastSavedTime}`}
+              </Typography>
+              <Button
+                variant="contained"
+                color="success"
+                size="medium"
+                startIcon={saveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                disabled={saveMutation.isPending}
+                onClick={() => saveMutation.mutate(rows)}
+                sx={{
+                  fontWeight: 700,
+                  borderRadius: "6px",
+                  px: 3,
+                  py: 1,
+                  bgcolor: "#0f5132",
+                  "&:hover": { bgcolor: "#0b3d26" },
+                  boxShadow: "0 2px 4px rgba(15,81,50,0.2)"
+                }}
+              >
+                {saveMutation.isPending ? "Saving Attendance..." : "Save Attendance"}
+              </Button>
+            </Paper>
+          )}
         </Box>
       )}
 
@@ -546,6 +619,23 @@ export default function BiometricsPage() {
           <OrbxGrid rowData={rawLogs} columnDefs={rawColDefs} loading={isLogsLoading} onRefresh={refetchLogs} />
         </Box>
       )}
+
+      {/* Snackbar Alert for Save Feedback */}
+      <Snackbar
+        open={!!snackMsg}
+        autoHideDuration={4000}
+        onClose={() => setSnackMsg(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackMsg(null)}
+          severity={snackMsg?.severity || "info"}
+          variant="filled"
+          sx={{ width: "100%", fontWeight: 600 }}
+        >
+          {snackMsg?.text}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
