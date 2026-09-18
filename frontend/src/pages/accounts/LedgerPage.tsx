@@ -49,6 +49,7 @@ const schema = z.object({
   department: z.string().nullish(),
   staff_category: z.string().nullish(),
   basic_salary: optionalNumber,
+  per_day_salary: optionalNumber,
   hourly_rate: optionalNumber,
   join_date: z.string().nullish(),
   is_active: z.boolean().default(true),
@@ -601,11 +602,14 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
                   <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("designation")} label="Designation" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
                   <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("department")} label="Department" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
                   {watch("staff_category") === "Labour" ? (
-                    <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("hourly_rate")} label="Hour-wise Salary (₹ / Hour) *" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Hourly rate for labor wage calculation" /></Grid>
+                    <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("hourly_rate")} label="Hour-wise Salary (₹ / Hour) *" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Hourly rate for labor wage calculation" /></Grid>
                   ) : (
-                    <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("basic_salary")} label="Fixed Basic Salary (₹ / Month) *" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Monthly fixed basic salary" /></Grid>
+                    <>
+                      <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("basic_salary")} label="Fixed Basic Salary (₹ / Month)" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Monthly basic salary" /></Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("per_day_salary")} label="Per Day Salary (₹ / Day)" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} helperText="Daily wage for attendance" /></Grid>
+                    </>
                   )}
-                  <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("join_date")} label="Join Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("join_date")} label="Join Date" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
                 </>
               )}
             </Grid>

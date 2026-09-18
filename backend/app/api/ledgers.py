@@ -50,6 +50,7 @@ class LedgerOut(BaseModel):
     department: str | None = None
     staff_category: str | None = "Staff"
     basic_salary: float | None = None
+    per_day_salary: float | None = 0.0
     hourly_rate: float | None = 0.0
     join_date: str | None = None
     photo: str | None = None
@@ -80,6 +81,7 @@ class LedgerCreate(BaseModel):
     department: str | None = None
     staff_category: str | None = "Staff"
     basic_salary: float | None = None
+    per_day_salary: float | None = 0.0
     hourly_rate: float | None = 0.0
     join_date: str | None = None
     photo: str | None = None
@@ -110,6 +112,7 @@ class LedgerUpdate(BaseModel):
     department: str | None = None
     staff_category: str | None = None
     basic_salary: float | None = None
+    per_day_salary: float | None = None
     hourly_rate: float | None = None
     join_date: str | None = None
     photo: str | None = None

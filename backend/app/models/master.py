@@ -149,6 +149,7 @@ class Ledger(Base):
     department: Mapped[str | None] = mapped_column(String(100))
     staff_category: Mapped[str | None] = mapped_column(String(20), default="Staff")  # Staff (Fixed) or Labour (Hourly)
     basic_salary: Mapped[float | None] = mapped_column(Numeric(15, 2))
+    per_day_salary: Mapped[float | None] = mapped_column(Numeric(15, 2), default=0)
     hourly_rate: Mapped[float | None] = mapped_column(Numeric(15, 2), default=0)
     join_date: Mapped[str | None] = mapped_column(String(10))
     photo: Mapped[str | None] = mapped_column(Text)

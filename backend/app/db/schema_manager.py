@@ -171,6 +171,8 @@ CREATE TABLE IF NOT EXISTS {schema}.salary_vouchers (
     year INTEGER NOT NULL,
     days_worked NUMERIC(5,1) DEFAULT 0,
     basic_salary NUMERIC(15,2) DEFAULT 0,
+    per_day_salary NUMERIC(15,2) DEFAULT 0,
+    payable_amount NUMERIC(15,2) DEFAULT 0,
     allowances NUMERIC(15,2) DEFAULT 0,
     deductions NUMERIC(15,2) DEFAULT 0,
     net_salary NUMERIC(15,2) DEFAULT 0,
