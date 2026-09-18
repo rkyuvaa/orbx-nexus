@@ -187,6 +187,7 @@ const NavNode = memo(function NavNode({
   onNavigate,
   openMenus = {},
   onToggleMenu,
+  onOpenSidebar,
 }: {
   item: NavItem;
   depth?: number;
@@ -194,7 +195,8 @@ const NavNode = memo(function NavNode({
   activePath: string;
   onNavigate: (path: string) => void;
   openMenus?: Record<string, boolean>;
-  onToggleMenu?: (label: string) => void;
+  onToggleMenu?: (label: string, forceOpen?: boolean) => void;
+  onOpenSidebar?: () => void;
 }) {
   const hasChildren = !!item.children?.length;
   const isMenuOpen = depth === 0 ? (openMenus[item.label] ?? false) : false;
@@ -203,6 +205,20 @@ const NavNode = memo(function NavNode({
   const isSelected = isActive || isChildActive;
 
   const handleClick = () => {
+    if (collapsed) {
+      if (onOpenSidebar) {
+        onOpenSidebar();
+      }
+      if (hasChildren) {
+        if (depth === 0 && onToggleMenu) {
+          onToggleMenu(item.label, true);
+        }
+      } else if (item.path) {
+        onNavigate(item.path);
+      }
+      return;
+    }
+
     if (hasChildren) {
       if (depth === 0 && onToggleMenu) {
         onToggleMenu(item.label);
@@ -370,6 +386,9 @@ const NavNode = memo(function NavNode({
                 collapsed={false}
                 activePath={activePath}
                 onNavigate={onNavigate}
+                openMenus={openMenus}
+                onToggleMenu={onToggleMenu}
+                onOpenSidebar={onOpenSidebar}
               />
             ))}
           </List>
@@ -382,7 +401,7 @@ const NavNode = memo(function NavNode({
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sidebarOpen, toggleSidebar, themeMode } = useUIStore();
+  const { sidebarOpen, toggleSidebar, setSidebarOpen, themeMode } = useUIStore();
   const [searchVal, setSearchVal] = useState<SearchOption | null>(null);
   const searchOptions = useMemo(() => getSearchOptions(NAV_ITEMS), []);
   const isMobile = useMediaQuery("(max-width: 600px)");
@@ -421,9 +440,9 @@ export default function Sidebar() {
     }
   }, [activeParent]);
 
-  const handleToggleMenu = (label: string) => {
+  const handleToggleMenu = (label: string, forceOpen?: boolean) => {
     setOpenMenus((prev) => ({
-      [label]: !prev[label],
+      [label]: forceOpen ? true : !prev[label],
     }));
   };
 
@@ -466,7 +485,15 @@ export default function Sidebar() {
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", height: sidebarOpen ? 46 : 34, justifyContent: "center", width: "100%" }}>
-          <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 46, objectFit: "contain" }} />
+          <img
+            src={logoSrc}
+            alt="Logo"
+            style={{ height: "100%", maxHeight: 46, objectFit: "contain", cursor: "pointer" }}
+            onClick={() => {
+              if (!sidebarOpen) setSidebarOpen(true);
+              handleNavigate("/");
+            }}
+          />
         </Box>
       </Box>
 
@@ -612,6 +639,7 @@ export default function Sidebar() {
               onNavigate={handleNavigate}
               openMenus={openMenus}
               onToggleMenu={handleToggleMenu}
+              onOpenSidebar={() => setSidebarOpen(true)}
             />
           ))}
         </List>

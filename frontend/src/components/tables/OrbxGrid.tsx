@@ -58,6 +58,7 @@ export interface OrbxGridProps<T = any> {
   onBulkDelete?: (selectedRows: T[]) => void | Promise<void>;
   onDeleteRow?: (row: T) => void | Promise<void>;
   onBulkStatusChange?: (selectedRows: T[], is_active: boolean) => void | Promise<void>;
+  extraFilters?: React.ReactNode;
 }
 
 export default function OrbxGrid<T = any>({
@@ -80,6 +81,7 @@ export default function OrbxGrid<T = any>({
   onBulkDelete,
   onDeleteRow,
   onBulkStatusChange,
+  extraFilters,
 }: OrbxGridProps<T>) {
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(0);
@@ -114,6 +116,10 @@ export default function OrbxGrid<T = any>({
       setSelectedKeys(set);
     }
   }, [selectedRows]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [rowData]);
 
   const dateFieldKey = useMemo(() => {
     if (rowData.length === 0) return null;
@@ -528,6 +534,7 @@ export default function OrbxGrid<T = any>({
                 )}
               </Box>
             )}
+            {extraFilters}
           </Box>
 
           <Box

@@ -49,6 +49,7 @@ export function InwardVoucherPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | string>("");
 
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["stock-inward", activeFY],
@@ -64,6 +65,35 @@ export function InwardVoucherPage() {
     ledgers.forEach((l: any) => map[l.id] = l.name);
     return map;
   }, [ledgers]);
+
+  const supplierOptions = useMemo(() => {
+    const usedIds = new Set<number>();
+    items.forEach((item: any) => {
+      if (item.ledger_id) usedIds.add(Number(item.ledger_id));
+    });
+
+    const list: { id: number; name: string }[] = [];
+    const added = new Set<number>();
+
+    usedIds.forEach((id) => {
+      list.push({ id, name: ledgerMap[id] || `Supplier #${id}` });
+      added.add(id);
+    });
+
+    ledgers.forEach((l: any) => {
+      if (!added.has(l.id) && (l.ledger_type === "Account" || !l.ledger_type)) {
+        list.push({ id: l.id, name: l.name });
+        added.add(l.id);
+      }
+    });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, ledgers, ledgerMap]);
+
+  const filteredItems = useMemo(() => {
+    if (!selectedSupplierId) return items;
+    return items.filter((row: any) => Number(row.ledger_id) === Number(selectedSupplierId));
+  }, [items, selectedSupplierId]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.delete(`/stock/inward/${id}?fy=${activeFY}`),
@@ -284,7 +314,7 @@ export function InwardVoucherPage() {
         breadcrumbs={[{ label: "Customer Material" }]}
       />
       <OrbxGrid
-        rowData={items}
+        rowData={filteredItems}
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={() => refetch()}
@@ -293,6 +323,54 @@ export function InwardVoucherPage() {
         }}
         onAdd={() => handleOpen()}
         addLabel="New Inward"
+        extraFilters={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <TextField
+              select
+              size="small"
+              label="Supplier"
+              value={selectedSupplierId}
+              onChange={(e) => setSelectedSupplierId(e.target.value)}
+              slotProps={{
+                inputLabel: { shrink: true },
+                select: {
+                  MenuProps: {
+                    slotProps: {
+                      paper: {
+                        sx: { maxHeight: 320, borderRadius: "8px" },
+                      },
+                    },
+                  },
+                },
+              }}
+              sx={{
+                minWidth: 180,
+                maxWidth: 260,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                },
+              }}
+            >
+              <MenuItem value="">All Suppliers</MenuItem>
+              {supplierOptions.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {selectedSupplierId && (
+              <Button
+                size="small"
+                variant="text"
+                color="error"
+                onClick={() => setSelectedSupplierId("")}
+                sx={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
+              >
+                Clear Supplier
+              </Button>
+            )}
+          </Box>
+        }
       />
       <InwardVoucherDialog
         open={open}
@@ -691,8 +769,7 @@ export function OutwardVoucherPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-
-
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | string>("");
 
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["stock-outward", activeFY],
@@ -700,6 +777,7 @@ export function OutwardVoucherPage() {
   });
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Supplier"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data });
+  const { data: allLedgers = [] } = useQuery({ queryKey: ["ledgers-all"], queryFn: async () => (await api.get("/ledgers/")).data });
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: inwardVouchers = [] } = useQuery({
@@ -715,9 +793,40 @@ export function OutwardVoucherPage() {
 
   const ledgerMap = useMemo(() => {
     const map: Record<number, string> = {};
+    allLedgers.forEach((l: any) => map[l.id] = l.name);
     ledgers.forEach((l: any) => map[l.id] = l.name);
     return map;
-  }, [ledgers]);
+  }, [allLedgers, ledgers]);
+
+  const supplierOptions = useMemo(() => {
+    const usedIds = new Set<number>();
+    items.forEach((item: any) => {
+      if (item.ledger_id) usedIds.add(Number(item.ledger_id));
+    });
+
+    const list: { id: number; name: string }[] = [];
+    const added = new Set<number>();
+
+    usedIds.forEach((id) => {
+      list.push({ id, name: ledgerMap[id] || `Supplier #${id}` });
+      added.add(id);
+    });
+
+    const sourceLedgers = allLedgers.length > 0 ? allLedgers : ledgers;
+    sourceLedgers.forEach((l: any) => {
+      if (!added.has(l.id) && (l.ledger_type === "Account" || !l.ledger_type)) {
+        list.push({ id: l.id, name: l.name });
+        added.add(l.id);
+      }
+    });
+
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, allLedgers, ledgers, ledgerMap]);
+
+  const filteredItems = useMemo(() => {
+    if (!selectedSupplierId) return items;
+    return items.filter((row: any) => Number(row.ledger_id) === Number(selectedSupplierId));
+  }, [items, selectedSupplierId]);
 
   const productMapObj = useMemo(() => {
     const map: Record<number | string, any> = {};
@@ -1127,7 +1236,7 @@ export function OutwardVoucherPage() {
     <Box>
       <PageHeader title="Outward Voucher" subtitle="Record outgoing process work" breadcrumbs={[{ label: "Customer Material" }]} />
       <OrbxGrid
-        rowData={items}
+        rowData={filteredItems}
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={() => refetch()}
@@ -1136,6 +1245,54 @@ export function OutwardVoucherPage() {
         }}
         onAdd={() => handleOpen()}
         addLabel="New Outward"
+        extraFilters={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <TextField
+              select
+              size="small"
+              label="Supplier"
+              value={selectedSupplierId}
+              onChange={(e) => setSelectedSupplierId(e.target.value)}
+              slotProps={{
+                inputLabel: { shrink: true },
+                select: {
+                  MenuProps: {
+                    slotProps: {
+                      paper: {
+                        sx: { maxHeight: 320, borderRadius: "8px" },
+                      },
+                    },
+                  },
+                },
+              }}
+              sx={{
+                minWidth: 180,
+                maxWidth: 260,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                },
+              }}
+            >
+              <MenuItem value="">All Suppliers</MenuItem>
+              {supplierOptions.map((s) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {selectedSupplierId && (
+              <Button
+                size="small"
+                variant="text"
+                color="error"
+                onClick={() => setSelectedSupplierId("")}
+                sx={{ textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
+              >
+                Clear Supplier
+              </Button>
+            )}
+          </Box>
+        }
       />
       <OutwardVoucherDialog
         open={open}
