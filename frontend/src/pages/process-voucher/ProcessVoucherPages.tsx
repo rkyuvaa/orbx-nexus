@@ -58,37 +58,25 @@ export function InwardVoucherPage() {
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers-all"], queryFn: async () => (await api.get("/ledgers/")).data });
+  const { data: masterSuppliers = [] } = useQuery({
+    queryKey: ["ledgers", "Account"],
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+  });
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
 
   const ledgerMap = useMemo(() => {
     const map: Record<number, string> = {};
     ledgers.forEach((l: any) => map[l.id] = l.name);
+    masterSuppliers.forEach((l: any) => map[l.id] = l.name);
     return map;
-  }, [ledgers]);
+  }, [ledgers, masterSuppliers]);
 
+  // Linked directly from Master - Supplier
   const supplierOptions = useMemo(() => {
-    const usedIds = new Set<number>();
-    items.forEach((item: any) => {
-      if (item.ledger_id) usedIds.add(Number(item.ledger_id));
-    });
-
-    const list: { id: number; name: string }[] = [];
-    const added = new Set<number>();
-
-    usedIds.forEach((id) => {
-      list.push({ id, name: ledgerMap[id] || `Supplier #${id}` });
-      added.add(id);
-    });
-
-    ledgers.forEach((l: any) => {
-      if (!added.has(l.id) && (l.ledger_type === "Account" || !l.ledger_type)) {
-        list.push({ id: l.id, name: l.name });
-        added.add(l.id);
-      }
-    });
-
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [items, ledgers, ledgerMap]);
+    return (masterSuppliers || [])
+      .map((s: any) => ({ id: s.id, name: s.name }))
+      .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""));
+  }, [masterSuppliers]);
 
   const filteredItems = useMemo(() => {
     if (!selectedSupplierId) return items;
@@ -776,7 +764,7 @@ export function OutwardVoucherPage() {
     queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data,
   });
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
-  const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Supplier"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data });
+  const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Account"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data });
   const { data: allLedgers = [] } = useQuery({ queryKey: ["ledgers-all"], queryFn: async () => (await api.get("/ledgers/")).data });
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
@@ -798,30 +786,12 @@ export function OutwardVoucherPage() {
     return map;
   }, [allLedgers, ledgers]);
 
+  // Linked directly from Master - Supplier
   const supplierOptions = useMemo(() => {
-    const usedIds = new Set<number>();
-    items.forEach((item: any) => {
-      if (item.ledger_id) usedIds.add(Number(item.ledger_id));
-    });
-
-    const list: { id: number; name: string }[] = [];
-    const added = new Set<number>();
-
-    usedIds.forEach((id) => {
-      list.push({ id, name: ledgerMap[id] || `Supplier #${id}` });
-      added.add(id);
-    });
-
-    const sourceLedgers = allLedgers.length > 0 ? allLedgers : ledgers;
-    sourceLedgers.forEach((l: any) => {
-      if (!added.has(l.id) && (l.ledger_type === "Account" || !l.ledger_type)) {
-        list.push({ id: l.id, name: l.name });
-        added.add(l.id);
-      }
-    });
-
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [items, allLedgers, ledgers, ledgerMap]);
+    return (ledgers || [])
+      .map((s: any) => ({ id: s.id, name: s.name }))
+      .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""));
+  }, [ledgers]);
 
   const filteredItems = useMemo(() => {
     if (!selectedSupplierId) return items;
