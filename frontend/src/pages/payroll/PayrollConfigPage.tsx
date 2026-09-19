@@ -14,6 +14,7 @@ import RouterIcon from "@mui/icons-material/Router";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import EventBusyIcon from "@mui/icons-material/EventBusy";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import NetworkCheckIcon from "@mui/icons-material/NetworkCheck";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 
@@ -53,6 +54,9 @@ export default function PayrollConfigPage() {
 
   // ── Config state ──
   const [cfg, setCfg] = useState<any>(DEFAULT_CONFIG);
+
+  // ── Connection test state ──
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // ── Holiday form state ──
   const [newDate, setNewDate] = useState("");
@@ -125,6 +129,24 @@ export default function PayrollConfigPage() {
     onError: (err: any) => {
       const msg = err?.response?.data?.detail || err?.message || "Failed to save configuration";
       alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // ── Test connection ──
+  const testConnMutation = useMutation({
+    mutationFn: async () => {
+      setTestResult(null);
+      const res = await api.post("/payroll/config-settings/test-connection", {
+        device_ip: cfg.device_ip,
+        device_port: cfg.device_port || 4370,
+        device_protocol: cfg.device_protocol || "ZKTeco",
+      });
+      return res.data;
+    },
+    onSuccess: (data: any) => setTestResult(data),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || err?.message || "Failed to test connection";
+      setTestResult({ success: false, message: msg });
     },
   });
 
@@ -296,7 +318,7 @@ export default function PayrollConfigPage() {
                       {PROTOCOLS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                     </TextField>
                   </Grid>
-                  <Grid size={{ xs: 12 }}>
+                  <Grid size={{ xs: 12 }} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2, pt: 1 }}>
                     <FormControlLabel
                       control={
                         <Switch checked={Boolean(cfg.auto_sync)} onChange={setBool("auto_sync")} color="success" />
@@ -307,7 +329,25 @@ export default function PayrollConfigPage() {
                         </Typography>
                       }
                     />
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      startIcon={<NetworkCheckIcon />}
+                      onClick={() => testConnMutation.mutate()}
+                      disabled={testConnMutation.isPending || !cfg.device_ip?.trim()}
+                      sx={{ fontWeight: 600, px: 2.5 }}
+                    >
+                      {testConnMutation.isPending ? "Testing Connection..." : "Test Connection"}
+                    </Button>
                   </Grid>
+
+                  {testResult && (
+                    <Grid size={{ xs: 12 }}>
+                      <Alert severity={testResult.success ? "success" : "error"} onClose={() => setTestResult(null)}>
+                        {testResult.message}
+                      </Alert>
+                    </Grid>
+                  )}
                 </Grid>
               </Box>
             )}

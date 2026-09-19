@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import text
 from pydantic import BaseModel
@@ -30,6 +31,12 @@ class PayrollConfigIn(BaseModel):
 
     # Working days per month (for per-day salary calc fallback)
     working_days_per_month: Optional[int] = 26
+
+
+class TestConnectionIn(BaseModel):
+    device_ip: Optional[str] = ""
+    device_port: Optional[int] = 4370
+    device_protocol: Optional[str] = "ZKTeco"
 
 
 @router.get("")
@@ -122,6 +129,39 @@ async def upsert_payroll_config(body: PayrollConfigIn, current_user: CurrentUser
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=400, detail=f"Failed to save payroll configuration: {str(e)}")
+
+
+@router.post("/test-connection")
+async def test_device_connection(body: TestConnectionIn, current_user: CurrentUser):
+    """Test TCP network connection to the biometric machine."""
+    ip = (body.device_ip or "").strip()
+    port = body.device_port or 4370
+
+    if not ip:
+        return {
+            "success": False,
+            "message": "Device IP address is required to test connection."
+        }
+
+    try:
+        conn = asyncio.open_connection(ip, port)
+        reader, writer = await asyncio.wait_for(conn, timeout=3.0)
+        writer.close()
+        await writer.wait_closed()
+        return {
+            "success": True,
+            "message": f"Successfully connected to biometric machine at {ip}:{port} ({body.device_protocol or 'ZKTeco'})."
+        }
+    except asyncio.TimeoutError:
+        return {
+            "success": False,
+            "message": f"Connection to {ip}:{port} timed out after 3 seconds. Please check device IP, power, and local network connection."
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Could not connect to {ip}:{port} — {str(e)}"
+        }
 
 
 # ─── Holidays ──────────────────────────────────────────────────────────────────
