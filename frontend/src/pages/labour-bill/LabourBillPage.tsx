@@ -84,6 +84,49 @@ function WorkDetailsActionMenu({
 
 
 
+export const getBillShotBlastingWeight = (
+  row: any,
+  processMap: Record<number | string, any> = {},
+  processesList: any[] = []
+): number => {
+  if (!row) return 0;
+
+  let itemsArray: any[] = [];
+  if (typeof row.items === "string") {
+    try {
+      itemsArray = JSON.parse(row.items);
+    } catch (e) {
+      itemsArray = [];
+    }
+  } else if (Array.isArray(row.items)) {
+    itemsArray = row.items;
+  }
+
+  if (itemsArray && itemsArray.length > 0) {
+    // 1. Try to find items matching "shot" in process name, code, or resolved name
+    const shotItems = itemsArray.filter((item: any) => {
+      const proc = processMap[item.process_id] || processesList.find((p: any) => p.id === Number(item.process_id));
+      const name = (proc && (proc.name || proc.process_name || proc.process_code)) || "";
+      if (/shot/i.test(name)) return true;
+      const resolved = resolveProcessName(item.process_id, processesList);
+      return /shot/i.test(resolved);
+    });
+
+    if (shotItems.length > 0) {
+      const sumShotQty = shotItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+      if (sumShotQty > 0) return sumShotQty;
+    }
+
+    // 2. All items start with shotblasting only, so the first item's quantity covers all
+    const firstQty = Number(itemsArray[0]?.quantity);
+    if (!isNaN(firstQty) && firstQty > 0) {
+      return firstQty;
+    }
+  }
+
+  return Number(row.quantity || 0);
+};
+
 export default function LabourBillPage() {
 
   const { activeFY } = useAuthStore();
@@ -1475,7 +1518,14 @@ export default function LabourBillPage() {
     { field: "bill_no", headerName: "Bill No.", width: 110 },
     { field: "bill_date", headerName: "Date", width: 95 },
     { field: "ledger_id", headerName: "Supplier", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
-    { field: "quantity", headerName: "Weight", width: 80, type: "numericColumn", valueFormatter: (p) => formatWeight(p.value) },
+    { 
+      field: "quantity", 
+      headerName: "Weight", 
+      width: 80, 
+      type: "numericColumn", 
+      valueGetter: (p) => getBillShotBlastingWeight(p.data, processMapObj, processes),
+      valueFormatter: (p) => formatWeight(p.value) 
+    },
     { field: "total_amount", headerName: "Total Amount", width: 130, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value || p.data?.net_amount)}` },
     { field: "is_paid", headerName: "Status", width: 90, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Paid" : "Pending"} color={p.value ? "success" : "warning"} /> },
     { headerName: "Actions", width: 200, sortable: false, filter: false, cellRenderer: (p: any) => (
@@ -1719,12 +1769,18 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   };
 
   const getShotBlastingWeight = () => {
-    const shotItem = lineItems.find((item: any) => {
-      const proc = processMapObj[item.process_id];
-      const name = (proc && proc.name) || "";
-      return /shot/i.test(name);
+    const shotItems = lineItems.filter((item: any) => {
+      const proc = processMapObj[item.process_id] || processes.find((p: any) => p.id === Number(item.process_id));
+      const name = (proc && (proc.name || proc.process_name || proc.process_code)) || "";
+      if (/shot/i.test(name)) return true;
+      const resolved = resolveProcessName(item.process_id, processes);
+      return /shot/i.test(resolved);
     });
-    return Number(shotItem?.quantity) || 0;
+    if (shotItems.length > 0) {
+      const sumQty = shotItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+      if (sumQty > 0) return sumQty;
+    }
+    return Number(lineItems[0]?.quantity) || 0;
   };
 
   const computeLineItemsFromOutwards = (outs: any[]) => {
@@ -1964,6 +2020,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
+      const shotWeight = getShotBlastingWeight();
+      const finalWeight = shotWeight > 0 ? shotWeight : (Number(lineItems[0]?.quantity) || totalQty);
       const payload = {
         bill_no: formData.bill_no,
         bill_date: formData.bill_date,
@@ -1971,7 +2029,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         inward_id: selectedInwards.length > 0 ? selectedInwards[0].id : null,
         product_id: lineItems[0]?.product_id ? Number(lineItems[0].product_id) : null,
         process_id: lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null,
-        quantity: totalQty,
+        quantity: finalWeight,
         rate: lineItems[0]?.rate ? Number(lineItems[0].rate) : 0,
         amount: subtotalAmount,
         gst_percent: gstPercent,

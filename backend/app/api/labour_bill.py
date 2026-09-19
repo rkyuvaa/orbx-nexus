@@ -217,6 +217,37 @@ async def list_labour_bills(
     return [dict(r) for r in result.mappings().all()]
 
 
+async def _resolve_bill_weight(db: DBSession, body_quantity: float, items: list[dict] | None) -> float:
+    if not items or len(items) == 0:
+        return body_quantity
+
+    proc_ids = [it.get("process_id") for it in items if it.get("process_id")]
+    if proc_ids:
+        numeric_pids = [int(p) for p in proc_ids if str(p).isdigit()]
+        if numeric_pids:
+            res = await db.execute(
+                text("SELECT id, name, process_code FROM master.processes WHERE id = ANY(:pids)"),
+                {"pids": numeric_pids}
+            )
+            proc_rows = res.mappings().all()
+            shot_ids = {
+                r["id"] for r in proc_rows
+                if "shot" in (r["name"] or "").lower() or "shot" in (r["process_code"] or "").lower()
+            }
+            shot_weight = sum(
+                float(it.get("quantity") or 0)
+                for it in items
+                if it.get("process_id") and int(it["process_id"]) in shot_ids
+            )
+            if shot_weight > 0:
+                return shot_weight
+
+    first_qty = float(items[0].get("quantity") or 0)
+    if first_qty > 0:
+        return first_qty
+    return body_quantity
+
+
 @router.post("/", status_code=201)
 async def create_labour_bill(
     body: LabourBillIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
@@ -228,6 +259,7 @@ async def create_labour_bill(
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
+    bill_qty = await _resolve_bill_weight(db, body.quantity, body.items)
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.labour_bills "
@@ -239,7 +271,7 @@ async def create_labour_bill(
         {
             "bno": bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
             "iid": body.inward_id, "pid": body.product_id, "prid": body.process_id,
-            "qty": body.quantity, "rate": body.rate, "amt": body.amount,
+            "qty": bill_qty, "rate": body.rate, "amt": body.amount,
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
@@ -261,6 +293,7 @@ async def update_labour_bill(
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
+    bill_qty = await _resolve_bill_weight(db, body.quantity, body.items)
     await db.execute(
         text(
             f"UPDATE {schema}.labour_bills SET bill_no=:bno, bill_date=:bdate, ledger_id=:lid, "
@@ -273,7 +306,7 @@ async def update_labour_bill(
         {
             "bno": body.bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
             "iid": body.inward_id, "pid": body.product_id, "prid": body.process_id,
-            "qty": body.quantity, "rate": body.rate, "amt": body.amount,
+            "qty": bill_qty, "rate": body.rate, "amt": body.amount,
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
             "sgp": body.sgst_percent, "sga": body.sgst_amount,

@@ -98,6 +98,30 @@ async def lifespan(app: FastAPI):
             async with engine.begin() as conn:
                 for col in ("items JSONB DEFAULT '[]'::jsonb", "outward_ids JSONB DEFAULT '[]'::jsonb", "dispatch_through VARCHAR(255)", "freight_items JSONB DEFAULT '[]'::jsonb"):
                     await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.labour_bills ADD COLUMN IF NOT EXISTS {col}"))
+                # Recalculate quantity for existing labour bills to shotblasting weight if items present
+                try:
+                    await conn.execute(text(f"""
+                        UPDATE fy_{fy['year_str']}.labour_bills lb
+                        SET quantity = COALESCE(
+                            NULLIF((
+                                SELECT SUM(COALESCE(NULLIF(elem->>'quantity', ''), '0')::numeric)
+                                FROM jsonb_array_elements(lb.items) AS elem
+                                JOIN master.processes p ON p.id = NULLIF(elem->>'process_id', '')::int
+                                WHERE p.name ILIKE '%shot%' OR p.process_code ILIKE '%shot%'
+                            ), 0),
+                            (
+                                SELECT COALESCE(NULLIF(elem->>'quantity', ''), '0')::numeric
+                                FROM jsonb_array_elements(lb.items) AS elem
+                                LIMIT 1
+                            ),
+                            lb.quantity
+                        )
+                        WHERE lb.items IS NOT NULL 
+                          AND jsonb_typeof(lb.items) = 'array' 
+                          AND jsonb_array_length(lb.items) > 0;
+                    """))
+                except Exception as e:
+                    print(f"Labour bill weight migration notice for fy_{fy['year_str']}: {e}")
                 await conn.execute(
                     text(
                         f"ALTER TABLE fy_{fy['year_str']}.stock_item_movements "
