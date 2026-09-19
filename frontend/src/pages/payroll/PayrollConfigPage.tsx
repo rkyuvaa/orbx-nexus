@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Grid, TextField, Typography, Paper,
@@ -77,14 +77,26 @@ export default function PayrollConfigPage() {
   };
 
   // ── Fetch config ──
-  const { isLoading: cfgLoading } = useQuery({
+  const { data: serverConfig, isLoading: cfgLoading } = useQuery({
     queryKey: ["payroll-config"],
     queryFn: async () => {
       const res = await api.get("/payroll/config-settings/");
-      setCfg({ ...DEFAULT_CONFIG, ...res.data });
       return res.data;
     },
   });
+
+  // Populate state when server data is loaded/updated
+  useEffect(() => {
+    if (serverConfig) {
+      const merged = { ...DEFAULT_CONFIG, ...serverConfig };
+      Object.keys(merged).forEach((k) => {
+        if (merged[k] === null) {
+          merged[k] = (DEFAULT_CONFIG as any)[k] ?? "";
+        }
+      });
+      setCfg(merged);
+    }
+  }, [serverConfig]);
 
   // ── Fetch holidays ──
   const { data: holidays = [], isLoading: hdLoading, refetch: refetchHolidays } = useQuery({
@@ -96,6 +108,12 @@ export default function PayrollConfigPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const { id, created_at, updated_at, ...payload } = cfg;
+
+      if (payload.device_port === "" || payload.device_port == null) payload.device_port = 4370;
+      if (payload.ot_after_hours === "" || payload.ot_after_hours == null) payload.ot_after_hours = 8.0;
+      if (payload.grace_minutes === "" || payload.grace_minutes == null) payload.grace_minutes = 15;
+      if (payload.working_days_per_month === "" || payload.working_days_per_month == null) payload.working_days_per_month = 26;
+
       const res = await api.put("/payroll/config-settings/", payload);
       return res.data;
     },
@@ -131,9 +149,19 @@ export default function PayrollConfigPage() {
     onError: () => alert("Failed to delete holiday"),
   });
 
-  const set = (key: string) => (e: any) => setCfg((c: any) => ({ ...c, [key]: e.target.value }));
-  const setNum = (key: string) => (e: any) => setCfg((c: any) => ({ ...c, [key]: Number(e.target.value) }));
-  const setBool = (key: string) => (e: any) => setCfg((c: any) => ({ ...c, [key]: e.target.checked }));
+  const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setCfg((c: any) => ({ ...c, [key]: val }));
+  };
+
+  const setNum = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setCfg((c: any) => ({ ...c, [key]: val === "" ? "" : Number(val) }));
+  };
+
+  const setBool = (key: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCfg((c: any) => ({ ...c, [key]: e.target.checked }));
+  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, width: "100%" }}>
@@ -229,7 +257,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="Device Name / Description"
-                      value={cfg.device_name || ""}
+                      value={cfg.device_name ?? ""}
                       onChange={set("device_name")}
                       fullWidth
                       placeholder="e.g. Front Gate ZK-U980"
@@ -239,7 +267,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="IP Address"
-                      value={cfg.device_ip || ""}
+                      value={cfg.device_ip ?? ""}
                       onChange={set("device_ip")}
                       fullWidth
                       placeholder="e.g. 192.168.1.100"
@@ -249,7 +277,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 2 }}>
                     <TextField
                       label="Port"
-                      value={cfg.device_port || 4370}
+                      value={cfg.device_port ?? ""}
                       onChange={setNum("device_port")}
                       type="number"
                       fullWidth
@@ -294,7 +322,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="Shift Name"
-                      value={cfg.shift_name || ""}
+                      value={cfg.shift_name ?? ""}
                       onChange={set("shift_name")}
                       fullWidth
                       placeholder="e.g. General Shift"
@@ -304,7 +332,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 2 }}>
                     <TextField
                       label="Shift Start Time"
-                      value={cfg.shift_start || "09:00"}
+                      value={cfg.shift_start ?? "09:00"}
                       onChange={set("shift_start")}
                       type="time"
                       fullWidth
@@ -314,7 +342,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 2 }}>
                     <TextField
                       label="Shift End Time"
-                      value={cfg.shift_end || "18:00"}
+                      value={cfg.shift_end ?? "18:00"}
                       onChange={set("shift_end")}
                       type="time"
                       fullWidth
@@ -324,7 +352,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 2 }}>
                     <TextField
                       label="OT After (hours)"
-                      value={cfg.ot_after_hours ?? 8}
+                      value={cfg.ot_after_hours ?? ""}
                       onChange={setNum("ot_after_hours")}
                       type="number"
                       fullWidth
@@ -335,7 +363,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 2 }}>
                     <TextField
                       label="Grace Period (mins)"
-                      value={cfg.grace_minutes ?? 15}
+                      value={cfg.grace_minutes ?? ""}
                       onChange={setNum("grace_minutes")}
                       type="number"
                       fullWidth
@@ -346,7 +374,7 @@ export default function PayrollConfigPage() {
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="Working Days per Month (default)"
-                      value={cfg.working_days_per_month ?? 26}
+                      value={cfg.working_days_per_month ?? ""}
                       onChange={setNum("working_days_per_month")}
                       type="number"
                       fullWidth
