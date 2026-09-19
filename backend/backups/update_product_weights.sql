@@ -1,3 +1,12 @@
+-- Ensure master.ledgers columns exist
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS basic_salary NUMERIC(15, 2);
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS per_day_salary NUMERIC(15, 2) DEFAULT 0;
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(15, 2) DEFAULT 0;
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS staff_category VARCHAR(20) DEFAULT 'Staff';
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS photo TEXT;
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS process_id INTEGER;
+ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS process_ids VARCHAR(500);
+
 -- Update Product Weights in master.products
 
 UPDATE master.products SET weight = 8.330 WHERE product_code = '2';

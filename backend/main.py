@@ -48,7 +48,18 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Migrate ledger table if needed
-        for col in ("city VARCHAR(100)", "pincode VARCHAR(10)", "state VARCHAR(100)", "photo TEXT", "process_id INTEGER", "process_ids VARCHAR(500)", "staff_category VARCHAR(20) DEFAULT 'Staff'", "hourly_rate NUMERIC(15, 2) DEFAULT 0"):
+        for col in (
+            "city VARCHAR(100)",
+            "pincode VARCHAR(10)",
+            "state VARCHAR(100)",
+            "photo TEXT",
+            "process_id INTEGER",
+            "process_ids VARCHAR(500)",
+            "staff_category VARCHAR(20) DEFAULT 'Staff'",
+            "basic_salary NUMERIC(15, 2)",
+            "per_day_salary NUMERIC(15, 2) DEFAULT 0",
+            "hourly_rate NUMERIC(15, 2) DEFAULT 0",
+        ):
             await conn.execute(text(f"ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS {col}"))
         # Migrate processes table if needed
         for col in ("company_rate NUMERIC(15, 4) DEFAULT 0", "contractor_rate NUMERIC(15, 4) DEFAULT 0"):
