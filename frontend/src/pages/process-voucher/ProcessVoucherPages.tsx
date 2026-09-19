@@ -384,7 +384,14 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
-  const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers-all"], queryFn: async () => (await api.get("/ledgers/")).data });
+  const { data: ledgers = [] } = useQuery({
+    queryKey: ["ledgers", "Account"],
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+  });
+  const { data: allLedgers = [] } = useQuery({
+    queryKey: ["ledgers-all"],
+    queryFn: async () => (await api.get("/ledgers/")).data,
+  });
 
   const { data: suggestedProcesses = [] } = useQuery({
     queryKey: ["suggested-processes", activeFY],
@@ -399,8 +406,15 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
 
   const ledgerMapObj = useMemo(() => {
     const map: Record<number | string, any> = {};
+    allLedgers.forEach((l: any) => { map[l.id] = l; });
     ledgers.forEach((l: any) => { map[l.id] = l; });
     return map;
+  }, [ledgers, allLedgers]);
+
+  const supplierOptions = useMemo(() => {
+    return (ledgers || [])
+      .map((s: any) => ({ id: s.id, name: s.name }))
+      .sort((a: any, b: any) => (a.name || "").localeCompare(b.name || ""));
   }, [ledgers]);
 
 
@@ -602,8 +616,9 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                 size="small"
                 value={ledgerMapObj[watch("ledger_id")] || null}
                 onChange={(_, val) => setValue("ledger_id", val ? val.id : "")}
-                options={ledgers}
+                options={supplierOptions}
                 getOptionLabel={(option: any) => option.name || ""}
+                isOptionEqualToValue={(option: any, val: any) => option?.id === val?.id || String(option?.id) === String(val?.id)}
                 noOptionsText="No matching suppliers"
                 renderInput={(params) => <TextField {...params} label="Supplier Name *" required={!watch("ledger_id")} />}
               />
