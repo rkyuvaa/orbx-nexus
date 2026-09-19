@@ -130,6 +130,9 @@ async def lifespan(app: FastAPI):
                 )
                 AND (l.ledger_type IS NULL OR l.ledger_type = 'Account');
             """))
+        except Exception as e:
+            print(f"Staff ledger migration notice: {e}")
+
         # Create payroll config and holidays tables
         try:
             await conn.execute(text("""
