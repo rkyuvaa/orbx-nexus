@@ -415,13 +415,6 @@ export function SalaryVoucherPage() {
       )
     },
     {
-      field: "per_day_salary",
-      headerName: "Per Day Salary",
-      width: 125,
-      type: "numericColumn",
-      valueFormatter: (p) => `₹${formatAmount(p.value || 0)}`
-    },
-    {
       field: "payable_amount",
       headerName: "Payable Amount",
       width: 145,
