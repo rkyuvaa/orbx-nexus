@@ -215,6 +215,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   };
 
   const colDefs: ColDef[] = [
+    { field: "id", headerName: "ID", width: 80 },
     {
       field: "name",
       headerName: "Name",
@@ -395,7 +396,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
         <form onSubmit={handleSubmit(onSubmit, (errs) => console.error("Form validation errors:", errs))}>
-          <DialogTitle>{editing ? `Edit ${displayName}` : `Add ${displayName}`}</DialogTitle>
+          <DialogTitle>{editing ? `Edit ${displayName} (ID: #${editing.id})` : `Add ${displayName}`}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
               <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("name")} label="Name *" fullWidth error={!!errors.name} helperText={errors.name?.message ? String(errors.name.message) : ""} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
