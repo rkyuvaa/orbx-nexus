@@ -317,7 +317,15 @@ async def delete_ledger(ledger_id: int, current_user: CurrentUser, db: DBSession
     ledger = result.scalar_one_or_none()
     if not ledger:
         raise HTTPException(status_code=404, detail="Ledger not found")
-    await db.delete(ledger)
+    try:
+        await db.delete(ledger)
+        await db.flush()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete ledger '{ledger.name}' because it has linked transactions or vouchers. You can deactivate it using the Status toggle instead."
+        )
     await log_audit_event(
         db=db, user_id=current_user.id, username=current_user.username,
         action="DELETE", module="Ledgers", record_id=ledger_id

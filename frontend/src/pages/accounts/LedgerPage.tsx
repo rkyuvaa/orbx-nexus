@@ -149,17 +149,14 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     },
   });
 
+  const ledgerToDelete = useMemo(() => {
+    return ledgers.find((l: any) => l.id === deleteId);
+  }, [ledgers, deleteId]);
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const targetRow = ledgers.find((l: any) => l.id === id);
-      const isCurrentlyInactive = statusFilter === "inactive" || (targetRow && targetRow.is_active === false);
-
-      if (isCurrentlyInactive) {
-        await api.delete(`/ledgers/${id}`);
-        localStorage.removeItem(`ledger_photo_${id}`);
-      } else {
-        await api.patch(`/ledgers/${id}/status`, { is_active: false });
-      }
+      await api.delete(`/ledgers/${id}`);
+      localStorage.removeItem(`ledger_photo_${id}`);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ledgers"] });
@@ -173,20 +170,12 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
 
   const bulkDeleteMutation = useMutation({
     mutationFn: async (rows: any[]) => {
-      if (statusFilter === "inactive") {
-        await Promise.all(
-          rows.map(async (r) => {
-            await api.delete(`/ledgers/${r.id}`);
-            localStorage.removeItem(`ledger_photo_${r.id}`);
-          })
-        );
-      } else {
-        await Promise.all(
-          rows.map(async (r) => {
-            await api.patch(`/ledgers/${r.id}/status`, { is_active: false });
-          })
-        );
-      }
+      await Promise.all(
+        rows.map(async (r) => {
+          await api.delete(`/ledgers/${r.id}`);
+          localStorage.removeItem(`ledger_photo_${r.id}`);
+        })
+      );
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
@@ -623,24 +612,25 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
         </form>
       </Dialog>
 
-      <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs">
-        <DialogTitle>{statusFilter === "inactive" ? `Permanently Delete ${displayName}?` : `Mark ${displayName} as Inactive?`}</DialogTitle>
+      <Dialog open={!!deleteId} onClose={() => setDeleteId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Delete {displayName}?</DialogTitle>
         <DialogContent>
-          <Alert severity={statusFilter === "inactive" ? "error" : "warning"}>
-            {statusFilter === "inactive"
-              ? "This will permanently remove the record from the database."
-              : `This will move the ${displayName.toLowerCase()} to the Inactive tab.`}
+          <Alert severity="error" sx={{ mb: 1.5 }}>
+            Are you sure you want to delete <strong>{ledgerToDelete?.name || `this ${displayName.toLowerCase()}`}</strong>?
           </Alert>
+          <Typography variant="body2" color="text.secondary">
+            This action cannot be undone. This record will be permanently deleted from the database.
+          </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button onClick={() => setDeleteId(null)} variant="outlined">Cancel</Button>
           <Button
-            color={statusFilter === "inactive" ? "error" : "warning"}
+            color="error"
             variant="contained"
             onClick={() => deleteMutation.mutate(deleteId!)}
             disabled={deleteMutation.isPending}
           >
-            {statusFilter === "inactive" ? "Permanently Delete" : "Mark Inactive"}
+            {deleteMutation.isPending ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>
