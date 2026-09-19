@@ -130,8 +130,38 @@ async def lifespan(app: FastAPI):
                 )
                 AND (l.ledger_type IS NULL OR l.ledger_type = 'Account');
             """))
+        # Create payroll config and holidays tables
+        try:
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS master.payroll_config (
+                    id SERIAL PRIMARY KEY,
+                    device_name VARCHAR(200),
+                    device_ip VARCHAR(100),
+                    device_port INTEGER DEFAULT 4370,
+                    device_protocol VARCHAR(50) DEFAULT 'ZKTeco',
+                    auto_sync BOOLEAN DEFAULT FALSE,
+                    shift_name VARCHAR(100) DEFAULT 'General Shift',
+                    shift_start VARCHAR(10) DEFAULT '09:00',
+                    shift_end VARCHAR(10) DEFAULT '18:00',
+                    ot_after_hours NUMERIC(5,2) DEFAULT 8.0,
+                    grace_minutes INTEGER DEFAULT 15,
+                    week_off_days VARCHAR(50) DEFAULT '0',
+                    working_days_per_month INTEGER DEFAULT 26,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+            """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS master.payroll_holidays (
+                    id SERIAL PRIMARY KEY,
+                    holiday_date DATE NOT NULL,
+                    holiday_name VARCHAR(200) NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """))
         except Exception as e:
-            print(f"Staff ledger migration notice: {e}")
+            print(f"Payroll config table creation notice: {e}")
     print("[OK] Master tables created")
 
     # 3. Ensure financial year schemas exist and run migrations on year tables

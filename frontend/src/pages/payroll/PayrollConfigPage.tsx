@@ -62,7 +62,9 @@ export default function PayrollConfigPage() {
 
   // ── Week off days set ──
   const weekOffSet = useMemo(() => {
-    const parts = (cfg.week_off_days || "0").split(",").map((s: string) => s.trim()).filter(Boolean);
+    const raw = cfg.week_off_days;
+    if (raw === null || raw === undefined || raw === "") return new Set<string>();
+    const parts = String(raw).split(",").map((s: string) => s.trim()).filter(Boolean);
     return new Set<string>(parts);
   }, [cfg.week_off_days]);
 
@@ -70,7 +72,8 @@ export default function PayrollConfigPage() {
     const s = new Set(weekOffSet);
     if (s.has(day)) s.delete(day);
     else s.add(day);
-    setCfg((c: any) => ({ ...c, week_off_days: Array.from(s).sort().join(",") || "0" }));
+    const updated = Array.from(s).sort().join(",");
+    setCfg((c: any) => ({ ...c, week_off_days: updated }));
   };
 
   // ── Fetch config ──
@@ -91,13 +94,20 @@ export default function PayrollConfigPage() {
 
   // ── Save config ──
   const saveMutation = useMutation({
-    mutationFn: async () => { await api.put("/payroll/config-settings/", cfg); },
+    mutationFn: async () => {
+      const { id, created_at, updated_at, ...payload } = cfg;
+      const res = await api.put("/payroll/config-settings/", payload);
+      return res.data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payroll-config"] });
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 3500);
     },
-    onError: (err: any) => alert(err?.response?.data?.detail || "Failed to save configuration"),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || err?.message || "Failed to save configuration";
+      alert(typeof msg === "string" ? msg : JSON.stringify(msg));
+    },
   });
 
   // ── Add holiday ──
@@ -126,15 +136,32 @@ export default function PayrollConfigPage() {
   const setBool = (key: string) => (e: any) => setCfg((c: any) => ({ ...c, [key]: e.target.checked }));
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <PageHeader
-        title="Payroll Configuration"
-        subtitle="Configure biometric machine, shifts, holidays and week off settings"
-        breadcrumbs={BREADCRUMBS}
-      />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, width: "100%" }}>
+      {/* ── Top Header with Action Button ── */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+        <PageHeader
+          title="Payroll Configuration"
+          subtitle="Configure biometric machine, shifts, holidays and week off settings"
+          breadcrumbs={BREADCRUMBS}
+        />
+        {activeTab !== 3 && (
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<Save />}
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            sx={{ fontWeight: 700, px: 3, height: 40 }}
+          >
+            {saveMutation.isPending ? "Saving..." : "Save Configuration"}
+          </Button>
+        )}
+      </Box>
 
       {saveSuccess && (
-        <Alert severity="success" sx={{ mb: 1 }}>Configuration saved successfully!</Alert>
+        <Alert severity="success" sx={{ mb: 1 }}>
+          Configuration saved successfully!
+        </Alert>
       )}
 
       {cfgLoading ? (
@@ -142,9 +169,9 @@ export default function PayrollConfigPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <Paper variant="outlined" sx={{ borderRadius: "12px", overflow: "hidden" }}>
+        <Paper variant="outlined" sx={{ borderRadius: "12px", width: "100%" }}>
           {/* ── Tab Bar ── */}
-          <Box sx={{ borderBottom: "1px solid #e2e8f0", bgcolor: "#f8fafc" }}>
+          <Box sx={{ borderBottom: "1px solid #e2e8f0", bgcolor: "#f8fafc", borderTopLeftRadius: "12px", borderTopRightRadius: "12px" }}>
             <Tabs
               value={activeTab}
               onChange={(_, v) => setActiveTab(v)}
@@ -341,7 +368,7 @@ export default function PayrollConfigPage() {
                   <FormLabel component="legend" sx={{ fontWeight: 600, mb: 1.5, color: "#92400e" }}>
                     Select Weekly Off Days
                   </FormLabel>
-                  <FormGroup row sx={{ gap: 1 }}>
+                  <FormGroup row sx={{ gap: 1.5, flexWrap: "wrap" }}>
                     {WEEK_DAYS.map((day) => (
                       <Paper
                         key={day.value}
@@ -381,7 +408,7 @@ export default function PayrollConfigPage() {
                   ))}
                   {weekOffSet.size === 0 && (
                     <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
-                      No weekly off days — all 7 days are working days.
+                      No weekly off days selected — all 7 days are considered working days.
                     </Typography>
                   )}
                 </Box>
@@ -520,7 +547,7 @@ export default function PayrollConfigPage() {
               </Box>
             )}
 
-            {/* ── Save Button (not on Holidays tab) ── */}
+            {/* ── Save Button at bottom of settings tabs ── */}
             {activeTab !== 3 && (
               <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3, pt: 2, borderTop: "1px solid #e2e8f0" }}>
                 <Button
