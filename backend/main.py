@@ -99,6 +99,38 @@ async def lifespan(app: FastAPI):
             "p2_to VARCHAR(10)"
         ):
             await conn.execute(text(f"ALTER TABLE master.locations ADD COLUMN IF NOT EXISTS {col}"))
+
+        # Ensure all staff ledgers are active and typed as Staff
+        try:
+            await conn.execute(text("""
+                UPDATE master.ledgers l
+                SET is_active = TRUE
+                WHERE (
+                    l.ledger_type = 'Staff'
+                    OR l.name ILIKE '%(Staff%'
+                    OR EXISTS (
+                        SELECT 1 FROM master.ledger_groups lg
+                        WHERE lg.id = l.group_id
+                          AND (lg.name ILIKE '%Staff%' OR lg.name ILIKE '%Salary%')
+                    )
+                )
+                AND (l.is_active IS FALSE OR l.is_active IS NULL);
+            """))
+            await conn.execute(text("""
+                UPDATE master.ledgers l
+                SET ledger_type = 'Staff'
+                WHERE (
+                    l.name ILIKE '%(Staff%'
+                    OR EXISTS (
+                        SELECT 1 FROM master.ledger_groups lg
+                        WHERE lg.id = l.group_id
+                          AND (lg.name ILIKE '%Staff%' OR lg.name ILIKE '%Salary%')
+                    )
+                )
+                AND (l.ledger_type IS NULL OR l.ledger_type = 'Account');
+            """))
+        except Exception as e:
+            print(f"Staff ledger migration notice: {e}")
     print("[OK] Master tables created")
 
     # 3. Ensure financial year schemas exist and run migrations on year tables

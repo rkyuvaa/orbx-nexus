@@ -194,6 +194,7 @@ async def list_ledgers(
                 (Ledger.ledger_type == "Staff")
                 | (LedgerGroup.name.ilike("%Staff%"))
                 | (LedgerGroup.name.ilike("%Salary%"))
+                | (Ledger.name.ilike("%(Staff%"))
             )
         elif ledger_type == "Contractor":
             q = q.join(LedgerGroup, Ledger.group_id == LedgerGroup.id, isouter=True)

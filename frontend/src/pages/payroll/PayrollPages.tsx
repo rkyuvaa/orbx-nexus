@@ -216,8 +216,15 @@ export function SalaryVoucherPage() {
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", "Staff"],
-    queryFn: async () => (await api.get("/ledgers/?ledger_type=Staff")).data
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Staff&is_active=true")).data
   });
+
+  const staffMembers = useMemo(() => {
+    return ledgers.filter((l: any) => 
+      !l.name.includes("(Staff Advance)") && 
+      !l.name.includes("(Contractor Advance)")
+    );
+  }, [ledgers]);
 
   const staffMap = useMemo(() => {
     const map: Record<number, any> = {};
@@ -543,9 +550,9 @@ export function SalaryVoucherPage() {
                   rules={{ required: "Required" }}
                   render={({ field, fieldState }) => (
                     <LazyAutocomplete
-                      options={ledgers}
+                      options={staffMembers}
                       getOptionLabel={(o: any) => `${o.name}${o.ledger_code ? ` (${o.ledger_code})` : ""}${o.per_day_salary ? ` [₹${o.per_day_salary}/day]` : o.basic_salary ? ` [₹${o.basic_salary}/mo]` : ""}`}
-                      value={ledgers.find((l: any) => l.id === field.value) || null}
+                      value={staffMembers.find((l: any) => l.id === field.value) || ledgers.find((l: any) => l.id === field.value) || null}
                       onChange={(_, v) => {
                         field.onChange(v ? v.id : "");
                       }}

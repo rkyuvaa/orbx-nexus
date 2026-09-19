@@ -71,21 +71,48 @@ async def get_staff_attendance_stats(
     if not staff:
         return {"error": "Staff member not found"}
 
-    # Query biometric entries for this staff in specified month/year
+    # Clean base name: strip " - (Staff Salary)", " - (Staff Advance)", etc.
+    import re
+    full_name = staff["name"] or ""
+    clean_name = re.sub(r'[\s\-]*\((Staff|Contractor)[^\)]*\).*$', '', full_name, flags=re.IGNORECASE).strip()
+
+    # Find all related ledger IDs for this staff member (e.g. Master record, Salary ledger, Advance ledger)
+    rel_res = await db.execute(
+        text("""
+            SELECT id, name, basic_salary, per_day_salary, hourly_rate 
+            FROM master.ledgers 
+            WHERE id = :lid 
+               OR TRIM(name) = :bname 
+               OR TRIM(name) ILIKE :p1
+               OR TRIM(name) ILIKE :p2
+               OR TRIM(name) ILIKE :p3
+        """),
+        {
+            "lid": ledger_id,
+            "bname": clean_name,
+            "p1": f"{clean_name} - (Staff%",
+            "p2": f"{clean_name} (Staff%",
+            "p3": f"{clean_name} - (Contractor%",
+        }
+    )
+    rel_rows = rel_res.mappings().all()
+    all_lids = list({r["id"] for r in rel_rows} | {ledger_id})
+
+    # Query biometric entries for this staff in specified month/year across all linked ledger IDs
     att_res = await db.execute(
         text(
             f"SELECT "
-            f"COUNT(*) FILTER (WHERE status = 'Present') AS present_days, "
-            f"COUNT(*) FILTER (WHERE status = 'Half Day') AS half_days, "
-            f"COUNT(*) FILTER (WHERE status = 'Absent') AS absent_days, "
-            f"COUNT(*) FILTER (WHERE status = 'On Leave') AS leave_days, "
+            f"COUNT(*) FILTER (WHERE status ILIKE '%present%') AS present_days, "
+            f"COUNT(*) FILTER (WHERE status ILIKE '%half%') AS half_days, "
+            f"COUNT(*) FILTER (WHERE status ILIKE '%absent%') AS absent_days, "
+            f"COUNT(*) FILTER (WHERE status ILIKE '%leave%') AS leave_days, "
             f"COALESCE(SUM(hours_worked), 0) AS total_hours, "
             f"COALESCE(SUM(ot_hours), 0) AS total_ot_hours "
             f"FROM {schema}.biometric_entries "
-            f"WHERE ledger_id = :lid "
+            f"WHERE ledger_id = ANY(:lids) "
             f"AND EXTRACT(MONTH FROM entry_date) = :m AND EXTRACT(YEAR FROM entry_date) = :y"
         ),
-        {"lid": ledger_id, "m": month, "y": year}
+        {"lids": all_lids, "m": month, "y": year}
     )
     att = att_res.mappings().first()
 
@@ -99,9 +126,9 @@ async def get_staff_attendance_stats(
     # Working days = Present + (0.5 * Half Day)
     working_days = round(present_days + (0.5 * half_days), 1)
 
-    # Calculate Per Day Salary
-    ledger_per_day = float(staff["per_day_salary"] or 0)
-    basic_salary = float(staff["basic_salary"] or 0)
+    # Resolve per_day_salary and basic_salary across all related ledger records
+    ledger_per_day = max([float(r["per_day_salary"] or 0) for r in rel_rows] + [float(staff["per_day_salary"] or 0), 0.0])
+    basic_salary = max([float(r["basic_salary"] or 0) for r in rel_rows] + [float(staff["basic_salary"] or 0), 0.0])
 
     if ledger_per_day > 0:
         per_day_salary = round(ledger_per_day, 2)

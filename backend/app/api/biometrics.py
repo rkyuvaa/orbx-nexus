@@ -99,7 +99,10 @@ async def attendance_summary(
             f"FROM master.ledgers l "
             f"LEFT JOIN {schema}.biometric_entries be ON be.ledger_id = l.id "
             f"AND EXTRACT(MONTH FROM be.entry_date) = :m AND EXTRACT(YEAR FROM be.entry_date) = :y "
-            f"WHERE (l.ledger_type = 'Staff' OR l.group_id IN (SELECT id FROM master.ledger_groups WHERE name LIKE '%Staff%' OR name LIKE '%Salary%')) AND l.is_active = TRUE "
+            f"WHERE (l.ledger_type = 'Staff' OR l.group_id IN (SELECT id FROM master.ledger_groups WHERE name LIKE '%Staff%' OR name LIKE '%Salary%') OR l.name LIKE '%(Staff%') "
+            f"  AND (l.is_active = TRUE OR l.is_active IS NULL) "
+            f"  AND l.name NOT ILIKE '%(Staff Advance)%' "
+            f"  AND l.name NOT ILIKE '%(Contractor Advance)%' "
             f"GROUP BY l.id, l.name ORDER BY l.name"
         ),
         {"m": month, "y": year}
@@ -146,7 +149,10 @@ async def get_daily_staff_attendance(
             f"FROM master.ledgers l "
             f"LEFT JOIN master.ledger_groups lg ON lg.id = l.group_id "
             f"LEFT JOIN {schema}.biometric_entries be ON be.ledger_id = l.id AND be.entry_date = CAST(:edate AS date) "
-            f"WHERE (l.ledger_type = 'Staff' OR lg.name LIKE '%Staff%' OR lg.name LIKE '%Salary%') AND l.is_active = TRUE "
+            f"WHERE (l.ledger_type = 'Staff' OR lg.name LIKE '%Staff%' OR lg.name LIKE '%Salary%' OR l.name LIKE '%(Staff%') "
+            f"  AND (l.is_active = TRUE OR l.is_active IS NULL) "
+            f"  AND l.name NOT ILIKE '%(Staff Advance)%' "
+            f"  AND l.name NOT ILIKE '%(Contractor Advance)%' "
             f"ORDER BY l.name ASC"
         ),
         {"edate": entry_date}
