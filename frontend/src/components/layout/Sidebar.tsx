@@ -143,7 +143,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Inward Register", path: "/reports/inward-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Outward Register", path: "/reports/outward-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Labour Bill Register", path: "/reports/labour-bill-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Staff Salary A/c", path: "/reports/staff-salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Monthly Report", path: "/reports/monthly", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Trial Balance", path: "/reports/trial-balance", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
