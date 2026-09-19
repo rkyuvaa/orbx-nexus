@@ -435,8 +435,6 @@ export function SalaryVoucherPage() {
         );
       }
     },
-    { field: "allowances", headerName: "Allowances (+)", width: 115, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value || 0)}` },
-    { field: "deductions", headerName: "Deductions (-)", width: 115, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value || 0)}` },
     {
       field: "net_salary",
       headerName: "Net Salary",
@@ -454,7 +452,7 @@ export function SalaryVoucherPage() {
       width: 120,
       sortable: false,
       cellRenderer: (p) => (
-        <Box sx={{ display: "flex", gap: 0.5 }}>
+        <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", gap: 0.5 }}>
           <Tooltip title="View / Print Voucher Slip">
             <IconButton size="small" color="info" onClick={() => setViewVoucher(p.data)}>
               <Print fontSize="small" />
