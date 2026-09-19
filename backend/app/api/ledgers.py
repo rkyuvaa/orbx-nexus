@@ -31,6 +31,7 @@ class LedgerOut(BaseModel):
     id: int
     name: str
     ledger_code: str | None = None
+    biometric_id: str | None = None
     group_id: int | None = 1
     ledger_type: str | None = "Account"
     opening_balance: float | None = 0.0
@@ -62,6 +63,7 @@ class LedgerOut(BaseModel):
 class LedgerCreate(BaseModel):
     name: str
     ledger_code: str | None = None
+    biometric_id: str | None = None
     group_id: int
     ledger_type: str = "Account"
     opening_balance: float = 0
@@ -93,6 +95,7 @@ class LedgerCreate(BaseModel):
 class LedgerUpdate(BaseModel):
     name: str | None = None
     ledger_code: str | None = None
+    biometric_id: str | None = None
     group_id: int | None = None
     ledger_type: str | None = None
     opening_balance: float | None = None

@@ -101,6 +101,12 @@ async def lifespan(app: FastAPI):
         ):
             await conn.execute(text(f"ALTER TABLE master.locations ADD COLUMN IF NOT EXISTS {col}"))
 
+        # Add biometric_id column to master.ledgers
+        try:
+            await conn.execute(text("ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS biometric_id VARCHAR(50)"))
+        except Exception:
+            pass
+
         # Ensure all staff ledgers are active and typed as Staff
         try:
             await conn.execute(text("""

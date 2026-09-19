@@ -128,6 +128,7 @@ class Ledger(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     ledger_code: Mapped[str | None] = mapped_column(String(50), unique=True)
+    biometric_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     group_id: Mapped[int] = mapped_column(Integer, ForeignKey("master.ledger_groups.id"))
     ledger_type: Mapped[str] = mapped_column(String(20), default="Account")
     # Account, Staff, Contractor

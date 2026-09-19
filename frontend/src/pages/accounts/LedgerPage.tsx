@@ -29,6 +29,7 @@ const optionalNumber = z.preprocess((val) => {
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
   ledger_code: z.string().nullish(),
+  biometric_id: z.string().nullish(),
   ledger_type: z.string().nullish(),
   opening_balance: optionalNumber,
   balance_type: z.string().nullish(),
@@ -254,6 +255,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       }
     },
     { field: "ledger_code", headerName: "Code", width: 100 },
+    { field: "biometric_id", headerName: "Biometric ID", width: 130 },
     {
       field: "is_active",
       headerName: "Status",
@@ -399,8 +401,18 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
           <DialogTitle>{editing ? `Edit ${displayName} (ID: #${editing.id})` : `Add ${displayName}`}</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("name")} label="Name *" fullWidth error={!!errors.name} helperText={errors.name?.message ? String(errors.name.message) : ""} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
-              <Grid size={{ xs: 12, sm: 6 }}><TextField {...register("ledger_code")} label="Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 12, sm: 4 }}><TextField {...register("name")} label="Name *" fullWidth error={!!errors.name} helperText={errors.name?.message ? String(errors.name.message) : ""} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 6, sm: 4 }}><TextField {...register("ledger_code")} label="Code" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
+              <Grid size={{ xs: 6, sm: 4 }}>
+                <TextField
+                  {...register("biometric_id")}
+                  label="Biometric Machine User ID"
+                  placeholder="e.g. 101 or 1002"
+                  fullWidth
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  helperText="User ID / PIN set on Biometric Machine"
+                />
+              </Grid>
               <Grid size={{ xs: 6, sm: 3 }}><TextField {...register("opening_balance")} label="Opening Balance" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 6, sm: 3 }}>
                 <Controller name="balance_type" control={control} render={({ field }) => (

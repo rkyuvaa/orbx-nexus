@@ -138,7 +138,7 @@ async def get_daily_staff_attendance(
 
     result = await db.execute(
         text(
-            f"SELECT l.id AS ledger_id, l.name AS staff_name, l.ledger_code AS staff_code, "
+            f"SELECT l.id AS ledger_id, l.name AS staff_name, l.ledger_code AS staff_code, l.biometric_id AS biometric_id, "
             f"be.id AS entry_id, "
             f"COALESCE(be.status, 'Present') AS status, "
             f"be.punch_in::text AS punch_in, "
@@ -222,3 +222,89 @@ async def save_daily_staff_attendance_bulk(
         )
     await db.commit()
     return {"message": f"Saved attendance for {len(body.entries)} staff members on {body.entry_date}"}
+
+
+class DevicePunchItem(BaseModel):
+    device_user_id: str
+    timestamp: str  # e.g. "2026-09-19 09:05:12" or "2026-09-19T09:05:12"
+    device_id: Optional[str] = None
+
+
+class DeviceSyncIn(BaseModel):
+    punches: list[DevicePunchItem]
+
+
+@router.post("/device-sync", status_code=200)
+async def sync_biometric_device_punches(
+    body: DeviceSyncIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
+):
+    """Sync raw biometric device punch logs. Matches employee by biometric_id, ledger_code, or ledger id."""
+    schema = s(fy)
+    result = await db.execute(
+        text("SELECT id, name, ledger_code, biometric_id FROM master.ledgers WHERE ledger_type = 'Staff' OR name ILIKE '%(Staff%'")
+    )
+    staff_rows = [dict(r) for r in result.mappings().all()]
+
+    id_map = {}
+    for s_row in staff_rows:
+        lid = s_row["id"]
+        if s_row.get("biometric_id"):
+            id_map[str(s_row["biometric_id"]).strip().lower()] = lid
+        if s_row.get("ledger_code"):
+            id_map[str(s_row["ledger_code"]).strip().lower()] = lid
+        id_map[str(lid)] = lid
+
+    daily_punches: dict = {}
+    for p in body.punches:
+        uid = str(p.device_user_id).strip().lower()
+        lid = id_map.get(uid)
+        if not lid:
+            continue
+
+        try:
+            ts_clean = p.timestamp.replace("T", " ").split(".")[0]
+            dt = datetime.datetime.strptime(ts_clean, "%Y-%m-%d %H:%M:%S")
+            date_str = dt.strftime("%Y-%m-%d")
+            time_str = dt.strftime("%H:%M:%S")
+        except Exception:
+            continue
+
+        key = (lid, date_str)
+        if key not in daily_punches:
+            daily_punches[key] = []
+        daily_punches[key].append(time_str)
+
+    synced_count = 0
+    for (lid, edate), times in daily_punches.items():
+        times.sort()
+        pin = times[0]
+        pout = times[-1] if len(times) > 1 else None
+
+        hw = 0.0
+        if pin and pout:
+            try:
+                t1 = datetime.datetime.strptime(pin, "%H:%M:%S")
+                t2 = datetime.datetime.strptime(pout, "%H:%M:%S")
+                hw = round((t2 - t1).total_seconds() / 3600.0, 2)
+            except Exception:
+                pass
+
+        status = "Present" if hw > 0 or pin else "Absent"
+
+        await db.execute(
+            text(f"""
+                INSERT INTO {schema}.biometric_entries (ledger_id, entry_date, punch_in, punch_out, hours_worked, status)
+                VALUES (:lid, CAST(:edate AS date), :pin, :pout, :hw, :status)
+                ON CONFLICT (ledger_id, entry_date) DO UPDATE SET
+                    punch_in = LEAST(COALESCE({schema}.biometric_entries.punch_in, EXCLUDED.punch_in), EXCLUDED.punch_in),
+                    punch_out = GREATEST(COALESCE({schema}.biometric_entries.punch_out, EXCLUDED.punch_out), EXCLUDED.punch_out),
+                    hours_worked = EXCLUDED.hours_worked,
+                    status = EXCLUDED.status
+            """),
+            {"lid": lid, "edate": edate, "pin": pin, "pout": pout, "hw": hw, "status": status}
+        )
+        synced_count += 1
+
+    await db.commit()
+    return {"message": f"Successfully synced biometric punches for {synced_count} employee-days."}
+
