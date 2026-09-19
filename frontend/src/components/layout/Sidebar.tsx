@@ -129,6 +129,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Attendance", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Staff Ledgers", path: "/accounts/staff", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Salary Voucher", path: "/payroll/salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Configuration", path: "/payroll/config", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {

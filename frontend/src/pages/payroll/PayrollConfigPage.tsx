@@ -1,0 +1,551 @@
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Box, Button, Grid, TextField, Typography, Paper, Divider,
+  MenuItem, Switch, FormControlLabel, Chip, IconButton, Tooltip,
+  Table, TableHead, TableBody, TableRow, TableCell, Alert,
+  CircularProgress, Accordion, AccordionSummary, AccordionDetails,
+  FormGroup, FormControl, FormLabel, Checkbox
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import Save from "@mui/icons-material/Save";
+import Add from "@mui/icons-material/Add";
+import Delete from "@mui/icons-material/Delete";
+import RouterIcon from "@mui/icons-material/Router";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import EventBusyIcon from "@mui/icons-material/EventBusy";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import PageHeader from "../../components/PageHeader";
+import api from "../../api/client";
+
+const BREADCRUMBS = [{ label: "Salary and Wages" }, { label: "Configuration" }];
+
+const WEEK_DAYS = [
+  { value: "0", label: "Sunday" },
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+];
+
+const PROTOCOLS = ["ZKTeco", "ESSL", "TCP", "HTTP", "SDK"];
+
+const DEFAULT_CONFIG = {
+  device_name: "",
+  device_ip: "",
+  device_port: 4370,
+  device_protocol: "ZKTeco",
+  auto_sync: false,
+  shift_name: "General Shift",
+  shift_start: "09:00",
+  shift_end: "18:00",
+  ot_after_hours: 8.0,
+  grace_minutes: 15,
+  week_off_days: "0",
+  working_days_per_month: 26,
+};
+
+export default function PayrollConfigPage() {
+  const qc = useQueryClient();
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // ── Config state ──
+  const [cfg, setCfg] = useState<any>(DEFAULT_CONFIG);
+
+  // ── Holiday form state ──
+  const [newDate, setNewDate] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [holidayYear, setHolidayYear] = useState(new Date().getFullYear());
+
+  // ── Week off days set ──
+  const weekOffSet = useMemo(() => {
+    const parts = (cfg.week_off_days || "0").split(",").map((s: string) => s.trim()).filter(Boolean);
+    return new Set<string>(parts);
+  }, [cfg.week_off_days]);
+
+  const toggleWeekOff = (day: string) => {
+    const s = new Set(weekOffSet);
+    if (s.has(day)) s.delete(day);
+    else s.add(day);
+    setCfg((c: any) => ({ ...c, week_off_days: Array.from(s).sort().join(",") || "0" }));
+  };
+
+  // ── Fetch config ──
+  const { isLoading: cfgLoading } = useQuery({
+    queryKey: ["payroll-config"],
+    queryFn: async () => {
+      const res = await api.get("/payroll/config-settings/");
+      setCfg({ ...DEFAULT_CONFIG, ...res.data });
+      return res.data;
+    },
+  });
+
+  // ── Fetch holidays ──
+  const { data: holidays = [], isLoading: hdLoading, refetch: refetchHolidays } = useQuery({
+    queryKey: ["payroll-holidays", holidayYear],
+    queryFn: async () => (await api.get(`/payroll/config-settings/holidays?year=${holidayYear}`)).data,
+  });
+
+  // ── Save config ──
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      await api.put("/payroll/config-settings/", cfg);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payroll-config"] });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to save configuration");
+    },
+  });
+
+  // ── Add holiday ──
+  const addHolidayMutation = useMutation({
+    mutationFn: async () => {
+      if (!newDate || !newName.trim()) throw new Error("Date and name are required");
+      await api.post("/payroll/config-settings/holidays", {
+        holiday_date: newDate,
+        holiday_name: newName.trim(),
+        description: newDesc.trim() || null,
+      });
+    },
+    onSuccess: () => {
+      setNewDate("");
+      setNewName("");
+      setNewDesc("");
+      refetchHolidays();
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || err?.message || "Failed to add holiday");
+    },
+  });
+
+  // ── Delete holiday ──
+  const deleteHolidayMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/payroll/config-settings/holidays/${id}`);
+    },
+    onSuccess: () => refetchHolidays(),
+    onError: () => alert("Failed to delete holiday"),
+  });
+
+  const set = (key: string) => (e: any) =>
+    setCfg((c: any) => ({ ...c, [key]: e.target.value }));
+  const setNum = (key: string) => (e: any) =>
+    setCfg((c: any) => ({ ...c, [key]: Number(e.target.value) }));
+  const setBool = (key: string) => (e: any) =>
+    setCfg((c: any) => ({ ...c, [key]: e.target.checked }));
+
+  const sectionSx = {
+    "& .MuiAccordionSummary-root": { bgcolor: "#f8fafc", borderRadius: "8px" },
+    border: "1px solid #e2e8f0",
+    borderRadius: "10px !important",
+    mb: 2,
+    "&:before": { display: "none" },
+    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+  };
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <PageHeader
+        title="Payroll Configuration"
+        subtitle="Configure biometric machine, shifts, holidays and week off settings"
+        breadcrumbs={BREADCRUMBS}
+      />
+
+      {saveSuccess && (
+        <Alert severity="success" sx={{ mb: 1 }}>
+          Configuration saved successfully!
+        </Alert>
+      )}
+
+      {cfgLoading ? (
+        <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          {/* ── 1. Biometric Machine ────────────────────────── */}
+          <Accordion defaultExpanded sx={sectionSx}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <RouterIcon sx={{ color: "#0f5132" }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                  Biometric Machine
+                </Typography>
+                <Chip label="Device Settings" size="small" variant="outlined" color="success" />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2} sx={{ pt: 1 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    label="Device Name / Description"
+                    value={cfg.device_name || ""}
+                    onChange={set("device_name")}
+                    fullWidth
+                    placeholder="e.g. Front Gate ZK-U980"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    label="IP Address"
+                    value={cfg.device_ip || ""}
+                    onChange={set("device_ip")}
+                    fullWidth
+                    placeholder="e.g. 192.168.1.100"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 2 }}>
+                  <TextField
+                    label="Port"
+                    value={cfg.device_port || 4370}
+                    onChange={setNum("device_port")}
+                    type="number"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 2 }}>
+                  <TextField
+                    label="Protocol"
+                    value={cfg.device_protocol || "ZKTeco"}
+                    onChange={set("device_protocol")}
+                    select
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  >
+                    {PROTOCOLS.map((p) => (
+                      <MenuItem key={p} value={p}>{p}</MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={Boolean(cfg.auto_sync)}
+                        onChange={setBool("auto_sync")}
+                        color="success"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Enable Auto-Sync (pull punches from device automatically)
+                      </Typography>
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* ── 2. Shift Timings ────────────────────────────── */}
+          <Accordion defaultExpanded sx={sectionSx}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <AccessTimeIcon sx={{ color: "#1e40af" }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1e40af" }}>
+                  Shift Timings
+                </Typography>
+                <Chip label="Default Shift" size="small" variant="outlined" color="primary" />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2} sx={{ pt: 1 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    label="Shift Name"
+                    value={cfg.shift_name || ""}
+                    onChange={set("shift_name")}
+                    fullWidth
+                    placeholder="e.g. General Shift"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 2 }}>
+                  <TextField
+                    label="Shift Start Time"
+                    value={cfg.shift_start || "09:00"}
+                    onChange={set("shift_start")}
+                    type="time"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 2 }}>
+                  <TextField
+                    label="Shift End Time"
+                    value={cfg.shift_end || "18:00"}
+                    onChange={set("shift_end")}
+                    type="time"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 2 }}>
+                  <TextField
+                    label="OT After (hours)"
+                    value={cfg.ot_after_hours ?? 8}
+                    onChange={setNum("ot_after_hours")}
+                    type="number"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true }, htmlInput: { step: "0.5", min: "1" } }}
+                    helperText="Hours beyond which OT is counted"
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 2 }}>
+                  <TextField
+                    label="Grace Period (mins)"
+                    value={cfg.grace_minutes ?? 15}
+                    onChange={setNum("grace_minutes")}
+                    type="number"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: "0", max: "60" } }}
+                    helperText="Late arrival grace time"
+                  />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <TextField
+                    label="Working Days per Month (default)"
+                    value={cfg.working_days_per_month ?? 26}
+                    onChange={setNum("working_days_per_month")}
+                    type="number"
+                    fullWidth
+                    slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: "20", max: "31" } }}
+                    helperText="Used to calculate per-day salary from monthly salary"
+                  />
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* ── 3. Week Off Days ────────────────────────────── */}
+          <Accordion defaultExpanded sx={sectionSx}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <EventBusyIcon sx={{ color: "#92400e" }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#92400e" }}>
+                  Week Off Days
+                </Typography>
+                <Chip
+                  label={`${weekOffSet.size} day${weekOffSet.size !== 1 ? "s" : ""} off`}
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Select the days that are weekly off (paid holidays). These days will be excluded from attendance calculations.
+              </Typography>
+              <FormControl component="fieldset">
+                <FormLabel component="legend" sx={{ fontWeight: 600, mb: 1 }}>
+                  Select Weekly Off Days
+                </FormLabel>
+                <FormGroup row>
+                  {WEEK_DAYS.map((day) => (
+                    <FormControlLabel
+                      key={day.value}
+                      control={
+                        <Checkbox
+                          checked={weekOffSet.has(day.value)}
+                          onChange={() => toggleWeekOff(day.value)}
+                          color="warning"
+                        />
+                      }
+                      label={day.label}
+                      sx={{ minWidth: 130 }}
+                    />
+                  ))}
+                </FormGroup>
+              </FormControl>
+              <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
+                {WEEK_DAYS.filter((d) => weekOffSet.has(d.value)).map((d) => (
+                  <Chip key={d.value} label={d.label} color="warning" variant="filled" size="small" sx={{ fontWeight: 700 }} />
+                ))}
+                {weekOffSet.size === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                    No weekly off days selected — all 7 days are working days.
+                  </Typography>
+                )}
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* ── Save Button ─────────────────────────────────── */}
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<Save />}
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              size="large"
+              sx={{ fontWeight: 700, px: 4 }}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save Configuration"}
+            </Button>
+          </Box>
+
+          <Divider sx={{ my: 1 }} />
+
+          {/* ── 4. Holidays ─────────────────────────────────── */}
+          <Accordion defaultExpanded sx={{ ...sectionSx, mb: 0 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <CalendarMonthIcon sx={{ color: "#7c3aed" }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#7c3aed" }}>
+                  Holidays
+                </Typography>
+                <Chip label={`${holidays.length} holidays`} size="small" variant="outlined" color="secondary" />
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              {/* Year filter */}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+                <TextField
+                  label="Year"
+                  type="number"
+                  value={holidayYear}
+                  onChange={(e) => setHolidayYear(Number(e.target.value))}
+                  size="small"
+                  sx={{ width: 110 }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Showing holidays for year {holidayYear}
+                </Typography>
+              </Box>
+
+              {/* Add holiday row */}
+              <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: "#faf5ff", borderRadius: "8px", border: "1px dashed #a78bfa" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#7c3aed", mb: 1.5 }}>
+                  Add New Holiday
+                </Typography>
+                <Grid container spacing={2} sx={{ alignItems: "center" }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      label="Date *"
+                      type="date"
+                      value={newDate}
+                      onChange={(e) => setNewDate(e.target.value)}
+                      fullWidth
+                      size="small"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      label="Holiday Name *"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      fullWidth
+                      size="small"
+                      placeholder="e.g. Diwali, Republic Day..."
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      label="Description (optional)"
+                      value={newDesc}
+                      onChange={(e) => setNewDesc(e.target.value)}
+                      fullWidth
+                      size="small"
+                      placeholder="Optional note"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 1 }}>
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      startIcon={<Add />}
+                      onClick={() => addHolidayMutation.mutate()}
+                      disabled={addHolidayMutation.isPending || !newDate || !newName.trim()}
+                      fullWidth
+                      sx={{ fontWeight: 700 }}
+                    >
+                      Add
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Holidays table */}
+              {hdLoading ? (
+                <Box sx={{ py: 3, textAlign: "center" }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : holidays.length === 0 ? (
+                <Alert severity="info">
+                  No holidays added for {holidayYear}. Use the form above to add holidays.
+                </Alert>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "#f3f0ff" }}>
+                      <TableCell sx={{ fontWeight: 700 }}>#</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Day</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Holiday Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {holidays.map((h: any, idx: number) => {
+                      const dt = new Date(h.holiday_date);
+                      const dayName = dt.toLocaleDateString("en-IN", { weekday: "long" });
+                      const dateStr = dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+                      return (
+                        <TableRow key={h.id} sx={{ "&:hover": { bgcolor: "#faf5ff" } }}>
+                          <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{dateStr}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={dayName}
+                              size="small"
+                              variant="outlined"
+                              color={["Saturday", "Sunday"].includes(dayName) ? "warning" : "default"}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>{h.holiday_name}</TableCell>
+                          <TableCell sx={{ color: "text.secondary", fontSize: "0.8rem" }}>{h.description || "—"}</TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Remove Holiday">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => {
+                                  if (window.confirm(`Remove holiday "${h.holiday_name}"?`)) {
+                                    deleteHolidayMutation.mutate(h.id);
+                                  }
+                                }}
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </AccordionDetails>
+          </Accordion>
+        </>
+      )}
+    </Box>
+  );
+}

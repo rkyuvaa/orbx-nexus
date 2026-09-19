@@ -25,6 +25,7 @@ from app.api import (
     stock, labour_bill, salary, contractor,
     reports, biometrics, backups,
     audit, financial_years, sequences,
+    payroll_config,
 )
 
 DEFAULT_YEARS = [
@@ -384,6 +385,7 @@ app.include_router(backups.router, prefix=f"{settings.API_V1_STR}/backups", tags
 app.include_router(audit.router, prefix=f"{settings.API_V1_STR}/audit", tags=["Audit"])
 app.include_router(financial_years.router, prefix=f"{settings.API_V1_STR}/financial-years", tags=["Financial Years"])
 app.include_router(sequences.router, prefix=f"{settings.API_V1_STR}/sequences", tags=["Sequences"])
+app.include_router(payroll_config.router, prefix=f"{settings.API_V1_STR}/payroll/config-settings", tags=["Payroll Config"])
 
 
 @app.get("/")

@@ -12,6 +12,7 @@ import {
   ContractorAdvancePaymentPage, ContractorAdvanceReceiptPage,
   SalaryVoucherPage
 } from "../pages/payroll/PayrollPages";
+import PayrollConfigPage from "../pages/payroll/PayrollConfigPage";
 import {
   PaymentVoucherPage, ReceiptVoucherPage, ContraVoucherPage,
   JournalVoucherPage, PurchaseVoucherPage, MiscExpensesPage
@@ -101,6 +102,7 @@ export const router = createBrowserRouter([
       { path: "payroll/attendance", element: <BiometricsPage /> },
       { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "Salary and Wages" }, { label: "Contractor" }]} /> },
       { path: "payroll/salary", element: <SalaryVoucherPage /> },
+      { path: "payroll/config", element: <PayrollConfigPage /> },
 
       // Contractor Voucher
       { path: "contractor/balance", element: <ContractorBalancePage /> },
