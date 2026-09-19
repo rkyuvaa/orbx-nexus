@@ -31,10 +31,10 @@ class LedgerOut(BaseModel):
     id: int
     name: str
     ledger_code: str | None = None
-    group_id: int
-    ledger_type: str
-    opening_balance: float
-    balance_type: str
+    group_id: int | None = 1
+    ledger_type: str | None = "Account"
+    opening_balance: float | None = 0.0
+    balance_type: str | None = "Dr"
     phone: str | None = None
     mobile: str | None = None
     address: str | None = None
@@ -56,7 +56,7 @@ class LedgerOut(BaseModel):
     photo: str | None = None
     process_id: int | None = None
     process_ids: str | None = None
-    is_active: bool
+    is_active: bool | None = True
 
 
 class LedgerCreate(BaseModel):

@@ -8,7 +8,7 @@ export function LazyAutocomplete<T>(
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  const activeOptions = open
+  const activeOptions = (open || (inputValue && inputValue.trim() !== ""))
     ? options
     : (value ? [value] : []);
 
@@ -36,6 +36,14 @@ export function LazyAutocomplete<T>(
 
   return (
     <Autocomplete
+      openOnFocus
+      isOptionEqualToValue={(option: any, val: any) => {
+        if (!option || !val) return option === val;
+        if (typeof option === "object" && typeof val === "object" && "id" in option && "id" in val) {
+          return String(option.id) === String(val.id);
+        }
+        return option === val;
+      }}
       {...rest}
       value={value}
       open={open}

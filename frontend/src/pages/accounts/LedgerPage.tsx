@@ -138,7 +138,8 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
     onSuccess: () => {
       handleClose();
       setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+        qc.invalidateQueries({ queryKey: ["ledgers"] });
+        qc.invalidateQueries({ queryKey: ["ledgers-all"] });
       }, 100);
     },
     onError: (err: any) => {
@@ -161,7 +162,8 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+      qc.invalidateQueries({ queryKey: ["ledgers"] });
+      qc.invalidateQueries({ queryKey: ["ledgers-all"] });
       setDeleteId(null);
     },
     onError: (err: any) => {
