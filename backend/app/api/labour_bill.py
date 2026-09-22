@@ -254,8 +254,40 @@ async def create_labour_bill(
 ):
     schema = s(fy)
     await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids)
-    from app.services.sequences import generate_and_increment_sequence
-    bill_no = await generate_and_increment_sequence(db, "labour_bill")
+    
+    if body.bill_no and body.bill_no.strip():
+        bill_no = body.bill_no.strip()
+    else:
+        from app.services.sequences import generate_and_increment_sequence
+        bill_no = await generate_and_increment_sequence(db, "labour_bill")
+
+    # Check for duplicate bill_no
+    dup_res = await db.execute(
+        text(f"SELECT id FROM {schema}.labour_bills WHERE bill_no = :bno"),
+        {"bno": bill_no}
+    )
+    if dup_res.mappings().first():
+        if not (body.bill_no and body.bill_no.strip()):
+            from app.services.sequences import generate_and_increment_sequence
+            for _ in range(50):
+                bill_no = await generate_and_increment_sequence(db, "labour_bill")
+                check = await db.execute(
+                    text(f"SELECT id FROM {schema}.labour_bills WHERE bill_no = :bno"),
+                    {"bno": bill_no}
+                )
+                if not check.mappings().first():
+                    break
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Labour Bill number '{bill_no}' already exists in database. Please update Document Numbering settings."
+                )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Labour Bill number '{bill_no}' already exists in database. Please verify or update Document Numbering settings."
+            )
+
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"

@@ -2172,7 +2172,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     },
     onError: (error: any) => {
       console.error("Save error:", error);
-      alert("Failed to save Labour Bill. This usually happens if the Bill Number already exists. Please verify the Bill Number and try again.");
+      const detailMsg = error.response?.data?.detail;
+      const msg = typeof detailMsg === "string" ? detailMsg : (detailMsg ? JSON.stringify(detailMsg) : "Failed to save Labour Bill. This usually happens if the Bill Number already exists. Please verify the Bill Number and try again.");
+      alert(msg);
     }
   });
 
@@ -2212,7 +2214,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             <Grid container spacing={2}>
               {/* Header Details */}
               <Grid size={{ xs: 6, sm: 2 }}>
-                <TextField {...register("bill_no")} label="Bill No. *" fullWidth required size="small" disabled />
+                <TextField {...register("bill_no")} label="Bill No. *" fullWidth required size="small" disabled={Boolean(editing)} />
               </Grid>
               <Grid size={{ xs: 6, sm: 2 }}>
                 <TextField {...register("bill_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
