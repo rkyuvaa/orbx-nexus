@@ -127,6 +127,68 @@ export const getBillShotBlastingWeight = (
   return Number(row.quantity || 0);
 };
 
+// Extract outward line items belonging exclusively to a specific inward ID.
+export const getOutwardLinesForInward = (out: any, inwId: number): any[] => {
+  if (!out || !inwId) return [];
+  let rawItems: any[] = [];
+  if (Array.isArray(out.items) && out.items.length > 0) {
+    rawItems = out.items;
+  } else if (typeof out.items === "string" && out.items.trim() !== "") {
+    try {
+      const parsed = JSON.parse(out.items);
+      if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
+    } catch (e) {}
+  }
+
+  if (rawItems.length === 0) {
+    const outHeaderInwardId = Number(out.inward_id);
+    let headerMatch = outHeaderInwardId === inwId;
+    if (!headerMatch) {
+      const outInwardIds: number[] = (() => {
+        if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+        if (typeof out.inward_ids === "string") {
+          try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch {}
+        }
+        return [];
+      })();
+      headerMatch = outInwardIds.includes(inwId);
+    }
+    if (headerMatch) {
+      return [{
+        product_id: out.product_id || "",
+        process_id: out.process_id || "",
+        quantity: out.total_weight || out.weight || 0,
+        total_weight: out.total_weight || out.weight || 0,
+        weight: out.total_weight || out.weight || 0,
+        inward_id: inwId,
+      }];
+    }
+    return [];
+  }
+
+  const anyHasInwardId = rawItems.some(
+    (item: any) => item.inward_id !== undefined && item.inward_id !== null && item.inward_id !== ""
+  );
+
+  if (anyHasInwardId) {
+    return rawItems.filter((item: any) => Number(item.inward_id) === inwId);
+  } else {
+    const outHeaderInwardId = Number(out.inward_id);
+    let headerMatch = outHeaderInwardId === inwId;
+    if (!headerMatch) {
+      const outInwardIds: number[] = (() => {
+        if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+        if (typeof out.inward_ids === "string") {
+          try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch {}
+        }
+        return [];
+      })();
+      headerMatch = outInwardIds.includes(inwId);
+    }
+    return headerMatch ? rawItems : [];
+  }
+};
+
 export default function LabourBillPage() {
 
   const { activeFY } = useAuthStore();
@@ -814,7 +876,7 @@ export default function LabourBillPage() {
 
       })();
 
-      const outItems = parseJsonArray(out.items);
+      const outItems = row.inward_id ? getOutwardLinesForInward(out, Number(row.inward_id)) : parseJsonArray(out.items);
 
       const pushReportRow = (item: any, outInv: any[]) => {
 
@@ -1285,7 +1347,7 @@ export default function LabourBillPage() {
         return ids.map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id))).filter(Boolean);
       })();
 
-      const outItems = parseJsonArray(out.items);
+      const outItems = row.inward_id ? getOutwardLinesForInward(out, Number(row.inward_id)) : parseJsonArray(out.items);
       const pushReportRow = (item: any, outInv: any[]) => {
         const prodId = Number(item.product_id);
         const invLines = collectInwardLines(outInv, prodId);
@@ -1697,58 +1759,16 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     if (!selectedLedger) return [];
     const supplierInwards = inwardVouchers.filter((inv: any) => inv.ledger_id === Number(selectedLedger));
 
-    const isLinked = (out: any, inwId: number) => {
-      if (Number(out.inward_id) === inwId) return true;
-      if (Array.isArray(out.inward_ids) && out.inward_ids.map(Number).includes(inwId)) return true;
-      if (typeof out.inward_ids === "string") {
-        try {
-          const parsed = JSON.parse(out.inward_ids);
-          if (Array.isArray(parsed) && parsed.map(Number).includes(inwId)) return true;
-        } catch {}
-      }
-      if (Array.isArray(out.items) && out.items.some((i: any) => Number(i.inward_id) === inwId)) return true;
-      const inv = inwardMap[inwId];
-      if (inv) {
-        if (inv.inward_no && out.inward_no === inv.inward_no) return true;
-        if (inv.serial_no && (out.serial_no === inv.serial_no || out.ref_no === inv.serial_no)) return true;
-        if (inv.ref_no && (out.ref_no === inv.ref_no || out.serial_no === inv.ref_no)) return true;
-      }
-      return false;
-    };
-
     return supplierInwards
       .map((inv: any) => {
-        const linkedOutwards = supplierOutwardVouchers.filter((out: any) => isLinked(out, inv.id));
+        const linkedOutwards = supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inv.id).length > 0);
         const unbilledOutwards = linkedOutwards.filter((out: any) => !billedOutwardIdsSet.has(out.id));
         const unbilledOutwardCount = unbilledOutwards.length;
-        // Calculate weight belonging exclusively to this inward from each unbilled outward.
-        // If outward items carry inward_id, sum only those matching inv.id.
-        // Otherwise (legacy single-inward outward), use the full outward weight.
+        
         const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => {
-          const outItems: any[] = (() => {
-            if (Array.isArray(o.items) && o.items.length > 0) return o.items;
-            if (typeof o.items === "string") {
-              try { const p = JSON.parse(o.items); if (Array.isArray(p) && p.length > 0) return p; } catch {}
-            }
-            return [];
-          })();
-          if (outItems.length === 0) {
-            // Header-level only – include full weight (this outward belongs entirely to one inward).
-            return sum + Number(o.total_weight || o.weight || 0);
-          }
-          const anyHasInwardId = outItems.some(
-            (item: any) => item.inward_id !== undefined && item.inward_id !== null && item.inward_id !== ""
-          );
-          if (anyHasInwardId) {
-            // Sum weights of items that explicitly belong to this inward.
-            const filteredWeight = outItems
-              .filter((item: any) => Number(item.inward_id) === inv.id)
-              .reduce((s: number, item: any) => s + Number(item.total_weight || item.weight || 0), 0);
-            return sum + filteredWeight;
-          } else {
-            // Legacy outward: items have no inward_id; use full outward weight.
-            return sum + Number(o.total_weight || o.weight || 0);
-          }
+          const lines = getOutwardLinesForInward(o, inv.id);
+          const weightForInward = lines.reduce((s: number, item: any) => s + Number(item.total_weight || item.weight || 0), 0);
+          return sum + weightForInward;
         }, 0);
         const outwardNos = unbilledOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
 
@@ -1772,7 +1792,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           unbilledWeight,
           outwardNos,
           isOutwardCompleted: isFullyCompleted,
-          hasUnbilledOutward: unbilledOutwardCount > 0,
+          hasUnbilledOutward: unbilledOutwardCount > 0 && unbilledWeight > 0.0001,
         };
       })
       .filter((inv: any) => inv.isOutwardCompleted && inv.hasUnbilledOutward);
@@ -1812,66 +1832,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   };
 
   // selectedInwardId: when provided, only outward items belonging to that inward are included.
-  // Backward-compatible: if an item has no inward_id stored, it is included only when the
-  // outward is a single-inward outward (header inward_id matches) or when no filtering is needed.
   const computeLineItemsFromOutwards = (outs: any[], selectedInwardId: number | null = null) => {
     const newItems: any[] = [];
     outs.forEach((out: any) => {
-      let rawItems: any[] = [];
-      if (out.items && Array.isArray(out.items) && out.items.length > 0) {
-        rawItems = out.items;
-      } else if (typeof out.items === "string") {
-        try {
-          const parsed = JSON.parse(out.items);
-          if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
-        } catch (e) {}
-      }
-
-      if (rawItems.length === 0) {
-        // No line items: use header-level data.
-        // Only include if the header inward_id matches (or no filter is active).
-        if (selectedInwardId === null || Number(out.inward_id) === selectedInwardId) {
-          rawItems = [{
-            product_id: out.product_id || "",
-            process_id: out.process_id || "",
-            quantity: out.total_weight || out.weight || 0,
-          }];
-        }
-      } else {
-        // Filter line items to those belonging to the selected inward.
-        if (selectedInwardId !== null) {
-          // Determine if any item in this outward has an inward_id stored.
-          const anyHasInwardId = rawItems.some(
-            (item: any) => item.inward_id !== undefined && item.inward_id !== null && item.inward_id !== ""
-          );
-
-          if (anyHasInwardId) {
-            // Modern multi-inward outward: filter strictly by inward_id on each item.
-            rawItems = rawItems.filter(
-              (item: any) => Number(item.inward_id) === selectedInwardId
-            );
-          } else {
-            // Legacy single-inward outward: items have no inward_id stored.
-            // Include all items only if the outward header belongs to this inward.
-            const outHeaderInwardId = Number(out.inward_id);
-            // Also check inward_ids array on the outward header.
-            let outwardBelongsToInward = outHeaderInwardId === selectedInwardId;
-            if (!outwardBelongsToInward) {
-              const outInwardIds: number[] = (() => {
-                if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
-                if (typeof out.inward_ids === "string") {
-                  try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch { return []; }
-                }
-                return [];
-              })();
-              outwardBelongsToInward = outInwardIds.includes(selectedInwardId);
-            }
-            if (!outwardBelongsToInward) {
-              rawItems = [];
-            }
-          }
-        }
-      }
+      const rawItems = selectedInwardId !== null ? getOutwardLinesForInward(out, selectedInwardId) : (out.items || []);
 
       rawItems.forEach((item: any) => {
         const productId = item.product_id || out.product_id || "";

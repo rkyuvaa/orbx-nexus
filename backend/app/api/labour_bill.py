@@ -135,7 +135,7 @@ async def _validate_inwards_completed(
             ),
             out_dispatched AS (
               SELECT
-                COALESCE(NULLIF(o_item->>'inward_id', ''), NULLIF(so.inward_id::text, ''))::int AS inward_id,
+                :iid AS inward_id,
                 COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, ''))::int AS product_id,
                 SUM(COALESCE(NULLIF(o_item->>'quantity', ''), NULLIF(so.quantity::text, ''), '0')::numeric) AS dispatched
               FROM {schema}.stock_outward so
@@ -144,9 +144,17 @@ async def _validate_inwards_completed(
                   THEN so.items ELSE NULL END
               ) AS o_item ON TRUE
               WHERE (
-                so.inward_id = :iid
-                OR COALESCE(NULLIF(o_item->>'inward_id', ''), '')::text = :iid_str
-                OR (so.inward_ids IS NOT NULL AND jsonb_typeof(so.inward_ids) = 'array' AND :iid_str = ANY(ARRAY(SELECT jsonb_array_elements_text(so.inward_ids))))
+                (
+                  NULLIF(o_item->>'inward_id', '') IS NOT NULL 
+                  AND (o_item->>'inward_id')::text = :iid_str
+                )
+                OR (
+                  NULLIF(o_item->>'inward_id', '') IS NULL
+                  AND (
+                    so.inward_id = :iid
+                    OR (so.inward_ids IS NOT NULL AND jsonb_typeof(so.inward_ids) = 'array' AND :iid_str = ANY(ARRAY(SELECT jsonb_array_elements_text(so.inward_ids))))
+                  )
+                )
               )
               AND COALESCE(NULLIF(o_item->>'product_id', ''), NULLIF(so.product_id::text, '')) IS NOT NULL
               GROUP BY 1, 2
