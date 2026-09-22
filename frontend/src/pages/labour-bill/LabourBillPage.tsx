@@ -2095,6 +2095,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         bill_date: formData.bill_date,
         ledger_id: Number(formData.ledger_id),
         inward_id: selectedInwards.length > 0 ? selectedInwards[0].id : null,
+        inward_ids: selectedInwards.map((i) => i.id),
         product_id: lineItems[0]?.product_id ? Number(lineItems[0].product_id) : null,
         process_id: lineItems[0]?.process_id ? Number(lineItems[0].process_id) : null,
         quantity: finalWeight,

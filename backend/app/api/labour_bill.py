@@ -14,6 +14,7 @@ class LabourBillIn(BaseModel):
     bill_date: str
     ledger_id: int
     inward_id: int | None = None
+    inward_ids: list[int] | None = None
     product_id: int | None = None
     process_id: int | None = None
     quantity: float = 0
@@ -40,56 +41,15 @@ def s(fy: str) -> str:
 
 
 async def _validate_inwards_completed(
-    db: DBSession, schema: str, inward_id: Optional[int], outward_ids: Optional[list[int]]
+    db: DBSession, schema: str, inward_id: Optional[int], outward_ids: Optional[list[int]] = None, inward_ids: Optional[list[int]] = None
 ):
     inward_ids_to_check: set[int] = set()
     if inward_id:
         inward_ids_to_check.add(inward_id)
-
-    if outward_ids and len(outward_ids) > 0:
-        res = await db.execute(
-            text(
-                f"SELECT inward_id, inward_ids, items FROM {schema}.stock_outward "
-                f"WHERE id = ANY(:oids)"
-            ),
-            {"oids": list(outward_ids)},
-        )
-        for row in res.mappings().all():
-            if row.get("inward_id"):
-                inward_ids_to_check.add(row["inward_id"])
-            raw_iids = row.get("inward_ids")
-            if raw_iids:
-                if isinstance(raw_iids, list):
-                    for i in raw_iids:
-                        if isinstance(i, int):
-                            inward_ids_to_check.add(i)
-                elif isinstance(raw_iids, str):
-                    try:
-                        parsed = json.loads(raw_iids)
-                        if isinstance(parsed, list):
-                            for i in parsed:
-                                if isinstance(i, int):
-                                    inward_ids_to_check.add(i)
-                    except Exception:
-                        pass
-            items = row.get("items")
-            if items:
-                if isinstance(items, list):
-                    for it in items:
-                        if isinstance(it, dict) and it.get("inward_id"):
-                            try:
-                                inward_ids_to_check.add(int(it["inward_id"]))
-                            except Exception:
-                                pass
-                elif isinstance(items, str):
-                    try:
-                        parsed = json.loads(items)
-                        if isinstance(parsed, list):
-                            for it in parsed:
-                                if isinstance(it, dict) and it.get("inward_id"):
-                                    inward_ids_to_check.add(int(it["inward_id"]))
-                    except Exception:
-                        pass
+    if inward_ids:
+        for i in inward_ids:
+            if isinstance(i, int):
+                inward_ids_to_check.add(i)
 
     if not inward_ids_to_check:
         return
@@ -261,7 +221,7 @@ async def create_labour_bill(
     body: LabourBillIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
-    await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids)
+    await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids, body.inward_ids)
     
     if body.bill_no and body.bill_no.strip():
         bill_no = body.bill_no.strip()
@@ -329,7 +289,7 @@ async def update_labour_bill(
     db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
-    await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids)
+    await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids, body.inward_ids)
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
