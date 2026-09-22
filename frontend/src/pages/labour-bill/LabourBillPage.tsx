@@ -1721,7 +1721,35 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         const linkedOutwards = supplierOutwardVouchers.filter((out: any) => isLinked(out, inv.id));
         const unbilledOutwards = linkedOutwards.filter((out: any) => !billedOutwardIdsSet.has(out.id));
         const unbilledOutwardCount = unbilledOutwards.length;
-        const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => sum + Number(o.total_weight || o.weight || 0), 0);
+        // Calculate weight belonging exclusively to this inward from each unbilled outward.
+        // If outward items carry inward_id, sum only those matching inv.id.
+        // Otherwise (legacy single-inward outward), use the full outward weight.
+        const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => {
+          const outItems: any[] = (() => {
+            if (Array.isArray(o.items) && o.items.length > 0) return o.items;
+            if (typeof o.items === "string") {
+              try { const p = JSON.parse(o.items); if (Array.isArray(p) && p.length > 0) return p; } catch {}
+            }
+            return [];
+          })();
+          if (outItems.length === 0) {
+            // Header-level only – include full weight (this outward belongs entirely to one inward).
+            return sum + Number(o.total_weight || o.weight || 0);
+          }
+          const anyHasInwardId = outItems.some(
+            (item: any) => item.inward_id !== undefined && item.inward_id !== null && item.inward_id !== ""
+          );
+          if (anyHasInwardId) {
+            // Sum weights of items that explicitly belong to this inward.
+            const filteredWeight = outItems
+              .filter((item: any) => Number(item.inward_id) === inv.id)
+              .reduce((s: number, item: any) => s + Number(item.total_weight || item.weight || 0), 0);
+            return sum + filteredWeight;
+          } else {
+            // Legacy outward: items have no inward_id; use full outward weight.
+            return sum + Number(o.total_weight || o.weight || 0);
+          }
+        }, 0);
         const outwardNos = unbilledOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
 
         const overallBal = Number(inv.balance_qty ?? 0);
@@ -1783,7 +1811,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return Number(lineItems[0]?.quantity) || 0;
   };
 
-  const computeLineItemsFromOutwards = (outs: any[]) => {
+  // selectedInwardId: when provided, only outward items belonging to that inward are included.
+  // Backward-compatible: if an item has no inward_id stored, it is included only when the
+  // outward is a single-inward outward (header inward_id matches) or when no filtering is needed.
+  const computeLineItemsFromOutwards = (outs: any[], selectedInwardId: number | null = null) => {
     const newItems: any[] = [];
     outs.forEach((out: any) => {
       let rawItems: any[] = [];
@@ -1795,13 +1826,53 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           if (Array.isArray(parsed) && parsed.length > 0) rawItems = parsed;
         } catch (e) {}
       }
+
       if (rawItems.length === 0) {
-        rawItems = [{
-          product_id: out.product_id || "",
-          process_id: out.process_id || "",
-          quantity: out.total_weight || out.weight || 0,
-        }];
+        // No line items: use header-level data.
+        // Only include if the header inward_id matches (or no filter is active).
+        if (selectedInwardId === null || Number(out.inward_id) === selectedInwardId) {
+          rawItems = [{
+            product_id: out.product_id || "",
+            process_id: out.process_id || "",
+            quantity: out.total_weight || out.weight || 0,
+          }];
+        }
+      } else {
+        // Filter line items to those belonging to the selected inward.
+        if (selectedInwardId !== null) {
+          // Determine if any item in this outward has an inward_id stored.
+          const anyHasInwardId = rawItems.some(
+            (item: any) => item.inward_id !== undefined && item.inward_id !== null && item.inward_id !== ""
+          );
+
+          if (anyHasInwardId) {
+            // Modern multi-inward outward: filter strictly by inward_id on each item.
+            rawItems = rawItems.filter(
+              (item: any) => Number(item.inward_id) === selectedInwardId
+            );
+          } else {
+            // Legacy single-inward outward: items have no inward_id stored.
+            // Include all items only if the outward header belongs to this inward.
+            const outHeaderInwardId = Number(out.inward_id);
+            // Also check inward_ids array on the outward header.
+            let outwardBelongsToInward = outHeaderInwardId === selectedInwardId;
+            if (!outwardBelongsToInward) {
+              const outInwardIds: number[] = (() => {
+                if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+                if (typeof out.inward_ids === "string") {
+                  try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch { return []; }
+                }
+                return [];
+              })();
+              outwardBelongsToInward = outInwardIds.includes(selectedInwardId);
+            }
+            if (!outwardBelongsToInward) {
+              rawItems = [];
+            }
+          }
+        }
       }
+
       rawItems.forEach((item: any) => {
         const productId = item.product_id || out.product_id || "";
         const processIdStr = String(item.process_id || out.process_id || "");
@@ -1856,8 +1927,41 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const handleInwardSelectionChange = (newSelected: any[]) => {
     setSelectedInwards(newSelected);
-    const allOuts = newSelected.flatMap((i: any) => i.unbilledOutwards || []);
-    setLineItems(computeLineItemsFromOutwards(allOuts));
+    // Compute line items per-inward so the filtering in computeLineItemsFromOutwards
+    // can exclude outward lines that belong to other inwards.
+    const allItems: any[] = [];
+    newSelected.forEach((inw: any) => {
+      const outs = inw.unbilledOutwards || [];
+      const inwItems = computeLineItemsFromOutwards(outs, inw.id);
+      // Collect all items; they will be merged by process_id below.
+      inwItems.forEach((it: any) => {
+        if (it.process_id || it.product_id) allItems.push(it);
+      });
+    });
+
+    if (allItems.length === 0) {
+      setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+      return;
+    }
+
+    // Merge items by process_id (same logic as inside computeLineItemsFromOutwards).
+    const merged: Record<number | string, any> = {};
+    allItems.forEach((item: any) => {
+      if (!item.process_id) {
+        merged[`temp_${Math.random()}`] = { ...item };
+      } else {
+        const key = Number(item.process_id);
+        if (merged[key]) {
+          const sumQty = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
+          merged[key].quantity = sumQty.toFixed(3);
+          merged[key].amount = Number((sumQty * Number(merged[key].rate || 0)).toFixed(2));
+        } else {
+          merged[key] = { ...item, quantity: Number(item.quantity || 0).toFixed(3) };
+        }
+      }
+    });
+    const result = Object.values(merged);
+    setLineItems(result.length > 0 ? result : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
   };
 
   const handleSupplierChange = (val: any) => {
