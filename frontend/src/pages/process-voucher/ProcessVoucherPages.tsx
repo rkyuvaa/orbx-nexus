@@ -708,12 +708,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                             onChange={(e) => handleLineItemChange(idx, "weight", e.target.value)}
                             fullWidth
                             slotProps={{
-                              input: { readOnly: true },
-                              htmlInput: { "data-field": "weight", "data-row-index": idx }
-                            }}
-                            sx={{
-                              bgcolor: "action.hover",
-                              "& .MuiInputBase-input": { cursor: "not-allowed", fontWeight: 600 }
+                              htmlInput: { "data-field": "weight", "data-row-index": idx, step: "any" }
                             }}
                           />
                         </TableCell>
