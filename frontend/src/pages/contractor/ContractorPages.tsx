@@ -281,7 +281,8 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
           qty = remainingBal;
         }
       } else if (oids.length > 0 && (qty === undefined || qty === null || qty === "")) {
-        qty = remainingBal;
+        // Keep qty blank — user must enter it manually
+        qty = "";
       }
 
       const numQty = Number(qty) || 0;
@@ -345,87 +346,49 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [selectedOutwardIds, outwardProcesses, processes, contractorProcessIds]);
 
   const buildLineItemsFromOutwardIds = (oids: number[], currentItems: any[] = []) => {
-    if (oids.length === 0) return currentItems;
-
-    const voucherItemsMap: Record<number, any> = {};
-
-    oids.forEach((id: number) => {
-      const v = outwardVouchers.find((inv: any) => inv.id === id);
-      if (v) {
-        const vItems = getVoucherItems(v);
-        vItems.forEach((it: any) => {
-          const pid = Number(it.product_id);
-          if (pid) {
-            if (!voucherItemsMap[pid]) {
-              voucherItemsMap[pid] = {
-                product_id: pid,
-                process_id: it.process_id || "",
-                weight: it.weight || "",
-              };
-            }
-          }
-        });
-      }
-    });
-
-    const productIds = Object.keys(voucherItemsMap).map(Number);
-
-    // Keep ALL current user items intact (preserving existing rows as-is)
-    const nextItems = currentItems.filter((item) => {
-      return item.product_id || item.process_id || item.quantity;
-    });
-
-    // Add missing items for products in selected inward vouchers
-    productIds.forEach((pid) => {
-      const exists = nextItems.some((it) => Number(it.product_id) === pid);
-      if (!exists) {
-        const vItem = voucherItemsMap[pid];
-        const prod = products.find((p: any) => Number(p.id) === pid);
-        const masterWeight = prod?.weight && parseFloat(prod.weight) > 0 ? parseFloat(prod.weight) : 0;
-        const weight = vItem.weight && parseFloat(vItem.weight) > 0 ? parseFloat(vItem.weight) : (masterWeight > 0 ? masterWeight : "");
-
-        let procId = vItem.process_id || "";
-        if (!procId && contractorProcessIds.length > 0) {
-          procId = contractorProcessIds[0];
-        }
-        if (!procId && availableProcesses.length > 0) {
-          procId = availableProcesses[0].id;
-        }
-
-        const proc = processes.find((p: any) => Number(p.id) === Number(procId));
-        const rate = proc ? proc.contractor_rate || 0 : 0;
-        const rawBal = getRawBalanceQtyForProcess(procId, pid, oids);
-
-        nextItems.push({
-          product_id: pid,
-          process_id: procId,
-          quantity: rawBal,
-          weight,
-          balance_qty: rawBal,
-          rate,
-          amount: 0
-        });
-      }
-    });
-
-    return recomputeLineItems(nextItems, oids);
+    // Do NOT auto-add rows — just recompute balances of any existing user-added rows.
+    // The user adds items one by one via "+ Add Process Line".
+    const validItems = currentItems.filter((item) => item.product_id || item.process_id || item.quantity);
+    if (validItems.length === 0) {
+      return [{ product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }];
+    }
+    return recomputeLineItems(validItems, oids);
   };
 
   const handleLineChange = (index: number, field: string, val: any) => {
     const updated = [...lineItems];
     updated[index][field] = val;
+
     if (field === "product_id") {
+      // Auto-fill weight from product master
       const prod = products.find((p: any) => Number(p.id) === Number(val));
       if (prod?.weight && parseFloat(prod.weight) > 0) {
         updated[index].weight = parseFloat(prod.weight);
       }
-    }
-    if (field === "product_id" || field === "process_id") {
+      // Auto-default process from Contractor Master if not already set
+      if (!updated[index].process_id) {
+        if (contractorProcessIds.length > 0) {
+          updated[index].process_id = contractorProcessIds[0];
+        } else if (availableProcesses.length > 0) {
+          updated[index].process_id = availableProcesses[0].id;
+        }
+      }
+      // Auto-fill rate from the defaulted process
       const proc = processes.find((p: any) => Number(p.id) === Number(updated[index].process_id));
       if (proc) {
         updated[index].rate = proc.contractor_rate || 0;
       }
+      // Keep qty blank — user must enter it manually
+      updated[index].quantity = "";
     }
+
+    if (field === "process_id") {
+      const proc = processes.find((p: any) => Number(p.id) === Number(val));
+      if (proc) {
+        updated[index].rate = proc.contractor_rate || 0;
+      }
+    }
+
     setLineItems(recomputeLineItems(updated));
   };
 
