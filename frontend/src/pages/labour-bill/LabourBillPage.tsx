@@ -858,6 +858,64 @@ export default function LabourBillPage() {
 
 
 
+    const billItems = (() => {
+      let parsed: any[] = [];
+      if (typeof row.items === "string") {
+        try { parsed = JSON.parse(row.items); } catch (e) {}
+      } else if (Array.isArray(row.items)) {
+        parsed = row.items;
+      }
+      return parsed;
+    })();
+
+    const uniqueActiveProcesses: any[] = [];
+    const seenProcIds = new Set<number>();
+    billItems.forEach((item: any) => {
+      if (item.process_id) {
+        const proc = processes.find((p: any) => p.id === Number(item.process_id));
+        if (proc && !seenProcIds.has(proc.id)) {
+          seenProcIds.add(proc.id);
+          uniqueActiveProcesses.push(proc);
+        }
+      }
+    });
+
+    if (uniqueActiveProcesses.length === 0 && row.process_id) {
+      const proc = processes.find((p: any) => p.id === Number(row.process_id));
+      if (proc) {
+        uniqueActiveProcesses.push(proc);
+      }
+    }
+
+    const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
+      if (!rowProcId) return false;
+      if (Number(rowProcId) === targetProcId) return true;
+      const rowProc = processes.find((p: any) => p.id === Number(rowProcId));
+      if (rowProc) {
+        if (rowProc.process_ids) {
+          const childIds = String(rowProc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+          if (childIds.includes(targetProcId)) return true;
+        }
+        if (rowProc.process_code && rowProc.process_code.includes(" / ")) {
+          const parts = rowProc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          const targetProc = processes.find((p: any) => p.id === targetProcId);
+          if (targetProc && parts.includes(targetProc.process_code)) return true;
+        }
+      }
+      const targetProc = processes.find((p: any) => p.id === Number(targetProcId));
+      if (targetProc) {
+        if (targetProc.process_ids) {
+          const childIds = String(targetProc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+          if (childIds.includes(Number(rowProcId))) return true;
+        }
+        if (targetProc.process_code && targetProc.process_code.includes(" / ")) {
+          const parts = targetProc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          if (rowProc && parts.includes(rowProc.process_code)) return true;
+        }
+      }
+      return false;
+    };
+
     const reportRows: any[] = [];
 
 
@@ -879,6 +937,12 @@ export default function LabourBillPage() {
       const outItems = row.inward_id ? getOutwardLinesForInward(out, Number(row.inward_id)) : parseJsonArray(out.items);
 
       const pushReportRow = (item: any, outInv: any[]) => {
+
+        const itemProcId = item.process_id || out.process_id;
+        if (uniqueActiveProcesses.length > 0) {
+          const matchesAnyActive = uniqueActiveProcesses.some((proc: any) => isProcessInRow(proc.id, itemProcId));
+          if (!matchesAnyActive) return;
+        }
 
         const prodId = Number(item.product_id);
 
@@ -948,7 +1012,7 @@ export default function LabourBillPage() {
 
     // Fallback: bill with inwards but no linked outwards
 
-    if (reportRows.length === 0 && linkedInwards.length > 0) {
+    if (reportRows.length === 0 && linkedOutwards.length === 0 && linkedInwards.length > 0) {
 
       linkedInwards.forEach((inv: any) => {
 
@@ -993,59 +1057,19 @@ export default function LabourBillPage() {
         } else {
       invItems.forEach((item: any) => pushInvRow(item));
         }
+
       });
+
     }
 
-    const billItems = (() => {
-      let parsed: any[] = [];
-      if (typeof row.items === "string") {
-        try { parsed = JSON.parse(row.items); } catch (e) {}
-      } else if (Array.isArray(row.items)) {
-        parsed = row.items;
-      }
-      return parsed;
-    })();
 
-    const uniqueActiveProcesses: any[] = [];
-    const seenProcIds = new Set<number>();
-    billItems.forEach((item: any) => {
-      if (item.process_id) {
-        const proc = processes.find((p: any) => p.id === Number(item.process_id));
-        if (proc && !seenProcIds.has(proc.id)) {
-          seenProcIds.add(proc.id);
-          uniqueActiveProcesses.push(proc);
-        }
-      }
-    });
-
-    if (uniqueActiveProcesses.length === 0 && row.process_id) {
-      const proc = processes.find((p: any) => p.id === Number(row.process_id));
-      if (proc) {
-        uniqueActiveProcesses.push(proc);
-      }
-    }
-
-    const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
-      if (!rowProcId) return false;
-      if (Number(rowProcId) === targetProcId) return true;
-      const proc = processes.find((p: any) => p.id === Number(rowProcId));
-      if (proc) {
-        if (proc.process_ids) {
-          const childIds = String(proc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
-          if (childIds.includes(targetProcId)) return true;
-        }
-        if (proc.process_code && proc.process_code.includes(" / ")) {
-          const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
-          const targetProc = processes.find((p: any) => p.id === targetProcId);
-          if (targetProc && parts.includes(targetProc.process_code)) return true;
-        }
-      }
-      return false;
-    };
 
     const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
+
     const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+
     const totalOutwardQty = reportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
+
     const totalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
 
     const fmtCell = (v: any, fmt: (x: any) => string): string =>
@@ -1337,6 +1361,62 @@ export default function LabourBillPage() {
       return lines;
     };
 
+    const billItems = (() => {
+      let parsed: any[] = [];
+      if (typeof row.items === "string") {
+        try { parsed = JSON.parse(row.items); } catch (e) {}
+      } else if (Array.isArray(row.items)) {
+        parsed = row.items;
+      }
+      return parsed;
+    })();
+
+    const uniqueActiveProcesses: any[] = [];
+    const seenProcIds = new Set<number>();
+    billItems.forEach((item: any) => {
+      if (item.process_id) {
+        const proc = processes.find((p: any) => p.id === Number(item.process_id));
+        if (proc && !seenProcIds.has(proc.id)) {
+          seenProcIds.add(proc.id);
+          uniqueActiveProcesses.push(proc);
+        }
+      }
+    });
+
+    if (uniqueActiveProcesses.length === 0 && row.process_id) {
+      const proc = processes.find((p: any) => p.id === Number(row.process_id));
+      if (proc) uniqueActiveProcesses.push(proc);
+    }
+
+    const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
+      if (!rowProcId) return false;
+      if (Number(rowProcId) === targetProcId) return true;
+      const rowProc = processes.find((p: any) => p.id === Number(rowProcId));
+      if (rowProc) {
+        if (rowProc.process_ids) {
+          const childIds = String(rowProc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+          if (childIds.includes(targetProcId)) return true;
+        }
+        if (rowProc.process_code && rowProc.process_code.includes(" / ")) {
+          const parts = rowProc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          const targetProc = processes.find((p: any) => p.id === targetProcId);
+          if (targetProc && parts.includes(targetProc.process_code)) return true;
+        }
+      }
+      const targetProc = processes.find((p: any) => p.id === Number(targetProcId));
+      if (targetProc) {
+        if (targetProc.process_ids) {
+          const childIds = String(targetProc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
+          if (childIds.includes(Number(rowProcId))) return true;
+        }
+        if (targetProc.process_code && targetProc.process_code.includes(" / ")) {
+          const parts = targetProc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          if (rowProc && parts.includes(rowProc.process_code)) return true;
+        }
+      }
+      return false;
+    };
+
     const reportRows: any[] = [];
 
     linkedOutwards.forEach((out: any) => {
@@ -1349,6 +1429,12 @@ export default function LabourBillPage() {
 
       const outItems = row.inward_id ? getOutwardLinesForInward(out, Number(row.inward_id)) : parseJsonArray(out.items);
       const pushReportRow = (item: any, outInv: any[]) => {
+        const itemProcId = item.process_id || out.process_id;
+        if (uniqueActiveProcesses.length > 0) {
+          const matchesAnyActive = uniqueActiveProcesses.some((proc: any) => isProcessInRow(proc.id, itemProcId));
+          if (!matchesAnyActive) return;
+        }
+
         const prodId = Number(item.product_id);
         const invLines = collectInwardLines(outInv, prodId);
         const invQty = invLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
@@ -1384,7 +1470,7 @@ export default function LabourBillPage() {
       }
     });
 
-    if (reportRows.length === 0 && linkedInwards.length > 0) {
+    if (reportRows.length === 0 && linkedOutwards.length === 0 && linkedInwards.length > 0) {
       linkedInwards.forEach((inv: any) => {
         const invItems = parseJsonArray(inv.items);
         const invRef = inv.ref_no || inv.serial_no || "-";
@@ -1407,51 +1493,6 @@ export default function LabourBillPage() {
         else invItems.forEach((item: any) => pushInvRow(item));
       });
     }
-
-    const billItems = (() => {
-      let parsed: any[] = [];
-      if (typeof row.items === "string") {
-        try { parsed = JSON.parse(row.items); } catch (e) {}
-      } else if (Array.isArray(row.items)) {
-        parsed = row.items;
-      }
-      return parsed;
-    })();
-
-    const uniqueActiveProcesses: any[] = [];
-    const seenProcIds = new Set<number>();
-    billItems.forEach((item: any) => {
-      if (item.process_id) {
-        const proc = processes.find((p: any) => p.id === Number(item.process_id));
-        if (proc && !seenProcIds.has(proc.id)) {
-          seenProcIds.add(proc.id);
-          uniqueActiveProcesses.push(proc);
-        }
-      }
-    });
-
-    if (uniqueActiveProcesses.length === 0 && row.process_id) {
-      const proc = processes.find((p: any) => p.id === Number(row.process_id));
-      if (proc) uniqueActiveProcesses.push(proc);
-    }
-
-    const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
-      if (!rowProcId) return false;
-      if (Number(rowProcId) === targetProcId) return true;
-      const proc = processes.find((p: any) => p.id === Number(rowProcId));
-      if (proc) {
-        if (proc.process_ids) {
-          const childIds = String(proc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
-          if (childIds.includes(targetProcId)) return true;
-        }
-        if (proc.process_code && proc.process_code.includes(" / ")) {
-          const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
-          const targetProc = processes.find((p: any) => p.id === targetProcId);
-          if (targetProc && parts.includes(targetProc.process_code)) return true;
-        }
-      }
-      return false;
-    };
 
     const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
     const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
