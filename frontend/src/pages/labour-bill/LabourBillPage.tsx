@@ -1871,6 +1871,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const [freightOpen, setFreightOpen] = useState(false);
   const [freightItem, setFreightItem] = useState<any>({ process_id: "", quantity: "", rate: "", amount: "" });
 
+  const initialRawWeightRef = useRef<number>(0);
+  const initialLineItemsRef = useRef<any[]>([]);
+
   const { data: bills = [] } = useQuery<any[]>({
     queryKey: ["labour-bills", activeFY],
     queryFn: async () => (await api.get(`/labour-bills/?fy=${activeFY}`)).data,
@@ -2088,11 +2091,103 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     return result.length > 0 ? result : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }];
   };
 
+  const computeRawWeightForInwardsList = useCallback((inws: any[]) => {
+    if (!inws || inws.length === 0) return 0;
+    const selectedInwardIds = inws.map((i: any) => Number(i.id));
+
+    const outwardMap = new Map<number, any>();
+    inws.forEach((inw: any) => {
+      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
+        ? inw.unbilledOutwards
+        : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
+          ? inw.linkedOutwards
+          : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
+      outs.forEach((out: any) => {
+        if (out && out.id) outwardMap.set(out.id, out);
+      });
+    });
+
+    const uniqueOutwards = Array.from(outwardMap.values());
+    const parseArray = (x: any): any[] => {
+      if (typeof x === "string") {
+        try { return JSON.parse(x); } catch { return []; }
+      }
+      return Array.isArray(x) ? x : [];
+    };
+
+    let totalRawWeight = 0;
+    uniqueOutwards.forEach((out: any) => {
+      const rawOutItems = parseArray(out.items);
+      let outItems: any[] = [];
+      if (rawOutItems.length > 0) {
+        const anyHasInwardId = rawOutItems.some(
+          (i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== ""
+        );
+        if (anyHasInwardId) {
+          outItems = rawOutItems.filter((i: any) => selectedInwardIds.includes(Number(i.inward_id)));
+        } else {
+          const outHeaderInwardIds: number[] = (() => {
+            if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+            if (typeof out.inward_ids === "string") {
+              try { return parseArray(out.inward_ids).map(Number); } catch {}
+            }
+            if (out.inward_id !== undefined && out.inward_id !== null) return [Number(out.inward_id)];
+            return [];
+          })();
+          if (outHeaderInwardIds.some((id: number) => selectedInwardIds.includes(id))) {
+            outItems = rawOutItems;
+          }
+        }
+      }
+
+      outItems.forEach((item: any) => {
+        const w = Number(item.total_weight || item.weight || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
+        totalRawWeight += w;
+      });
+    });
+
+    return totalRawWeight;
+  }, [supplierOutwardVouchers]);
+
   const handleInwardSelectionChange = (newSelected: any[]) => {
     setSelectedInwards(newSelected);
 
     if (newSelected.length === 0) {
       setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+      return;
+    }
+
+    if (editing && initialRawWeightRef.current > 0 && initialLineItemsRef.current.length > 0) {
+      const currRawWeight = computeRawWeightForInwardsList(newSelected);
+      const ratio = currRawWeight / initialRawWeightRef.current;
+      const scaledItems = initialLineItemsRef.current.map((item: any) => {
+        const origQty = Number(item.quantity || 0);
+        const newQty = Number((origQty * ratio).toFixed(3));
+        const rateVal = Number(item.rate || 0);
+        const newAmount = Number((newQty * rateVal).toFixed(2));
+        return {
+          ...item,
+          quantity: newQty.toFixed(3),
+          amount: newAmount
+        };
+      });
+      setLineItems(scaledItems);
+
+      if (freightOpen && freightItem.process_id) {
+        const shotWeight = scaledItems.reduce((sum: number, it: any) => {
+          const proc = processMapObj[it.process_id] || processes.find((p: any) => p.id === Number(it.process_id));
+          const name = (proc && (proc.name || proc.process_name || proc.process_code)) || "";
+          if (/shot/i.test(name)) return sum + (Number(it.quantity) || 0);
+          return sum;
+        }, 0);
+        const newFreightQty = shotWeight > 0 ? shotWeight : (Number(scaledItems[0]?.quantity) || 0);
+        const rateVal = Number(freightItem.rate) || 0;
+        setFreightItem((prev: any) => ({
+          ...prev,
+          quantity: newFreightQty.toFixed(3),
+          amount: Number((newFreightQty * rateVal).toFixed(2))
+        }));
+      }
       return;
     }
 
@@ -2291,6 +2386,12 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
         const matchedInwardIds = new Set<number>();
         if (editing.inward_id) matchedInwardIds.add(editing.inward_id);
+        if (editing.inward_ids) {
+          const rawInwIds = Array.isArray(editing.inward_ids)
+            ? editing.inward_ids
+            : (typeof editing.inward_ids === "string" ? (() => { try { return JSON.parse(editing.inward_ids); } catch { return []; } })() : []);
+          rawInwIds.forEach((id: number) => matchedInwardIds.add(Number(id)));
+        }
         outwardIdList.forEach((out: any) => {
           if (out.inward_id) matchedInwardIds.add(out.inward_id);
           if (Array.isArray(out.inward_ids)) out.inward_ids.forEach((id: number) => matchedInwardIds.add(id));
@@ -2305,20 +2406,24 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           parsedItems = editing.items;
         }
 
+        let loadedLineItems: any[] = [];
         if (parsedItems && parsedItems.length > 0) {
-          setLineItems(parsedItems.map((item: any) => ({
+          loadedLineItems = parsedItems.map((item: any) => ({
             ...item,
             quantity: item.quantity !== undefined && item.quantity !== "" && item.quantity !== null ? Number(item.quantity).toFixed(3) : ""
-          })));
+          }));
         } else {
-          setLineItems([{
+          loadedLineItems = [{
             product_id: editing.product_id || "",
             process_id: editing.process_id || "",
             quantity: editing.quantity !== undefined && editing.quantity !== "" && editing.quantity !== null ? Number(editing.quantity).toFixed(3) : "",
             rate: editing.rate || "",
             amount: editing.amount || ""
-          }]);
+          }];
         }
+        setLineItems(loadedLineItems);
+        initialLineItemsRef.current = loadedLineItems;
+        initialRawWeightRef.current = computeRawWeightForInwardsList(matchedInws);
 
         let parsedFreight: any[] = [];
         if (typeof editing.freight_items === "string") {
@@ -2343,6 +2448,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
         setFreightItem({ process_id: "", quantity: "", rate: "", amount: "" });
         setFreightOpen(false);
+        initialLineItemsRef.current = [];
+        initialRawWeightRef.current = 0;
         reset({
           bill_no: "",
           bill_date: today,
@@ -2358,7 +2465,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           .catch((e) => console.error(e));
       }
     }
-  }, [open, editing, reset, outwardVouchers, inwardVouchers, setValue]);
+  }, [open, editing, reset, outwardVouchers, inwardVouchers, setValue, computeRawWeightForInwardsList]);
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
