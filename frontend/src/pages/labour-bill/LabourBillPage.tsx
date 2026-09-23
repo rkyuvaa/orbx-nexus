@@ -1160,15 +1160,17 @@ export default function LabourBillPage() {
       if (uniqueActiveProcesses.length === 0) {
         processTotalsHtml += `<td style="text-align: center; color: #0f5132; font-weight: 700;">-</td>`;
       } else {
-        uniqueActiveProcesses.forEach((proc, idx) => {
-          const isLast = idx === uniqueActiveProcesses.length - 1;
-          const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
-          processTotalsHtml += `
-            <td style="text-align: right; font-weight: 700; color: #0f5132; ${borderStyle}">
-              ${formatWeight(processTotals[proc.id])} kg
-            </td>
-          `;
-        });
+      uniqueActiveProcesses.forEach((proc, idx) => {
+        const isLast = idx === uniqueActiveProcesses.length - 1;
+        const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
+        const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
+        const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : processTotals[proc.id];
+        processTotalsHtml += `
+          <td style="text-align: right; font-weight: 700; color: #0f5132; ${borderStyle}">
+            ${formatWeight(finalVal)} kg
+          </td>
+        `;
+      });
       }
 
       reportRowsHtml += `
@@ -1683,7 +1685,9 @@ export default function LabourBillPage() {
       totalRow.push("-");
     } else {
       uniqueActiveProcesses.forEach((proc: any) => {
-        totalRow.push(toExcelNum(processTotals[proc.id]));
+        const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
+        const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : processTotals[proc.id];
+        totalRow.push(toExcelNum(finalVal));
       });
     }
     excelRows.push(totalRow);
