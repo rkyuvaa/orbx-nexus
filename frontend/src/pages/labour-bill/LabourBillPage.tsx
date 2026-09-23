@@ -918,23 +918,42 @@ export default function LabourBillPage() {
 
     const reportRows: any[] = [];
 
-
+    // Collect all inward IDs from this bill
+    const billInwardIds: number[] = (() => {
+      const iids = parseJsonArray(row.inward_ids);
+      if (iids.length > 0) return iids.map(Number);
+      if (row.inward_id) return [Number(row.inward_id)];
+      return [];
+    })();
 
     linkedOutwards.forEach((out: any) => {
 
+      // Resolve inwards for this outward — search linkedInwards first (covers completed), then inwardVouchers
       const linkedInvForOut = (() => {
-
         const ids = out.inward_ids
-
           ? parseJsonArray(out.inward_ids)
-
           : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
-
-        return ids.map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id))).filter(Boolean);
-
+        return ids.map((id: number | string) => {
+          const numId = Number(id);
+          return linkedInwards.find((v: any) => v.id === numId) || inwardVouchers.find((v: any) => v.id === numId);
+        }).filter(Boolean);
       })();
 
-      const outItems = row.inward_id ? getOutwardLinesForInward(out, Number(row.inward_id)) : parseJsonArray(out.items);
+      // Get ALL items for this outward, filtered to only inwards that belong to this bill
+      const rawOutItems = parseJsonArray(out.items);
+      let outItems: any[];
+      if (rawOutItems.length > 0) {
+        const anyHasInwardId = rawOutItems.some(
+          (i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== ""
+        );
+        if (anyHasInwardId && billInwardIds.length > 0) {
+          outItems = rawOutItems.filter((i: any) => billInwardIds.includes(Number(i.inward_id)));
+        } else {
+          outItems = rawOutItems;
+        }
+      } else {
+        outItems = [];
+      }
 
       const pushReportRow = (item: any, outInv: any[]) => {
 
@@ -944,9 +963,17 @@ export default function LabourBillPage() {
           if (!matchesAnyActive) return;
         }
 
+        // Narrow to the specific inward for this item if it has an item-level inward_id
+        let itemInvList = outInv;
+        if (item.inward_id) {
+          const specificInv = linkedInwards.find((v: any) => v.id === Number(item.inward_id))
+            || inwardVouchers.find((v: any) => v.id === Number(item.inward_id));
+          if (specificInv) itemInvList = [specificInv];
+        }
+
         const prodId = Number(item.product_id);
 
-        const invLines = collectInwardLines(outInv, prodId);
+        const invLines = collectInwardLines(itemInvList, prodId);
 
         const invQty = invLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
 
@@ -954,9 +981,9 @@ export default function LabourBillPage() {
 
         reportRows.push({
 
-          ref: outInv.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
+          ref: itemInvList.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
 
-          inward_date: outInv.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
+          inward_date: itemInvList.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
 
           productName: products.find((p: any) => p.id === prodId)?.name || `Product #${item.product_id}`,
 
@@ -1419,15 +1446,42 @@ export default function LabourBillPage() {
 
     const reportRows: any[] = [];
 
+    // Collect all inward IDs from this bill
+    const billInwardIds: number[] = (() => {
+      const iids = parseJsonArray(row.inward_ids);
+      if (iids.length > 0) return iids.map(Number);
+      if (row.inward_id) return [Number(row.inward_id)];
+      return [];
+    })();
+
     linkedOutwards.forEach((out: any) => {
+      // Resolve inwards for this outward — search linkedInwards first (covers completed), then inwardVouchers
       const linkedInvForOut = (() => {
         const ids = out.inward_ids
           ? parseJsonArray(out.inward_ids)
           : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
-        return ids.map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id))).filter(Boolean);
+        return ids.map((id: number | string) => {
+          const numId = Number(id);
+          return linkedInwards.find((v: any) => v.id === numId) || inwardVouchers.find((v: any) => v.id === numId);
+        }).filter(Boolean);
       })();
 
-      const outItems = row.inward_id ? getOutwardLinesForInward(out, Number(row.inward_id)) : parseJsonArray(out.items);
+      // Get ALL items for this outward, filtered to only inwards that belong to this bill
+      const rawOutItems = parseJsonArray(out.items);
+      let outItems: any[];
+      if (rawOutItems.length > 0) {
+        const anyHasInwardId = rawOutItems.some(
+          (i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== ""
+        );
+        if (anyHasInwardId && billInwardIds.length > 0) {
+          outItems = rawOutItems.filter((i: any) => billInwardIds.includes(Number(i.inward_id)));
+        } else {
+          outItems = rawOutItems;
+        }
+      } else {
+        outItems = [];
+      }
+
       const pushReportRow = (item: any, outInv: any[]) => {
         const itemProcId = item.process_id || out.process_id;
         if (uniqueActiveProcesses.length > 0) {
@@ -1435,14 +1489,22 @@ export default function LabourBillPage() {
           if (!matchesAnyActive) return;
         }
 
+        // Narrow to the specific inward for this item if it has an item-level inward_id
+        let itemInvList = outInv;
+        if (item.inward_id) {
+          const specificInv = linkedInwards.find((v: any) => v.id === Number(item.inward_id))
+            || inwardVouchers.find((v: any) => v.id === Number(item.inward_id));
+          if (specificInv) itemInvList = [specificInv];
+        }
+
         const prodId = Number(item.product_id);
-        const invLines = collectInwardLines(outInv, prodId);
+        const invLines = collectInwardLines(itemInvList, prodId);
         const invQty = invLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
         const invWeight = invLines.reduce((sum, l) => sum + (Number(l.weight) || 0), 0);
 
         reportRows.push({
-          ref: outInv.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
-          inward_date: outInv.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
+          ref: itemInvList.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
+          inward_date: itemInvList.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
           productName: products.find((p: any) => p.id === prodId)?.name || `Product #${item.product_id}`,
           inward_qty: invLines.length > 0 ? invQty : null,
           inward_weight: invLines.length > 0 ? invWeight : null,
