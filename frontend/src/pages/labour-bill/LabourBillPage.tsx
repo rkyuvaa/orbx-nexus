@@ -754,38 +754,32 @@ export default function LabourBillPage() {
 
 
 
-    // Resolve all inward IDs from this bill (from inward_ids array, fallback to inward_id)
-    const billAllInwardIds: number[] = (() => {
-      const iids = parseJsonArray(row.inward_ids);
-      if (iids.length > 0) return iids.map(Number);
-      if (row.inward_id) return [Number(row.inward_id)];
-      return [];
-    })();
-
-    const billAllInwardSet = new Set<number>(billAllInwardIds);
-
-    // Resolve linked outward vouchers:
-    // Include outwards stored in row.outward_ids PLUS any outward that references any of the bill's inward IDs
+    // Resolve linked outward vouchers using row.outward_ids (or fallback to inward_id match)
     const outwardIds = parseJsonArray(row.outward_ids).map(Number);
     const linkedOutwards = outwardVouchers.filter((out: any) => {
       if (outwardIds.includes(out.id)) return true;
-      const outInwardIds = out.inward_ids
-        ? parseJsonArray(out.inward_ids).map(Number)
-        : (out.inward_id !== undefined && out.inward_id !== null ? [Number(out.inward_id)] : []);
-      return outInwardIds.some((id: number) => billAllInwardSet.has(id));
+      if (row.inward_id && Number(out.inward_id) === Number(row.inward_id)) return true;
+      return false;
     });
 
-    // Resolve linked inward vouchers: from bill's inward_ids + outward refs, checking inwardVouchers
-    const inwardIdSet = new Set<number | string>(billAllInwardIds);
+    // Resolve ALL inward IDs belonging to this bill (from row.inward_ids, row.inward_id, PLUS outward header & items)
+    const billInwardIdSet = new Set<number>();
+    parseJsonArray(row.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
+    if (row.inward_id) billInwardIdSet.add(Number(row.inward_id));
+
     linkedOutwards.forEach((out: any) => {
-      const outInwardIds = out.inward_ids
-        ? parseJsonArray(out.inward_ids)
-        : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
-      outInwardIds.forEach((inwId: number | string) => inwardIdSet.add(inwId));
+      if (out.inward_id) billInwardIdSet.add(Number(out.inward_id));
+      parseJsonArray(out.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
+      parseJsonArray(out.items).forEach((item: any) => {
+        if (item.inward_id) billInwardIdSet.add(Number(item.inward_id));
+      });
     });
 
-    const linkedInwards = Array.from(inwardIdSet)
-      .map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id)))
+    const billAllInwardIds: number[] = Array.from(billInwardIdSet);
+
+    // Resolve linked inward vouchers: from all collected inward IDs, checking inwardVouchers
+    const linkedInwards = billAllInwardIds
+      .map((id: number) => inwardVouchers.find((v: any) => v.id === id))
       .filter(Boolean);
 
 
@@ -1331,35 +1325,32 @@ export default function LabourBillPage() {
       } catch (e) { return "-"; }
     };
 
-    // Resolve all inward IDs from this bill
-    const billAllInwardIds: number[] = (() => {
-      const iids = parseJsonArray(row.inward_ids);
-      if (iids.length > 0) return iids.map(Number);
-      if (row.inward_id) return [Number(row.inward_id)];
-      return [];
-    })();
-    const billAllInwardSet = new Set<number>(billAllInwardIds);
-
-    // Resolve linked outward vouchers: stored outward_ids + any outward referencing bill's inward IDs
+    // Resolve linked outward vouchers using row.outward_ids (or fallback to inward_id match)
     const outwardIds = parseJsonArray(row.outward_ids).map(Number);
     const linkedOutwards = outwardVouchers.filter((out: any) => {
       if (outwardIds.includes(out.id)) return true;
-      const outInwardIds = out.inward_ids
-        ? parseJsonArray(out.inward_ids).map(Number)
-        : (out.inward_id !== undefined && out.inward_id !== null ? [Number(out.inward_id)] : []);
-      return outInwardIds.some((id: number) => billAllInwardSet.has(id));
+      if (row.inward_id && Number(out.inward_id) === Number(row.inward_id)) return true;
+      return false;
     });
 
-    // Resolve linked inward vouchers: from bill's inward_ids + outward refs
-    const inwardIdSet = new Set<number | string>(billAllInwardIds);
+    // Resolve ALL inward IDs belonging to this bill (from row.inward_ids, row.inward_id, PLUS outward header & items)
+    const billInwardIdSet = new Set<number>();
+    parseJsonArray(row.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
+    if (row.inward_id) billInwardIdSet.add(Number(row.inward_id));
+
     linkedOutwards.forEach((out: any) => {
-      const outInwardIds = out.inward_ids
-        ? parseJsonArray(out.inward_ids)
-        : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
-      outInwardIds.forEach((inwId: number | string) => inwardIdSet.add(inwId));
+      if (out.inward_id) billInwardIdSet.add(Number(out.inward_id));
+      parseJsonArray(out.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
+      parseJsonArray(out.items).forEach((item: any) => {
+        if (item.inward_id) billInwardIdSet.add(Number(item.inward_id));
+      });
     });
-    const linkedInwards = Array.from(inwardIdSet)
-      .map((id: number | string) => inwardVouchers.find((v: any) => v.id === Number(id)))
+
+    const billAllInwardIds: number[] = Array.from(billInwardIdSet);
+
+    // Resolve linked inward vouchers: from all collected inward IDs, checking inwardVouchers
+    const linkedInwards = billAllInwardIds
+      .map((id: number) => inwardVouchers.find((v: any) => v.id === id))
       .filter(Boolean);
 
     const resolveSeparateProcesses = (procId: any): string => {
