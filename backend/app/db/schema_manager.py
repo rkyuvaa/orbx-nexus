@@ -314,6 +314,8 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS round_off NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS net_amount NUMERIC(15,2) DEFAULT 0;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS freight_items JSONB DEFAULT '[]'::jsonb;
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS inward_ids JSONB DEFAULT '[]'::jsonb;
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS outward_ids JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS to_location_id INTEGER;

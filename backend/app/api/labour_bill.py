@@ -258,19 +258,20 @@ async def create_labour_bill(
 
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+    iids_json = json.dumps(body.inward_ids) if body.inward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
     bill_qty = await _resolve_bill_weight(db, body.quantity, body.items)
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.labour_bills "
-            f"(bill_no, bill_date, ledger_id, inward_id, product_id, process_id, quantity, rate, "
+            f"(bill_no, bill_date, ledger_id, inward_id, inward_ids, product_id, process_id, quantity, rate, "
             f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, net_amount, total_amount, narration, items, outward_ids, dispatch_through, freight_items, created_by) "
-            f"VALUES (:bno, :bdate, :lid, :iid, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :fright, :cby) "
+            f"VALUES (:bno, :bdate, :lid, :iid, :iids, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :fright, :cby) "
             f"RETURNING id"
         ),
         {
             "bno": bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
-            "iid": body.inward_id, "pid": body.product_id, "prid": body.process_id,
+            "iid": body.inward_id, "iids": iids_json, "pid": body.product_id, "prid": body.process_id,
             "qty": bill_qty, "rate": body.rate, "amt": body.amount,
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
@@ -292,12 +293,13 @@ async def update_labour_bill(
     await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids, body.inward_ids)
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
+    iids_json = json.dumps(body.inward_ids) if body.inward_ids else "[]"
     freight_json = json.dumps(body.freight_items) if body.freight_items else "[]"
     bill_qty = await _resolve_bill_weight(db, body.quantity, body.items)
     await db.execute(
         text(
             f"UPDATE {schema}.labour_bills SET bill_no=:bno, bill_date=:bdate, ledger_id=:lid, "
-            f"inward_id=:iid, product_id=:pid, process_id=:prid, quantity=:qty, rate=:rate, "
+            f"inward_id=:iid, inward_ids=:iids, product_id=:pid, process_id=:prid, quantity=:qty, rate=:rate, "
             f"amount=:amt, gst_percent=:gp, gst_amount=:ga, "
             f"cgst_percent=:cgp, cgst_amount=:cga, sgst_percent=:sgp, sgst_amount=:sga, "
             f"round_off=:ro, net_amount=:namt, total_amount=:ta, narration=:narr, "
@@ -305,7 +307,7 @@ async def update_labour_bill(
         ),
         {
             "bno": body.bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
-            "iid": body.inward_id, "pid": body.product_id, "prid": body.process_id,
+            "iid": body.inward_id, "iids": iids_json, "pid": body.product_id, "prid": body.process_id,
             "qty": bill_qty, "rate": body.rate, "amt": body.amount,
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
