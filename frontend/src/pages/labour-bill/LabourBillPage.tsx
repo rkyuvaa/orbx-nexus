@@ -1095,13 +1095,32 @@ export default function LabourBillPage() {
 
 
 
-    const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
+    const rawTotalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
+    const billTotalWeight = Number(row.quantity) > 0 ? Number(row.quantity) : rawTotalOutwardWeight;
+    const weightScaleFactor = (billTotalWeight > 0 && rawTotalOutwardWeight > 0)
+      ? billTotalWeight / rawTotalOutwardWeight
+      : 1;
 
-    const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+    const scaledReportRows = reportRows.map((r) => {
+      const rawOutW = Number(r.outward_weight) || 0;
+      const rawInwW = Number(r.inward_weight) || 0;
+      const rawOutQ = Number(r.outward_qty) || 0;
+      const rawInwQ = Number(r.inward_qty) || 0;
 
-    const totalOutwardQty = reportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
+      return {
+        ...r,
+        outward_weight: rawOutW > 0 ? rawOutW * weightScaleFactor : r.outward_weight,
+        inward_weight: rawInwW > 0 ? rawInwW * weightScaleFactor : r.inward_weight,
+        outward_qty: rawOutQ > 0 ? Math.max(1, Math.round(rawOutQ * weightScaleFactor)) : r.outward_qty,
+        inward_qty: rawInwQ > 0 ? Math.max(1, Math.round(rawInwQ * weightScaleFactor)) : r.inward_qty,
+        raw_outward_weight: rawOutW,
+      };
+    });
 
-    const totalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
+    const totalInwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
+    const totalInwardWeight = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+    const totalOutwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
+    const totalOutwardWeight = billTotalWeight;
 
     const fmtCell = (v: any, fmt: (x: any) => string): string =>
       v === null || v === undefined || v === "" || v === "-" ? "-" : fmt(v);
@@ -1123,11 +1142,11 @@ export default function LabourBillPage() {
 
     let reportRowsHtml = "";
 
-    if (reportRows.length === 0) {
+    if (scaledReportRows.length === 0) {
       const totalColSpan = 9 + (uniqueActiveProcesses.length || 1);
       reportRowsHtml = `<tr><td colspan="${totalColSpan}" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
     } else {
-      reportRows.forEach((r) => {
+      scaledReportRows.forEach((r) => {
         let processColsHtml = "";
         if (uniqueActiveProcesses.length === 0) {
           processColsHtml += `<td style="text-align: center; color: #a0aec0;">-</td>`;
@@ -1142,7 +1161,7 @@ export default function LabourBillPage() {
               const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
               const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
               const cellWeight = (billedQty > 0 && rawTotal > 0)
-                ? (Number(r.outward_weight) / rawTotal) * billedQty
+                ? (r.raw_outward_weight / rawTotal) * billedQty
                 : Number(r.outward_weight) || 0;
 
               processColsHtml += `<td style="text-align: right; font-weight: 500; ${borderStyle}">${fmtWeightCell(cellWeight)}</td>`;
@@ -1175,7 +1194,7 @@ export default function LabourBillPage() {
         const isLast = idx === uniqueActiveProcesses.length - 1;
         const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
         const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
-        const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : processTotals[proc.id];
+        const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : (processTotals[proc.id] * weightScaleFactor);
         processTotalsHtml += `
           <td style="text-align: right; font-weight: 700; color: #0f5132; ${borderStyle}">
             ${formatWeight(finalVal)} kg
@@ -1595,10 +1614,32 @@ export default function LabourBillPage() {
       });
     }
 
-    const totalInwardQty = reportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
-    const totalInwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
-    const totalOutwardQty = reportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
-    const totalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
+    const rawTotalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
+    const billTotalWeight = Number(row.quantity) > 0 ? Number(row.quantity) : rawTotalOutwardWeight;
+    const weightScaleFactor = (billTotalWeight > 0 && rawTotalOutwardWeight > 0)
+      ? billTotalWeight / rawTotalOutwardWeight
+      : 1;
+
+    const scaledReportRows = reportRows.map((r) => {
+      const rawOutW = Number(r.outward_weight) || 0;
+      const rawInwW = Number(r.inward_weight) || 0;
+      const rawOutQ = Number(r.outward_qty) || 0;
+      const rawInwQ = Number(r.inward_qty) || 0;
+
+      return {
+        ...r,
+        outward_weight: rawOutW > 0 ? rawOutW * weightScaleFactor : r.outward_weight,
+        inward_weight: rawInwW > 0 ? rawInwW * weightScaleFactor : r.inward_weight,
+        outward_qty: rawOutQ > 0 ? Math.max(1, Math.round(rawOutQ * weightScaleFactor)) : r.outward_qty,
+        inward_qty: rawInwQ > 0 ? Math.max(1, Math.round(rawInwQ * weightScaleFactor)) : r.inward_qty,
+        raw_outward_weight: rawOutW,
+      };
+    });
+
+    const totalInwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
+    const totalInwardWeight = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+    const totalOutwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
+    const totalOutwardWeight = billTotalWeight;
 
     const processTotals: Record<number, number> = {};
     uniqueActiveProcesses.forEach((proc) => {
@@ -1659,7 +1700,7 @@ export default function LabourBillPage() {
     };
 
     // Data rows
-    reportRows.forEach((r) => {
+    scaledReportRows.forEach((r) => {
       const rowData: any[] = [
         r.ref,
         r.inward_date,
@@ -1681,7 +1722,7 @@ export default function LabourBillPage() {
             const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
             const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
             const cellWeight = (billedQty > 0 && rawTotal > 0)
-              ? (Number(r.outward_weight) / rawTotal) * billedQty
+              ? (r.raw_outward_weight / rawTotal) * billedQty
               : Number(r.outward_weight) || 0;
             rowData.push(toExcelNum(cellWeight));
           } else {
