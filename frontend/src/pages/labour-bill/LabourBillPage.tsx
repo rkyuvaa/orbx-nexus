@@ -1113,7 +1113,12 @@ export default function LabourBillPage() {
 
     const processTotals: Record<number, number> = {};
     uniqueActiveProcesses.forEach(proc => {
-      processTotals[proc.id] = 0;
+      processTotals[proc.id] = reportRows.reduce((sum, r) => {
+        if (isProcessInRow(proc.id, r.processId)) {
+          return sum + (Number(r.outward_weight) || 0);
+        }
+        return sum;
+      }, 0);
     });
 
     let reportRowsHtml = "";
@@ -1133,8 +1138,14 @@ export default function LabourBillPage() {
             const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
             
             if (matches) {
-              processColsHtml += `<td style="text-align: right; font-weight: 500; ${borderStyle}">${fmtWeightCell(r.outward_weight)}</td>`;
-              processTotals[proc.id] += Number(r.outward_weight) || 0;
+              const rawTotal = processTotals[proc.id] || 0;
+              const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
+              const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
+              const cellWeight = (billedQty > 0 && rawTotal > 0)
+                ? (Number(r.outward_weight) / rawTotal) * billedQty
+                : Number(r.outward_weight) || 0;
+
+              processColsHtml += `<td style="text-align: right; font-weight: 500; ${borderStyle}">${fmtWeightCell(cellWeight)}</td>`;
             } else {
               processColsHtml += `<td style="text-align: center; color: #a0aec0; ${borderStyle}">-</td>`;
             }
@@ -1591,7 +1602,12 @@ export default function LabourBillPage() {
 
     const processTotals: Record<number, number> = {};
     uniqueActiveProcesses.forEach((proc) => {
-      processTotals[proc.id] = 0;
+      processTotals[proc.id] = reportRows.reduce((sum, r) => {
+        if (isProcessInRow(proc.id, r.processId)) {
+          return sum + (Number(r.outward_weight) || 0);
+        }
+        return sum;
+      }, 0);
     });
 
     const excelRows: any[][] = [];
@@ -1661,9 +1677,13 @@ export default function LabourBillPage() {
       } else {
         uniqueActiveProcesses.forEach((proc: any) => {
           if (isProcessInRow(proc.id, r.processId)) {
-            const w = Number(r.outward_weight) || 0;
-            processTotals[proc.id] += w;
-            rowData.push(toExcelNum(w));
+            const rawTotal = processTotals[proc.id] || 0;
+            const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
+            const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
+            const cellWeight = (billedQty > 0 && rawTotal > 0)
+              ? (Number(r.outward_weight) / rawTotal) * billedQty
+              : Number(r.outward_weight) || 0;
+            rowData.push(toExcelNum(cellWeight));
           } else {
             rowData.push("-");
           }
