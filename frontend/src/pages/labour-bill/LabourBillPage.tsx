@@ -2090,30 +2090,101 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const handleInwardSelectionChange = (newSelected: any[]) => {
     setSelectedInwards(newSelected);
-    // Compute line items per-inward so the filtering in computeLineItemsFromOutwards
-    // can exclude outward lines that belong to other inwards.
-    const allItems: any[] = [];
+
+    if (newSelected.length === 0) {
+      setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+      return;
+    }
+
+    const selectedInwardIds = newSelected.map((i: any) => Number(i.id));
+
+    // Deduplicate outward vouchers linked to the selected inwards
+    const outwardMap = new Map<number, any>();
     newSelected.forEach((inw: any) => {
       const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
         ? inw.unbilledOutwards
         : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
           ? inw.linkedOutwards
           : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
-      const inwItems = computeLineItemsFromOutwards(outs, inw.id);
-      // Collect all items; they will be merged by process_id below.
-      inwItems.forEach((it: any) => {
-        if (it.process_id || it.product_id) allItems.push(it);
+      outs.forEach((out: any) => {
+        if (out && out.id) outwardMap.set(out.id, out);
       });
     });
 
-    if (allItems.length === 0) {
+    const uniqueOutwards = Array.from(outwardMap.values());
+    const parseArray = (x: any): any[] => {
+      if (typeof x === "string") {
+        try { return JSON.parse(x); } catch { return []; }
+      }
+      return Array.isArray(x) ? x : [];
+    };
+
+    const newItems: any[] = [];
+    uniqueOutwards.forEach((out: any) => {
+      const rawOutItems = parseArray(out.items);
+      let outItems: any[] = [];
+      if (rawOutItems.length > 0) {
+        const anyHasInwardId = rawOutItems.some(
+          (i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== ""
+        );
+        if (anyHasInwardId) {
+          outItems = rawOutItems.filter((i: any) => selectedInwardIds.includes(Number(i.inward_id)));
+        } else {
+          const outHeaderInwardIds: number[] = (() => {
+            if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+            if (typeof out.inward_ids === "string") {
+              try { return parseArray(out.inward_ids).map(Number); } catch {}
+            }
+            if (out.inward_id !== undefined && out.inward_id !== null) return [Number(out.inward_id)];
+            return [];
+          })();
+          if (outHeaderInwardIds.some((id: number) => selectedInwardIds.includes(id))) {
+            outItems = rawOutItems;
+          }
+        }
+      }
+
+      outItems.forEach((item: any) => {
+        const productId = item.product_id || out.product_id || "";
+        const processIdStr = String(item.process_id || out.process_id || "");
+        const totalWeightVal = Number(item.total_weight || item.weight || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
+        const proc = processes.find((p: any) => p.id === Number(processIdStr));
+        if (proc && proc.process_ids) {
+          const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
+          childIds.forEach((cid: string) => {
+            const childProc = processes.find((p: any) => p.id === Number(cid));
+            if (childProc) {
+              const rateVal = getCompanyRate(productId, childProc.id);
+              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) setValue("gst_percent", childProc.gst_percent);
+              newItems.push({ product_id: productId, process_id: childProc.id, quantity: totalWeightVal, rate: rateVal, amount: Number((totalWeightVal * rateVal).toFixed(2)) });
+            }
+          });
+        } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
+          const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+          parts.forEach((part: any) => {
+            const childProc = processes.find((p: any) => p.process_code === part);
+            if (childProc) {
+              const rateVal = getCompanyRate(productId, childProc.id);
+              if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) setValue("gst_percent", childProc.gst_percent);
+              newItems.push({ product_id: productId, process_id: childProc.id, quantity: totalWeightVal, rate: rateVal, amount: Number((totalWeightVal * rateVal).toFixed(2)) });
+            }
+          });
+        } else {
+          const rateVal = getCompanyRate(productId, processIdStr);
+          if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) setValue("gst_percent", proc.gst_percent);
+          newItems.push({ product_id: productId, process_id: processIdStr ? Number(processIdStr) : "", quantity: totalWeightVal, rate: rateVal, amount: Number((totalWeightVal * rateVal).toFixed(2)) });
+        }
+      });
+    });
+
+    if (newItems.length === 0) {
       setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
       return;
     }
 
-    // Merge items by process_id (same logic as inside computeLineItemsFromOutwards).
+    // Merge items by process_id
     const merged: Record<number | string, any> = {};
-    allItems.forEach((item: any) => {
+    newItems.forEach((item: any) => {
       if (!item.process_id) {
         merged[`temp_${Math.random()}`] = { ...item };
       } else {
