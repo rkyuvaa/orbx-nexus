@@ -1996,12 +1996,17 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const selectedOutwards = useMemo(() => {
     const all: any[] = [];
     selectedInwards.forEach((inw: any) => {
-      (inw.unbilledOutwards || []).forEach((out: any) => {
+      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
+        ? inw.unbilledOutwards
+        : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
+          ? inw.linkedOutwards
+          : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
+      outs.forEach((out: any) => {
         if (!all.find((o) => o.id === out.id)) all.push(out);
       });
     });
     return all;
-  }, [selectedInwards]);
+  }, [selectedInwards, supplierOutwardVouchers]);
 
   const [enableRoundOff, setEnableRoundOff] = useState(true);
 
@@ -2089,7 +2094,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     // can exclude outward lines that belong to other inwards.
     const allItems: any[] = [];
     newSelected.forEach((inw: any) => {
-      const outs = inw.unbilledOutwards || [];
+      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
+        ? inw.unbilledOutwards
+        : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
+          ? inw.linkedOutwards
+          : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
       const inwItems = computeLineItemsFromOutwards(outs, inw.id);
       // Collect all items; they will be merged by process_id below.
       inwItems.forEach((it: any) => {
