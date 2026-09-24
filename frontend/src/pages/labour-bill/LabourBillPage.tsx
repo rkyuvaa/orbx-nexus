@@ -2294,9 +2294,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     setLineItems(result.length > 0 ? result : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
   };
 
-  const handleSupplierChange = (val: any) => {
-    const lid = val && typeof val === "object" ? val.id : (val || "");
-    setValue("ledger_id", lid);
+  const handleSupplierChange = () => {
     handleInwardSelectionChange([]);
   };
 
@@ -2373,8 +2371,14 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   const netAmount = enableRoundOff ? Math.round(unroundedTotal) : Number(unroundedTotal.toFixed(2));
   const roundOffAmount = Number((netAmount - unroundedTotal).toFixed(2));
 
+  const initRef = useRef<any>(null);
+
   useEffect(() => {
     if (open) {
+      const currentInit = editing ? editing.id : "new";
+      if (initRef.current === currentInit) return; // Prevent re-initializing if data changes
+      initRef.current = currentInit;
+
       if (editing) {
         const outwardIdList = (() => {
           const ids = editing.outward_ids || [];
@@ -2448,6 +2452,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         setFreightOpen(false);
         initialLineItemsRef.current = [];
         initialRawWeightRef.current = 0;
+        
         reset({
           bill_no: "",
           bill_date: today,
@@ -2456,14 +2461,18 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
           narration: "",
           dispatch_through: ""
         });
+        
         api.get("/sequences/preview/labour_bill")
           .then((res) => {
             setValue("bill_no", res.data.next_no);
           })
           .catch((e) => console.error(e));
       }
+    } else {
+      initRef.current = null; // reset so next open will initialize
     }
-  }, [open, editing, reset, outwardVouchers, inwardVouchers, setValue, computeRawWeightForInwardsList]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, reset, setValue, outwardVouchers, inwardVouchers, computeRawWeightForInwardsList]);
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
@@ -2585,7 +2594,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                           const selectedObj = typeof val === "object" && val !== null ? val : (val ? ledgers.find((l: any) => String(l.id) === String(val)) : null);
                           const newLedgerId = selectedObj ? selectedObj.id : "";
                           field.onChange(newLedgerId);
-                          handleSupplierChange(selectedObj);
+                          handleSupplierChange();
                         }}
                         getOptionLabel={(option: any) => (option && typeof option === "object" ? option.name : "") || ""}
                         isOptionEqualToValue={(option: any, val: any) => {
