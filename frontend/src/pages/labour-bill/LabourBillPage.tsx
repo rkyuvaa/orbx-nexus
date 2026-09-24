@@ -15,7 +15,7 @@ import CheckCircle from "@mui/icons-material/CheckCircle";
 import Print from "@mui/icons-material/Print";
 import Description from "@mui/icons-material/Description";
 import RemoveCircle from "@mui/icons-material/RemoveCircle";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
@@ -1941,7 +1941,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { register, handleSubmit, reset, watch, setValue } = useForm({
+  const { register, handleSubmit, reset, watch, setValue, control } = useForm({
     defaultValues: { bill_no: "", bill_date: today, ledger_id: "", gst_percent: "" as any, narration: "", dispatch_through: "" },
   });
 
@@ -2566,14 +2566,40 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                 <TextField {...register("bill_date")} label="Date *" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid size={{ xs: 12, sm: 5 }}>
-                <LazyAutocomplete
-                  size="small"
-                  value={ledgerMapObj[watch("ledger_id")] || null}
-                  onChange={(_, val) => handleSupplierChange(val)}
-                  options={ledgers}
-                  getOptionLabel={(option: any) => option.name || ""}
-                  noOptionsText="No matching suppliers"
-                  renderInput={(params) => <TextField {...params} label="Supplier *" required={!watch("ledger_id")} />}
+                <Controller
+                  name="ledger_id"
+                  control={control}
+                  rules={{ required: "Supplier is required" }}
+                  render={({ field, fieldState }) => {
+                    const currentLedger = ledgers.find((l: any) => String(l.id) === String(field.value)) || ledgerMapObj[field.value] || null;
+                    return (
+                      <LazyAutocomplete
+                        size="small"
+                        options={ledgers}
+                        value={currentLedger}
+                        onChange={(_, val: any) => {
+                          const newLedgerId = val ? val.id : "";
+                          field.onChange(newLedgerId);
+                          handleSupplierChange(val);
+                        }}
+                        getOptionLabel={(option: any) => (option && typeof option === "object" ? option.name : "") || ""}
+                        isOptionEqualToValue={(option: any, val: any) => {
+                          if (!option || !val) return option === val;
+                          return String(option.id) === String(val.id);
+                        }}
+                        noOptionsText="No matching suppliers"
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Supplier *"
+                            required={!field.value}
+                            error={!!fieldState.error}
+                            helperText={fieldState.error?.message}
+                          />
+                        )}
+                      />
+                    );
+                  }}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 3 }}>
