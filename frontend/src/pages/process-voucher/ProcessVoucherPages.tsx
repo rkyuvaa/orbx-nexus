@@ -573,7 +573,6 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
   };
 
   const handleRemoveLineItem = (index: number) => {
-    if (lineItems.length === 1) return;
     setLineItems((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -661,7 +660,15 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {lineItems.map((item, idx) => (
+                    {lineItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            No Items / NIL Items
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : lineItems.map((item, idx) => (
                        <TableRow key={idx}>
                          <TableCell align="center">{idx + 1}</TableCell>
                         <TableCell>
@@ -718,7 +725,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
-                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} disabled={lineItems.length === 1} tabIndex={-1}>
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} tabIndex={-1}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
                         </TableCell>
@@ -1931,7 +1938,6 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   }, []);
 
   const handleRemoveLineItem = useCallback((index: number) => {
-    if (lineItems.length === 1) return;
     setLineItems((prev) => prev.filter((_, i) => i !== index));
   }, [lineItems.length]);
 
@@ -2213,7 +2219,15 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {lineItems.map((item, idx) => {
+                    {lineItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            No Items / NIL Items
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ) : lineItems.map((item, idx) => {
                       const lineInwardNo = (() => {
                         if (item.inward_id) {
                           return inwardMap[item.inward_id] ||
@@ -2415,7 +2429,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
-                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} disabled={lineItems.length === 1} tabIndex={-1}>
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)} tabIndex={-1}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
                         </TableCell>

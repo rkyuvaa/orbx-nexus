@@ -344,7 +344,6 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
   };
 
   const handleRemoveLineItem = (index: number) => {
-    if (lineItems.length === 1) return;
     setLineItems((prev) => prev.filter((_, i) => i !== index));
   };
 
@@ -565,7 +564,15 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {lineItems.map((item, idx) => {
+                  {lineItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No Items / NIL Items
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : lineItems.map((item, idx) => {
                     const currentBalance = item.stock_item_id ? (balanceMap[Number(item.stock_item_id)] ?? 0) : null;
                     const itemExceeds = movementType === "Outward" && currentBalance !== null && (Number(item.quantity) || 0) > currentBalance;
                     
@@ -652,7 +659,7 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ width: 45, minWidth: 40, verticalAlign: "top", pt: 2 }} align="center">
-                          <IconButton size="small" color="error" disabled={lineItems.length === 1} onClick={() => handleRemoveLineItem(idx)}>
+                          <IconButton size="small" color="error" onClick={() => handleRemoveLineItem(idx)}>
                             <RemoveCircle fontSize="small" />
                           </IconButton>
                         </TableCell>

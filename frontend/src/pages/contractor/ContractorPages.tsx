@@ -346,13 +346,66 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [selectedOutwardIds, outwardProcesses, processes, contractorProcessIds]);
 
   const buildLineItemsFromOutwardIds = (oids: number[], currentItems: any[] = []) => {
-    // Do NOT auto-add rows — just recompute balances of any existing user-added rows.
-    // The user adds items one by one via "+ Add Process Line".
-    const validItems = currentItems.filter((item) => item.product_id || item.process_id || item.quantity);
-    if (validItems.length === 0) {
+    // 1. Build a map of all items from the currently selected inward vouchers (outwards in code)
+    const newInwardItemsMap = new Map<string, any>();
+    oids.forEach(oid => {
+      const v = outwardVouchers.find((v: any) => v.id === oid);
+      if (v) {
+        const vItems = getVoucherItems(v);
+        vItems.forEach((vit: any, vidx: number) => {
+          const source_item_id = vit.id || `idx_${vidx}`;
+          const key = `${oid}_${source_item_id}`;
+          newInwardItemsMap.set(key, { ...vit, source_inward_id: oid, source_inward_item_id: source_item_id });
+        });
+      }
+    });
+
+    // 2. Keep/Update existing items or remove those from unselected inwards
+    const nextItems: any[] = [];
+    currentItems.forEach(item => {
+      if (item.source_inward_id) {
+        const key = `${item.source_inward_id}_${item.source_inward_item_id}`;
+        if (newInwardItemsMap.has(key)) {
+          // Exists in selected inwards, KEEP it!
+          nextItems.push(item);
+          newInwardItemsMap.delete(key); // Mark as processed
+        }
+        // If not in map, it means its inward voucher was deselected -> REMOVE it (do not push)
+      } else {
+        // No source link (e.g. manually added valid row), keep it
+        if (item.product_id || item.process_id || item.quantity) {
+          nextItems.push(item);
+        }
+      }
+    });
+
+    // 3. Add any newly selected inward items
+    newInwardItemsMap.forEach((vit) => {
+      let defaultProcessId = "";
+      if (contractorProcessIds.length > 0) {
+        defaultProcessId = String(contractorProcessIds[0]);
+      } else if (availableProcesses.length > 0) {
+        defaultProcessId = String(availableProcesses[0].id);
+      }
+      
+      nextItems.push({
+        source_inward_id: vit.source_inward_id,
+        source_inward_item_id: vit.source_inward_item_id,
+        product_id: vit.product_id || "",
+        process_id: defaultProcessId,
+        quantity: vit.quantity || "",
+        balance_qty: 0,
+        rate: "",
+        amount: "",
+        weight: vit.weight || ""
+      });
+    });
+
+    if (nextItems.length === 0) {
       return [{ product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }];
     }
-    return recomputeLineItems(validItems, oids);
+
+    return recomputeLineItems(nextItems, oids);
   };
 
   const handleLineChange = (index: number, field: string, val: any) => {
@@ -424,7 +477,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
             process_id: Number(item.process_id),
             quantity: Number(item.quantity) || 0,
             rate: Number(item.rate) || 0,
-            amount: Number(item.amount) || 0
+            amount: Number(item.amount) || 0,
+            source_inward_id: item.source_inward_id || null,
+            source_inward_item_id: item.source_inward_item_id || null
           })) : [],
         register_ids: type === "payment" ? selectedRegisterIds : []
       };
