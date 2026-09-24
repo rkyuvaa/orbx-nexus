@@ -2295,7 +2295,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
   };
 
   const handleSupplierChange = (val: any) => {
-    setValue("ledger_id", val ? val.id : "");
+    const lid = val && typeof val === "object" ? val.id : (val || "");
+    setValue("ledger_id", lid);
     handleInwardSelectionChange([]);
   };
 
@@ -2568,21 +2569,30 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                   control={control}
                   rules={{ required: "Supplier is required" }}
                   render={({ field, fieldState }) => {
-                    const currentLedger = ledgers.find((l: any) => String(l.id) === String(field.value)) || ledgerMapObj[field.value] || null;
+                    const val: any = field.value;
+                    const rawLedgerId = val && typeof val === "object" ? val.id : val;
+                    const currentLedger = (rawLedgerId !== undefined && rawLedgerId !== null && rawLedgerId !== "")
+                      ? (ledgers.find((l: any) => String(l.id) === String(rawLedgerId)) || (rawLedgerId ? ledgerMapObj[rawLedgerId] : null) || (val && typeof val === "object" ? val : null))
+                      : null;
+
                     return (
-                      <LazyAutocomplete
+                      <Autocomplete
                         size="small"
+                        openOnFocus
                         options={ledgers}
                         value={currentLedger}
                         onChange={(_, val: any) => {
-                          const newLedgerId = val ? val.id : "";
+                          const selectedObj = typeof val === "object" && val !== null ? val : (val ? ledgers.find((l: any) => String(l.id) === String(val)) : null);
+                          const newLedgerId = selectedObj ? selectedObj.id : "";
                           field.onChange(newLedgerId);
-                          handleSupplierChange(val);
+                          handleSupplierChange(selectedObj);
                         }}
                         getOptionLabel={(option: any) => (option && typeof option === "object" ? option.name : "") || ""}
                         isOptionEqualToValue={(option: any, val: any) => {
                           if (!option || !val) return option === val;
-                          return String(option.id) === String(val.id);
+                          const optId = typeof option === "object" ? option.id : option;
+                          const valId = typeof val === "object" ? val.id : val;
+                          return String(optId) === String(valId);
                         }}
                         noOptionsText="No matching suppliers"
                         renderInput={(params) => (
