@@ -216,11 +216,8 @@ export default function LabourBillPage() {
 
 
   const { data: ledgers = [] } = useQuery({
-
-    queryKey: ["ledgers", "Account"],
-
-    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
-
+    queryKey: ["ledgers-all"],
+    queryFn: async () => (await api.get("/ledgers/")).data,
   });
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
@@ -1880,8 +1877,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     enabled: open
   });
   const { data: ledgers = [] } = useQuery({
-    queryKey: ["ledgers", "Account"],
-    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+    queryKey: ["ledgers-all"],
+    queryFn: async () => (await api.get("/ledgers/")).data,
   });
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
