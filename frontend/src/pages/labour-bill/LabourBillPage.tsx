@@ -982,6 +982,10 @@ export default function LabourBillPage() {
 
         reportRows.push({
 
+          raw_inward_date: itemInvList.length > 0 ? new Date(itemInvList[0].inward_date).getTime() : 0,
+
+          raw_outward_date: out.outward_date ? new Date(out.outward_date).getTime() : 0,
+
           ref: itemInvList.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
 
           inward_date: itemInvList.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
@@ -1052,6 +1056,10 @@ export default function LabourBillPage() {
 
           reportRows.push({
 
+            raw_inward_date: inv.inward_date ? new Date(inv.inward_date).getTime() : 0,
+
+            raw_outward_date: 0,
+
             ref: invRef,
 
             inward_date: toDateStr(inv.inward_date),
@@ -1091,6 +1099,13 @@ export default function LabourBillPage() {
     }
 
 
+
+    // Sort report rows chronologically (old date to new)
+    reportRows.sort((a, b) => {
+      const dateA = a.raw_inward_date || a.raw_outward_date || 0;
+      const dateB = b.raw_inward_date || b.raw_outward_date || 0;
+      return dateA - dateB;
+    });
 
     const rawTotalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
     const billTotalWeight = Number(row.quantity) > 0 ? Number(row.quantity) : rawTotalOutwardWeight;
@@ -1558,6 +1573,8 @@ export default function LabourBillPage() {
         const invWeight = invLines.reduce((sum, l) => sum + (Number(l.weight) || 0), 0);
 
         reportRows.push({
+          raw_inward_date: itemInvList.length > 0 ? new Date(itemInvList[0].inward_date).getTime() : 0,
+          raw_outward_date: out.outward_date ? new Date(out.outward_date).getTime() : 0,
           ref: itemInvList.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
           inward_date: itemInvList.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
           productName: products.find((p: any) => p.id === prodId)?.name || `Product #${item.product_id}`,
@@ -1593,6 +1610,8 @@ export default function LabourBillPage() {
         const invRef = inv.ref_no || inv.serial_no || "-";
         const pushInvRow = (item: any) => {
           reportRows.push({
+            raw_inward_date: inv.inward_date ? new Date(inv.inward_date).getTime() : 0,
+            raw_outward_date: 0,
             ref: invRef,
             inward_date: toDateStr(inv.inward_date),
             productName: products.find((p: any) => p.id === Number(item.product_id))?.name || `Product #${item.product_id}`,
@@ -1610,6 +1629,13 @@ export default function LabourBillPage() {
         else invItems.forEach((item: any) => pushInvRow(item));
       });
     }
+
+    // Sort report rows chronologically (old date to new)
+    reportRows.sort((a, b) => {
+      const dateA = a.raw_inward_date || a.raw_outward_date || 0;
+      const dateB = b.raw_inward_date || b.raw_outward_date || 0;
+      return dateA - dateB;
+    });
 
     const rawTotalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
     const billTotalWeight = Number(row.quantity) > 0 ? Number(row.quantity) : rawTotalOutwardWeight;
