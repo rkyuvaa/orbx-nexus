@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, MenuItem, Autocomplete, Typography, Table, TableHead, TableRow, TableCell, TableBody, Paper, Select, Checkbox } from "@mui/material";
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
+import Print from "@mui/icons-material/Print";
 import { useForm, Controller } from "react-hook-form";
+import { COMMON_PRINT_CSS } from "../../utils/printStyles";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import api from "../../api/client";
@@ -89,6 +91,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     },
   });
 
+  const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
@@ -597,6 +600,125 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     setOpen(true);
   };
 
+  const handlePrintJobWork = (row: any) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const savedConfig = localStorage.getItem("orbx_print_config");
+    let printConfig = { showLogo: true, billPaperSize: "A4" };
+    if (savedConfig) {
+      try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
+    }
+
+    const logoBase64 = localStorage.getItem("company_logo");
+    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
+    const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
+    const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
+    const cTax = compData?.gstin ? `GSTIN: ${compData?.gstin}` : "";
+
+    const dateStr = new Date(row.entry_date).toLocaleDateString("en-IN", {
+      day: "2-digit", month: "2-digit", year: "numeric"
+    }).replace(/\//g, "-");
+
+    const contractorName = row.contractor_name || "General";
+    
+    let itemsArray: any[] = [];
+    if (typeof row.items === "string") {
+      try { itemsArray = JSON.parse(row.items); } catch (e) {}
+    } else if (Array.isArray(row.items)) {
+      itemsArray = row.items;
+    }
+
+    let rowsHtml = "";
+    itemsArray.forEach((item, idx) => {
+      const pName = products.find((p: any) => p.id === Number(item.product_id))?.name || "-";
+      const procName = processes.find((p: any) => p.id === Number(item.process_id))?.process_name || "-";
+      const qty = Number(item.quantity) || 0;
+      const rate = Number(item.rate) || 0;
+      const amt = Number(item.amount) || 0;
+      rowsHtml += `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td>${pName}</td>
+          <td>${procName}</td>
+          <td style="text-align: right;">${formatQty(qty)}</td>
+          <td style="text-align: right;">${formatAmount(rate)}</td>
+          <td style="text-align: right; font-weight: 600;">${formatAmount(amt)}</td>
+        </tr>
+      `;
+    });
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Job Work Register - ${row.entry_no}</title>
+          <style>
+            @page { size: A4 portrait; margin: 15mm; }
+            ${COMMON_PRINT_CSS}
+            table.items-table th, table.items-table td {
+              border: 1px solid #cbd5e1;
+              padding: 5px 7px;
+            }
+            table.items-table th { background-color: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <div class="logo-wrapper">${logoHtml}</div>
+            <div class="company-details">
+              <h1>${cName}</h1>
+              ${cAddress ? `<p>${cAddress}</p>` : ""}
+              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+              ${cTax ? `<p class="gstin">${cTax}</p>` : ""}
+            </div>
+          </div>
+          <div class="title-section">
+            <h2>JOB WORK REGISTER</h2>
+            <div class="doc-no">Entry No: ${row.entry_no}</div>
+            <div class="doc-date">Date: ${dateStr}</div>
+          </div>
+          
+          <div class="address-section">
+            <div class="address-column" style="width: 100%;">
+              <h3>CONTRACTOR DETAILS:</h3>
+              <div class="name">${contractorName}</div>
+            </div>
+          </div>
+
+          <table class="items-table" style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                <th style="text-align: left;">Product</th>
+                <th style="text-align: left;">Process</th>
+                <th style="width: 80px; text-align: right;">Qty</th>
+                <th style="width: 100px; text-align: right;">Rate (₹)</th>
+                <th style="width: 120px; text-align: right;">Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+              <tr class="totals-row">
+                <td colspan="3" style="text-align: right; text-transform: uppercase; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">Totals</td>
+                <td style="text-align: right; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">${formatQty(row.quantity)}</td>
+                <td style="border-top: 2px solid #0f5132; background-color: #e2e8f0;"></td>
+                <td style="text-align: right; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">${formatAmount(row.amount)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const TITLES: Record<string, string> = { rates: "Supplier Rate Register", "job-work": "Job Work Register", payment: "Job Work Payment" };
   const BREADCRUMBS: Record<string, string> = { rates: "Rate Register", "job-work": "Job Work Register", payment: "Job Work Payment" };
 
@@ -632,9 +754,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     ] : []),
     { field: "quantity", headerName: "Qty", width: 80, type: "numericColumn" },
     { field: "amount", headerName: "Amount", width: 110, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
-    { headerName: "Actions", width: 90, sortable: false, filter: false, cellRenderer: (p: any) => (
+    { headerName: "Actions", width: 120, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Edit"><IconButton size="small" onClick={() => handleOpen(p.data)}><Edit fontSize="small" /></IconButton></Tooltip>
+        {type === "job-work" && (
+          <Tooltip title="Print Job Work"><IconButton size="small" color="primary" onClick={() => handlePrintJobWork(p.data)}><Print fontSize="small" /></IconButton></Tooltip>
+        )}
         <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => { if (window.confirm("Delete this contractor entry?")) deleteMutation.mutate(p.data.id); }}><Delete fontSize="small" /></IconButton></Tooltip>
       </Box>
     )},
