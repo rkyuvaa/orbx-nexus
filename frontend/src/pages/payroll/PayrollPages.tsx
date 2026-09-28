@@ -18,6 +18,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { useAuthStore } from "../../store";
 import { formatAmount } from "../../utils/format";
+import { COMMON_PRINT_CSS } from "../../utils/printStyles";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -39,6 +40,8 @@ function VoucherModule({
     queryKey: [queryKey, activeFY],
     queryFn: async () => (await api.get(`${endpoint}?fy=${activeFY}&ledger_type=${ledgerType}&payment_type=${paymentType}`)).data,
   });
+
+  const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", ledgerType],
@@ -91,6 +94,99 @@ function VoucherModule({
     setOpen(true);
   };
 
+  const handlePrintVoucher = (row: any) => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const savedConfig = localStorage.getItem("orbx_print_config");
+    let printConfig = { showLogo: true, billPaperSize: "A5" };
+    if (savedConfig) {
+      try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
+    }
+
+    const logoBase64 = localStorage.getItem("company_logo");
+    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
+    const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
+    const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
+    const cTax = compData?.gstin ? `GSTIN: ${compData?.gstin}` : "";
+
+    const dateStr = new Date(row.voucher_date).toLocaleDateString("en-IN", {
+      day: "2-digit", month: "2-digit", year: "numeric"
+    }).replace(/\//g, "-");
+
+    const l = ledgers.find((item: any) => item.id === row.ledger_id || item.id === Number(row.ledger_id));
+    const ledgerName = l ? `${l.code ? l.code + ' - ' : ''}${l.name}` : row.ledger_id;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${title} - ${row.voucher_no}</title>
+          <style>
+            @page { size: A5 landscape; margin: 10mm; }
+            ${COMMON_PRINT_CSS}
+            table.items-table th, table.items-table td {
+              border: 1px solid #cbd5e1;
+              padding: 5px 7px;
+            }
+            table.items-table th { background-color: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <div class="logo-wrapper">${logoHtml}</div>
+            <div class="company-details">
+              <h1>${cName}</h1>
+              ${cAddress ? `<p>${cAddress}</p>` : ""}
+              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+              ${cTax ? `<p class="gstin">${cTax}</p>` : ""}
+            </div>
+          </div>
+          <div class="title-section">
+            <h2>${title.toUpperCase()}</h2>
+            <div class="doc-no">Voucher No: ${row.voucher_no}</div>
+            <div class="doc-date">Date: ${dateStr}</div>
+          </div>
+          
+          <div class="address-section">
+            <div class="address-column" style="width: 100%;">
+              <h3>${ledgerType.toUpperCase()} DETAILS:</h3>
+              <div class="name">${ledgerName}</div>
+            </div>
+          </div>
+
+          <table class="items-table" style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                <th style="text-align: left;">Particulars</th>
+                <th style="width: 120px; text-align: right;">Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="text-align: center;">1</td>
+                <td>Advance ${paymentType} ${row.narration ? `- ${row.narration}` : ''}</td>
+                <td style="text-align: right; font-weight: 600;">${formatAmount(row.amount)}</td>
+              </tr>
+              <tr class="totals-row">
+                <td colspan="2" style="text-align: right; text-transform: uppercase; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">Total</td>
+                <td style="text-align: right; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">${formatAmount(row.amount)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 140 },
     { field: "voucher_date", headerName: "Date", width: 100 },
@@ -107,14 +203,19 @@ function VoucherModule({
     { field: "narration", headerName: "Narration", flex: 1 },
     {
       headerName: "Actions",
-      width: 110,
+      width: 130,
       sortable: false,
       filter: false,
       cellRenderer: (p: any) => (
         <Box sx={{ display: "flex", gap: 0.5 }}>
           <Tooltip title="Edit">
-            <IconButton size="small" color="primary" onClick={() => handleEditRow(p.data)}>
+            <IconButton size="small" onClick={() => handleEditRow(p.data)}>
               <Edit fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Print A5 Voucher">
+            <IconButton size="small" color="primary" onClick={() => handlePrintVoucher(p.data)}>
+              <Print fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete">
