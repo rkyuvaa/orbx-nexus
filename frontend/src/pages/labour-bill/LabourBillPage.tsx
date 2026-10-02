@@ -1214,9 +1214,9 @@ export default function LabourBillPage() {
 
         reportRowsHtml += `
           <tr>
-            <td style="font-weight: 600; white-space: nowrap; text-align: ${isDuplicate ? 'center' : 'left'};">${displayRef}</td>
-            <td style="white-space: nowrap; text-align: ${isDuplicate ? 'center' : 'left'};">${displayDate}</td>
-            <td style="font-weight: 600; text-align: ${isDuplicate ? 'center' : 'left'};">${displayProd}</td>
+            <td style="font-weight: 600; white-space: nowrap; text-align: ${isDuplicateItem || isSameRef ? 'center' : 'left'};">${displayRef}</td>
+            <td style="white-space: nowrap; text-align: ${isDuplicateItem || isSameRef ? 'center' : 'left'};">${displayDate}</td>
+            <td style="font-weight: 600; text-align: ${isDuplicateItem ? 'center' : 'left'};">${displayProd}</td>
             <td style="text-align: right; white-space: nowrap;">${fmtCell(displayInwQty, formatQty)}</td>
             <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(displayInwWeight)}</td>
             <td style="font-weight: 600; white-space: nowrap;">${r.outward_no}</td>
