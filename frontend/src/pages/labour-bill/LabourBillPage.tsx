@@ -1283,8 +1283,7 @@ export default function LabourBillPage() {
         const borderStyle = isLast ? "" : "border-right: 1px solid rgba(255,255,255,0.3) !important;";
         subHeaderHtml += `
           <th style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important; ${borderStyle}">
-            <div style="font-size: 0.75rem; margin-bottom: 2px; text-transform: uppercase;">${proc.name}</div>
-            <div style="font-size: 0.65rem; font-weight: normal; opacity: 0.85; text-transform: uppercase;">WEIGHT</div>
+            ${proc.name.toUpperCase()}<br/>WEIGHT
           </th>
         `;
       });
