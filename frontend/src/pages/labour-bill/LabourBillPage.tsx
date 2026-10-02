@@ -1129,8 +1129,19 @@ export default function LabourBillPage() {
       };
     });
 
-    const totalInwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
-    const totalInwardWeight = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+    const seenInwardForSum = new Set<string>();
+    let totalInwardQty = 0;
+    let totalInwardWeight = 0;
+    scaledReportRows.forEach((r) => {
+      if (r.inward_qty !== null && r.inward_weight !== null) {
+        const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        if (!seenInwardForSum.has(key)) {
+          seenInwardForSum.add(key);
+          totalInwardQty += Number(r.inward_qty) || 0;
+          totalInwardWeight += Number(r.inward_weight) || 0;
+        }
+      }
+    });
     const totalOutwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
     const totalOutwardWeight = billTotalWeight;
 
@@ -1158,7 +1169,21 @@ export default function LabourBillPage() {
       const totalColSpan = 9 + (uniqueActiveProcesses.length || 1);
       reportRowsHtml = `<tr><td colspan="${totalColSpan}" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
     } else {
+      const seenForRender = new Set<string>();
       scaledReportRows.forEach((r) => {
+        let isDuplicate = false;
+        if (r.inward_qty !== null && r.inward_weight !== null) {
+          const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+          isDuplicate = seenForRender.has(key);
+          seenForRender.add(key);
+        }
+        
+        const displayRef = isDuplicate ? '"' : r.ref;
+        const displayDate = isDuplicate ? '"' : r.inward_date;
+        const displayProd = isDuplicate ? '"' : r.productName;
+        const displayInwQty = isDuplicate ? null : r.inward_qty;
+        const displayInwWeight = isDuplicate ? null : r.inward_weight;
+
         let processColsHtml = "";
         if (uniqueActiveProcesses.length === 0) {
           processColsHtml += `<td style="text-align: center; color: #a0aec0;">-</td>`;
@@ -1185,11 +1210,11 @@ export default function LabourBillPage() {
 
         reportRowsHtml += `
           <tr>
-            <td style="font-weight: 600; white-space: nowrap;">${r.ref}</td>
-            <td style="white-space: nowrap;">${r.inward_date}</td>
-            <td style="font-weight: 600;">${r.productName}</td>
-            <td style="text-align: right; white-space: nowrap;">${fmtCell(r.inward_qty, formatQty)}</td>
-            <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(r.inward_weight)}</td>
+            <td style="font-weight: 600; white-space: nowrap; text-align: ${isDuplicate ? 'center' : 'left'};">${displayRef}</td>
+            <td style="white-space: nowrap; text-align: ${isDuplicate ? 'center' : 'left'};">${displayDate}</td>
+            <td style="font-weight: 600; text-align: ${isDuplicate ? 'center' : 'left'};">${displayProd}</td>
+            <td style="text-align: right; white-space: nowrap;">${fmtCell(displayInwQty, formatQty)}</td>
+            <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(displayInwWeight)}</td>
             <td style="font-weight: 600; white-space: nowrap;">${r.outward_no}</td>
             <td style="white-space: nowrap;">${r.outward_date}</td>
             <td style="text-align: right; white-space: nowrap;">${fmtCell(r.outward_qty, formatQty)}</td>
@@ -1659,8 +1684,19 @@ export default function LabourBillPage() {
       };
     });
 
-    const totalInwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_qty) || 0), 0);
-    const totalInwardWeight = scaledReportRows.reduce((sum, r) => sum + (Number(r.inward_weight) || 0), 0);
+    const seenInwardForSumXls = new Set<string>();
+    let totalInwardQty = 0;
+    let totalInwardWeight = 0;
+    scaledReportRows.forEach((r) => {
+      if (r.inward_qty !== null && r.inward_weight !== null) {
+        const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        if (!seenInwardForSumXls.has(key)) {
+          seenInwardForSumXls.add(key);
+          totalInwardQty += Number(r.inward_qty) || 0;
+          totalInwardWeight += Number(r.inward_weight) || 0;
+        }
+      }
+    });
     const totalOutwardQty = scaledReportRows.reduce((sum, r) => sum + (Number(r.outward_qty) || 0), 0);
     const totalOutwardWeight = billTotalWeight;
 
@@ -1722,14 +1758,28 @@ export default function LabourBillPage() {
       return Number(num.toFixed(3));
     };
 
+    const seenForXlsRender = new Set<string>();
     // Data rows
     scaledReportRows.forEach((r) => {
+      let isDuplicate = false;
+      if (r.inward_qty !== null && r.inward_weight !== null) {
+        const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        isDuplicate = seenForXlsRender.has(key);
+        seenForXlsRender.add(key);
+      }
+      
+      const displayRef = isDuplicate ? '"' : r.ref;
+      const displayDate = isDuplicate ? '"' : r.inward_date;
+      const displayProd = isDuplicate ? '"' : r.productName;
+      const displayInwQty = isDuplicate ? null : r.inward_qty;
+      const displayInwWeight = isDuplicate ? null : r.inward_weight;
+
       const rowData: any[] = [
-        r.ref,
-        r.inward_date,
-        r.productName,
-        toExcelNum(r.inward_qty),
-        toExcelNum(r.inward_weight),
+        displayRef,
+        displayDate,
+        displayProd,
+        toExcelNum(displayInwQty),
+        toExcelNum(displayInwWeight),
         r.outward_no,
         r.outward_date,
         toExcelNum(r.outward_qty),
