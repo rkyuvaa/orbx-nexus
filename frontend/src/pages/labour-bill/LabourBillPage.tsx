@@ -1201,9 +1201,9 @@ export default function LabourBillPage() {
                 ? (r.raw_outward_weight / rawTotal) * billedQty
                 : Number(r.outward_weight) || 0;
 
-              processColsHtml += `<td style="text-align: right; font-weight: 500; ${borderStyle}">${fmtWeightCell(cellWeight)}</td>`;
+              processColsHtml += `<td style="text-align: right; font-weight: 500; white-space: nowrap; ${borderStyle}">${fmtWeightCell(cellWeight)}</td>`;
             } else {
-              processColsHtml += `<td style="text-align: center; color: #a0aec0; ${borderStyle}">-</td>`;
+              processColsHtml += `<td style="text-align: center; color: #a0aec0; white-space: nowrap; ${borderStyle}">-</td>`;
             }
           });
         }
@@ -1233,7 +1233,7 @@ export default function LabourBillPage() {
         const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
         const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : (processTotals[proc.id] * weightScaleFactor);
         processTotalsHtml += `
-          <td style="text-align: right; font-weight: 700; color: #0f5132; ${borderStyle}">
+          <td style="text-align: right; font-weight: 700; color: #0f5132; white-space: nowrap; ${borderStyle}">
             ${formatWeight(finalVal)} kg
           </td>
         `;
@@ -1241,7 +1241,7 @@ export default function LabourBillPage() {
       }
 
       reportRowsHtml += `
-          <tr class="total-row">
+          <tr class="total-row" style="background-color: #f0fdf4 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
             <td colspan="3" style="text-align: right; font-weight: 700; color: #0f5132;">Total</td>
             <td style="text-align: right; font-weight: 700; color: #0f5132;">${formatQty(totalInwardQty)}</td>
             <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;">${formatWeight(totalInwardWeight)} kg</td>
@@ -1256,27 +1256,27 @@ export default function LabourBillPage() {
     const processingColSpan = uniqueActiveProcesses.length || 1;
     const superHeaderHtml = `
       <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-        <th colspan="5" style="text-align: center; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Inward Details</th>
-        <th colspan="4" style="text-align: center; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Outward details</th>
-        <th colspan="${processingColSpan}" style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">Processing</th>
+        <th colspan="5" style="text-align: center; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">INWARD DETAILS</th>
+        <th colspan="4" style="text-align: center; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD DETAILS</th>
+        <th colspan="${processingColSpan}" style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">PROCESSING</th>
       </tr>
     `;
 
     let subHeaderHtml = `
       <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-        <th style="background-color: #0f5132 !important; color: #ffffff !important;">inward ref no</th>
-        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Date</th>
-        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Product</th>
-        <th style="text-align: right; width: 60px; background-color: #0f5132 !important; color: #ffffff !important;">Qty</th>
-        <th style="text-align: right; width: 90px; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Weight</th>
-        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Outward No</th>
-        <th style="background-color: #0f5132 !important; color: #ffffff !important;">Date</th>
-        <th style="text-align: right; width: 60px; background-color: #0f5132 !important; color: #ffffff !important;">Qty</th>
-        <th style="text-align: right; width: 90px; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">Weight</th>
+        <th style="text-align: left; background-color: #0f5132 !important; color: #ffffff !important;">INWARD<br/>REF NO</th>
+        <th style="text-align: left; background-color: #0f5132 !important; color: #ffffff !important;">DATE</th>
+        <th style="text-align: left; background-color: #0f5132 !important; color: #ffffff !important;">PRODUCT</th>
+        <th style="text-align: right; width: 60px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
+        <th style="text-align: right; width: 90px; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT</th>
+        <th style="text-align: left; background-color: #0f5132 !important; color: #ffffff !important;">OUTWARD<br/>NO</th>
+        <th style="text-align: left; background-color: #0f5132 !important; color: #ffffff !important;">DATE</th>
+        <th style="text-align: right; width: 60px; background-color: #0f5132 !important; color: #ffffff !important;">QTY</th>
+        <th style="text-align: right; width: 90px; border-right: 2.5px solid #ffffff !important; background-color: #0f5132 !important; color: #ffffff !important;">WEIGHT</th>
     `;
 
     if (uniqueActiveProcesses.length === 0) {
-      subHeaderHtml += `<th style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">Process Weight</th>`;
+      subHeaderHtml += `<th style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important;">PROCESS WEIGHT</th>`;
     } else {
       uniqueActiveProcesses.forEach((proc, idx) => {
         const isLast = idx === uniqueActiveProcesses.length - 1;
@@ -1284,7 +1284,7 @@ export default function LabourBillPage() {
         subHeaderHtml += `
           <th style="text-align: center; background-color: #0f5132 !important; color: #ffffff !important; ${borderStyle}">
             <div style="font-size: 0.75rem; margin-bottom: 2px; text-transform: uppercase;">${proc.name}</div>
-            <div style="font-size: 0.65rem; font-weight: normal; opacity: 0.85;">weight</div>
+            <div style="font-size: 0.65rem; font-weight: normal; opacity: 0.85; text-transform: uppercase;">WEIGHT</div>
           </th>
         `;
       });
@@ -1724,13 +1724,13 @@ export default function LabourBillPage() {
 
     // Super Header row
     const superHeader = [
-      "Inward Details", "", "", "", "",
-      "Outward Details", "", "", ""
+      "INWARD DETAILS", "", "", "", "",
+      "OUTWARD DETAILS", "", "", ""
     ];
     if (uniqueActiveProcesses.length === 0) {
-      superHeader.push("Processing");
+      superHeader.push("PROCESSING");
     } else {
-      superHeader.push("Processing");
+      superHeader.push("PROCESSING");
       for (let i = 1; i < uniqueActiveProcesses.length; i++) {
         superHeader.push("");
       }
@@ -1739,14 +1739,14 @@ export default function LabourBillPage() {
 
     // Sub Header row
     const subHeader = [
-      "inward ref no", "Date", "Product", "Qty", "Weight (kg)",
-      "Outward No", "Date", "Qty", "Weight (kg)"
+      "INWARD REF NO", "DATE", "PRODUCT", "QTY", "WEIGHT (kg)",
+      "OUTWARD NO", "DATE", "QTY", "WEIGHT (kg)"
     ];
     if (uniqueActiveProcesses.length === 0) {
-      subHeader.push("Process Weight (kg)");
+      subHeader.push("PROCESS WEIGHT (kg)");
     } else {
       uniqueActiveProcesses.forEach((proc: any) => {
-        subHeader.push(`${proc.name} (kg)`);
+        subHeader.push(`${proc.name.toUpperCase()} (kg)`);
       });
     }
     excelRows.push(subHeader);
