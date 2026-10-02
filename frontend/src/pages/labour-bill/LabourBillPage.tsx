@@ -1292,12 +1292,12 @@ export default function LabourBillPage() {
       reportRowsHtml += `
           <tr class="total-row" style="background-color: #f0fdf4 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
             <td colspan="3" style="text-align: right; font-weight: 700; color: #0f5132;">Total</td>
-            <td style="text-align: right; font-weight: 700; color: #0f5132;">${formatQty(totalInwardQty)}</td>
-            <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;">${formatWeight(totalInwardWeight)} kg</td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132;"></td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;"></td>
             <td></td>
             <td></td>
-            <td style="text-align: right; font-weight: 700; color: #0f5132;">${formatQty(totalOutwardQty)}</td>
-            <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;">${formatWeight(totalOutwardWeight)} kg</td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132;"></td>
+            <td style="text-align: right; font-weight: 700; color: #0f5132; border-right: 2px solid #0f5132 !important;"></td>
             ${processTotalsHtml}
           </tr>`;
     }
@@ -1856,11 +1856,11 @@ export default function LabourBillPage() {
     // Total Row
     const totalRow: any[] = [
       "Total", "", "",
-      toExcelNum(totalInwardQty),
-      toExcelNum(totalInwardWeight),
+      "",
+      "",
       "", "",
-      toExcelNum(totalOutwardQty),
-      toExcelNum(totalOutwardWeight)
+      "",
+      ""
     ];
     if (uniqueActiveProcesses.length === 0) {
       totalRow.push("-");
