@@ -1170,61 +1170,107 @@ export default function LabourBillPage() {
       const totalColSpan = 9 + (uniqueActiveProcesses.length || 1);
       reportRowsHtml = `<tr><td colspan="${totalColSpan}" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
     } else {
-      const seenForRender = new Set<string>();
-      let lastRefForRender = "";
+      interface GroupedProduct {
+        inward_id: any;
+        productName: string;
+        inward_qty: any;
+        inward_weight: any;
+        rowSpan: number;
+        transactions: any[];
+      }
+      interface GroupedRef {
+        ref: string;
+        inward_date: string;
+        rowSpan: number;
+        products: GroupedProduct[];
+      }
+
+      const groups: GroupedRef[] = [];
+      let currentRefGroup: GroupedRef | null = null;
+      let currentProdGroup: GroupedProduct | null = null;
 
       scaledReportRows.forEach((r) => {
-        let isDuplicateItem = false;
-        if (r.inward_qty !== null && r.inward_weight !== null) {
-          const key = `${r.inward_id}_${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
-          isDuplicateItem = seenForRender.has(key);
-          seenForRender.add(key);
+        if (!currentRefGroup || currentRefGroup.ref !== r.ref || currentRefGroup.inward_date !== r.inward_date) {
+          currentRefGroup = {
+            ref: r.ref || "-",
+            inward_date: r.inward_date || "-",
+            rowSpan: 0,
+            products: []
+          };
+          groups.push(currentRefGroup);
+          currentProdGroup = null;
         }
-        
-        const isSameRef = r.ref === lastRefForRender;
-        lastRefForRender = r.ref;
 
-        const displayRef = isDuplicateItem || isSameRef ? '"' : r.ref;
-        const displayDate = isDuplicateItem || isSameRef ? '"' : r.inward_date;
-        const displayProd = isDuplicateItem ? '"' : r.productName;
-        const displayInwQty = isDuplicateItem ? null : r.inward_qty;
-        const displayInwWeight = isDuplicateItem ? null : r.inward_weight;
+        const prodKey = `${r.inward_id}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        if (!currentProdGroup || `${currentProdGroup.inward_id}_${currentProdGroup.productName}_${currentProdGroup.inward_qty}_${currentProdGroup.inward_weight}` !== prodKey) {
+          currentProdGroup = {
+            inward_id: r.inward_id,
+            productName: r.productName || "-",
+            inward_qty: r.inward_qty,
+            inward_weight: r.inward_weight,
+            rowSpan: 0,
+            transactions: []
+          };
+          currentRefGroup.products.push(currentProdGroup);
+        }
 
-        let processColsHtml = "";
-        if (uniqueActiveProcesses.length === 0) {
-          processColsHtml += `<td style="text-align: center; color: #a0aec0;">-</td>`;
-        } else {
-          uniqueActiveProcesses.forEach((proc, pIdx) => {
-            const matches = isProcessInRow(proc.id, r.processId);
-            const isLast = pIdx === uniqueActiveProcesses.length - 1;
-            const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
-            
-            if (matches) {
-              const rawTotal = processTotals[proc.id] || 0;
-              const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
-              const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
-              const cellWeight = Number(r.outward_weight) || 0;
+        currentProdGroup.transactions.push(r);
+        currentProdGroup.rowSpan++;
+        currentRefGroup.rowSpan++;
+      });
 
-              processColsHtml += `<td style="text-align: right; font-weight: 500; white-space: nowrap; ${borderStyle}">${fmtWeightCell(cellWeight)}</td>`;
+      groups.forEach((refGroup, refIdx) => {
+        refGroup.products.forEach((prodGroup, prodIdx) => {
+          prodGroup.transactions.forEach((r, txnIdx) => {
+            const isFirstRef = prodIdx === 0 && txnIdx === 0;
+            const isFirstProd = txnIdx === 0;
+
+            const txnBorderBottom = (txnIdx === prodGroup.transactions.length - 1) ? "border-bottom: 1px solid #198754;" : "border-bottom: 1px solid #e2e8f0;";
+
+            let processColsHtml = "";
+            if (uniqueActiveProcesses.length === 0) {
+              processColsHtml += `<td style="text-align: center; color: #a0aec0; ${txnBorderBottom}">-</td>`;
             } else {
-              processColsHtml += `<td style="text-align: center; color: #a0aec0; white-space: nowrap; ${borderStyle}">-</td>`;
+              uniqueActiveProcesses.forEach((proc, pIdx) => {
+                const matches = isProcessInRow(proc.id, r.processId);
+                const isLast = pIdx === uniqueActiveProcesses.length - 1;
+                const borderRight = isLast ? "" : "border-right: 1px solid #198754 !important;";
+                
+                if (matches) {
+                  const cellWeight = Number(r.outward_weight) || 0;
+                  processColsHtml += `<td style="text-align: right; font-weight: 500; white-space: nowrap; ${borderRight} ${txnBorderBottom}">${fmtWeightCell(cellWeight)}</td>`;
+                } else {
+                  processColsHtml += `<td style="text-align: center; color: #a0aec0; white-space: nowrap; ${borderRight} ${txnBorderBottom}">-</td>`;
+                }
+              });
             }
-          });
-        }
 
-        reportRowsHtml += `
-          <tr>
-            <td style="font-weight: 600; white-space: nowrap; text-align: ${isDuplicateItem || isSameRef ? 'center' : 'left'};">${displayRef}</td>
-            <td style="white-space: nowrap; text-align: ${isDuplicateItem || isSameRef ? 'center' : 'left'};">${displayDate}</td>
-            <td style="font-weight: 600; text-align: ${isDuplicateItem ? 'center' : 'left'};">${displayProd}</td>
-            <td style="text-align: right; white-space: nowrap;">${fmtCell(displayInwQty, formatQty)}</td>
-            <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(displayInwWeight)}</td>
-            <td style="font-weight: 600; white-space: nowrap;">${r.outward_no}</td>
-            <td style="white-space: nowrap;">${r.outward_date}</td>
-            <td style="text-align: right; white-space: nowrap;">${fmtCell(r.outward_qty, formatQty)}</td>
-            <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important;">${fmtWeightCell(r.outward_weight)}</td>
-            ${processColsHtml}
-          </tr>`;
+            reportRowsHtml += `<tr>`;
+            
+            if (isFirstRef) {
+              reportRowsHtml += `
+                <td rowspan="${refGroup.rowSpan}" style="font-weight: 600; white-space: nowrap; vertical-align: middle; text-align: left; border-bottom: 1px solid #198754;">${refGroup.ref}</td>
+                <td rowspan="${refGroup.rowSpan}" style="white-space: nowrap; vertical-align: middle; text-align: left; border-bottom: 1px solid #198754;">${refGroup.inward_date}</td>
+              `;
+            }
+
+            if (isFirstProd) {
+              reportRowsHtml += `
+                <td rowspan="${prodGroup.rowSpan}" style="font-weight: 600; text-align: left; vertical-align: middle; border-bottom: 1px solid #198754;">${prodGroup.productName}</td>
+                <td rowspan="${prodGroup.rowSpan}" style="text-align: right; white-space: nowrap; vertical-align: middle; border-bottom: 1px solid #198754;">${fmtCell(prodGroup.inward_qty, formatQty)}</td>
+                <td rowspan="${prodGroup.rowSpan}" style="text-align: right; font-weight: 600; white-space: nowrap; vertical-align: middle; border-right: 2px solid #0f5132 !important; border-bottom: 1px solid #198754;">${fmtWeightCell(prodGroup.inward_weight)}</td>
+              `;
+            }
+
+            reportRowsHtml += `
+              <td style="font-weight: 600; white-space: nowrap; ${txnBorderBottom}">${r.outward_no}</td>
+              <td style="white-space: nowrap; ${txnBorderBottom}">${r.outward_date}</td>
+              <td style="text-align: right; white-space: nowrap; ${txnBorderBottom}">${fmtCell(r.outward_qty, formatQty)}</td>
+              <td style="text-align: right; font-weight: 600; white-space: nowrap; border-right: 2px solid #0f5132 !important; ${txnBorderBottom}">${fmtWeightCell(r.outward_weight)}</td>
+              ${processColsHtml}
+            </tr>`;
+          });
+        });
       });
 
       let processTotalsHtml = "";
@@ -1774,9 +1820,9 @@ export default function LabourBillPage() {
       const isSameRef = r.ref === lastRefForXlsRender;
       lastRefForXlsRender = r.ref;
 
-      const displayRef = isDuplicateItem || isSameRef ? '"' : r.ref;
-      const displayDate = isDuplicateItem || isSameRef ? '"' : r.inward_date;
-      const displayProd = isDuplicateItem ? '"' : r.productName;
+      const displayRef = isDuplicateItem || isSameRef ? "" : r.ref;
+      const displayDate = isDuplicateItem || isSameRef ? "" : r.inward_date;
+      const displayProd = isDuplicateItem ? "" : r.productName;
       const displayInwQty = isDuplicateItem ? null : r.inward_qty;
       const displayInwWeight = isDuplicateItem ? null : r.inward_weight;
 
