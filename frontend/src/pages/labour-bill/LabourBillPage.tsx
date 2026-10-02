@@ -1197,9 +1197,7 @@ export default function LabourBillPage() {
               const rawTotal = processTotals[proc.id] || 0;
               const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
               const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
-              const cellWeight = (billedQty > 0 && rawTotal > 0)
-                ? (r.raw_outward_weight / rawTotal) * billedQty
-                : Number(r.outward_weight) || 0;
+              const cellWeight = Number(r.outward_weight) || 0;
 
               processColsHtml += `<td style="text-align: right; font-weight: 500; white-space: nowrap; ${borderStyle}">${fmtWeightCell(cellWeight)}</td>`;
             } else {
@@ -1230,8 +1228,7 @@ export default function LabourBillPage() {
       uniqueActiveProcesses.forEach((proc, idx) => {
         const isLast = idx === uniqueActiveProcesses.length - 1;
         const borderStyle = isLast ? "" : "border-right: 1px solid #198754 !important;";
-        const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
-        const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : (processTotals[proc.id] * weightScaleFactor);
+        const finalVal = (processTotals[proc.id] || 0) * weightScaleFactor;
         processTotalsHtml += `
           <td style="text-align: right; font-weight: 700; color: #0f5132; white-space: nowrap; ${borderStyle}">
             ${formatWeight(finalVal)} kg
@@ -1790,12 +1787,7 @@ export default function LabourBillPage() {
       } else {
         uniqueActiveProcesses.forEach((proc: any) => {
           if (isProcessInRow(proc.id, r.processId)) {
-            const rawTotal = processTotals[proc.id] || 0;
-            const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
-            const billedQty = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : 0;
-            const cellWeight = (billedQty > 0 && rawTotal > 0)
-              ? (r.raw_outward_weight / rawTotal) * billedQty
-              : Number(r.outward_weight) || 0;
+            const cellWeight = Number(r.outward_weight) || 0;
             rowData.push(toExcelNum(cellWeight));
           } else {
             rowData.push("-");
@@ -1818,8 +1810,7 @@ export default function LabourBillPage() {
       totalRow.push("-");
     } else {
       uniqueActiveProcesses.forEach((proc: any) => {
-        const billItem = billItems.find((it: any) => Number(it.process_id) === proc.id);
-        const finalVal = billItem && Number(billItem.quantity) > 0 ? Number(billItem.quantity) : processTotals[proc.id];
+        const finalVal = processTotals[proc.id] || 0;
         totalRow.push(toExcelNum(finalVal));
       });
     }
