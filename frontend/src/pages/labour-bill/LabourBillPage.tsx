@@ -1100,11 +1100,12 @@ export default function LabourBillPage() {
 
 
 
-    // Sort report rows chronologically (old date to new)
+    // Sort report rows chronologically (old date to new), then by ref
     reportRows.sort((a, b) => {
       const dateA = a.raw_inward_date || a.raw_outward_date || 0;
       const dateB = b.raw_inward_date || b.raw_outward_date || 0;
-      return dateA - dateB;
+      if (dateA !== dateB) return dateA - dateB;
+      return (a.ref || "").localeCompare(b.ref || "");
     });
 
     const rawTotalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
@@ -1134,7 +1135,7 @@ export default function LabourBillPage() {
     let totalInwardWeight = 0;
     scaledReportRows.forEach((r) => {
       if (r.inward_qty !== null && r.inward_weight !== null) {
-        const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        const key = `${r.inward_id}_${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
         if (!seenInwardForSum.has(key)) {
           seenInwardForSum.add(key);
           totalInwardQty += Number(r.inward_qty) || 0;
@@ -1170,19 +1171,24 @@ export default function LabourBillPage() {
       reportRowsHtml = `<tr><td colspan="${totalColSpan}" style="text-align: center; padding: 12px;">No linked inward / outward vouchers</td></tr>`;
     } else {
       const seenForRender = new Set<string>();
+      let lastRefForRender = "";
+
       scaledReportRows.forEach((r) => {
-        let isDuplicate = false;
+        let isDuplicateItem = false;
         if (r.inward_qty !== null && r.inward_weight !== null) {
-          const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
-          isDuplicate = seenForRender.has(key);
+          const key = `${r.inward_id}_${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+          isDuplicateItem = seenForRender.has(key);
           seenForRender.add(key);
         }
         
-        const displayRef = isDuplicate ? '"' : r.ref;
-        const displayDate = isDuplicate ? '"' : r.inward_date;
-        const displayProd = isDuplicate ? '"' : r.productName;
-        const displayInwQty = isDuplicate ? null : r.inward_qty;
-        const displayInwWeight = isDuplicate ? null : r.inward_weight;
+        const isSameRef = r.ref === lastRefForRender;
+        lastRefForRender = r.ref;
+
+        const displayRef = isDuplicateItem || isSameRef ? '"' : r.ref;
+        const displayDate = isDuplicateItem || isSameRef ? '"' : r.inward_date;
+        const displayProd = isDuplicateItem ? '"' : r.productName;
+        const displayInwQty = isDuplicateItem ? null : r.inward_qty;
+        const displayInwWeight = isDuplicateItem ? null : r.inward_weight;
 
         let processColsHtml = "";
         if (uniqueActiveProcesses.length === 0) {
@@ -1685,7 +1691,7 @@ export default function LabourBillPage() {
     let totalInwardWeight = 0;
     scaledReportRows.forEach((r) => {
       if (r.inward_qty !== null && r.inward_weight !== null) {
-        const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        const key = `${r.inward_id}_${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
         if (!seenInwardForSumXls.has(key)) {
           seenInwardForSumXls.add(key);
           totalInwardQty += Number(r.inward_qty) || 0;
@@ -1755,20 +1761,24 @@ export default function LabourBillPage() {
     };
 
     const seenForXlsRender = new Set<string>();
+    let lastRefForXlsRender = "";
     // Data rows
     scaledReportRows.forEach((r) => {
-      let isDuplicate = false;
+      let isDuplicateItem = false;
       if (r.inward_qty !== null && r.inward_weight !== null) {
-        const key = `${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
-        isDuplicate = seenForXlsRender.has(key);
+        const key = `${r.inward_id}_${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        isDuplicateItem = seenForXlsRender.has(key);
         seenForXlsRender.add(key);
       }
       
-      const displayRef = isDuplicate ? '"' : r.ref;
-      const displayDate = isDuplicate ? '"' : r.inward_date;
-      const displayProd = isDuplicate ? '"' : r.productName;
-      const displayInwQty = isDuplicate ? null : r.inward_qty;
-      const displayInwWeight = isDuplicate ? null : r.inward_weight;
+      const isSameRef = r.ref === lastRefForXlsRender;
+      lastRefForXlsRender = r.ref;
+
+      const displayRef = isDuplicateItem || isSameRef ? '"' : r.ref;
+      const displayDate = isDuplicateItem || isSameRef ? '"' : r.inward_date;
+      const displayProd = isDuplicateItem ? '"' : r.productName;
+      const displayInwQty = isDuplicateItem ? null : r.inward_qty;
+      const displayInwWeight = isDuplicateItem ? null : r.inward_weight;
 
       const rowData: any[] = [
         displayRef,
