@@ -3017,13 +3017,23 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                       </Box>
                     </Grid>
                     <Grid size={{ xs: 12 }}>
-                      <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2, pt: 1, borderTop: "1px solid #cbd5e1" }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
-                          Net Payable Amount:
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
-                          ₹{formatAmount(netAmount)}
-                        </Typography>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, pt: 1, borderTop: "1px solid #cbd5e1" }}>
+                        <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                          <Typography variant="body2" sx={{ color: "#475569", fontWeight: 500 }}>
+                            Total Wt (W/O Freight): <Box component="span" sx={{ fontWeight: 700, color: "#1e293b" }}>{totalQty.toFixed(3)} kg</Box>
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: "#475569", fontWeight: 500 }}>
+                            Total Wt (With Freight): <Box component="span" sx={{ fontWeight: 700, color: "#1e293b" }}>{(totalQty + (Number(freightItem.quantity) || 0)).toFixed(3)} kg</Box>
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                            Net Payable Amount:
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                            ₹{formatAmount(netAmount)}
+                          </Typography>
+                        </Box>
                       </Box>
                     </Grid>
                   </Grid>
