@@ -2212,75 +2212,38 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
   const computeRawWeightForInwardsList = useCallback((inws: any[]) => {
     if (!inws || inws.length === 0) return 0;
-    const selectedInwardIds = inws.map((i: any) => Number(i.id));
-
-    const outwardMap = new Map<number, any>();
-    inws.forEach((inw: any) => {
-      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
-        ? inw.unbilledOutwards
-        : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
-          ? inw.linkedOutwards
-          : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
-      outs.forEach((out: any) => {
-        if (out && out.id) outwardMap.set(out.id, out);
-      });
-    });
-
-    const uniqueOutwards = Array.from(outwardMap.values());
-    const parseArray = (x: any): any[] => {
-      if (typeof x === "string") {
-        try { return JSON.parse(x); } catch { return []; }
-      }
-      return Array.isArray(x) ? x : [];
-    };
 
     let totalRawWeight = 0;
-    uniqueOutwards.forEach((out: any) => {
-      const rawOutItems = parseArray(out.items);
-      let outItems: any[] = [];
-      if (rawOutItems.length > 0) {
-        const anyHasInwardId = rawOutItems.some(
-          (i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== ""
-        );
-        if (anyHasInwardId) {
-          outItems = rawOutItems.filter((i: any) => selectedInwardIds.includes(Number(i.inward_id)));
-        } else {
-          const outHeaderInwardIds: number[] = (() => {
-            if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
-            if (typeof out.inward_ids === "string") {
-              try { return parseArray(out.inward_ids).map(Number); } catch {}
-            }
-            if (out.inward_id !== undefined && out.inward_id !== null) return [Number(out.inward_id)];
-            return [];
-          })();
-          if (outHeaderInwardIds.some((id: number) => selectedInwardIds.includes(id))) {
-            outItems = rawOutItems;
-          }
-        }
+    
+    inws.forEach((inw: any) => {
+      let items: any[] = [];
+      if (typeof inw.items === "string") {
+        try { items = JSON.parse(inw.items); } catch { items = []; }
+      } else if (Array.isArray(inw.items)) {
+        items = inw.items;
       }
 
-      let sumItemWeight = 0;
-      let hasItemLevelWeight = false;
-
-      outItems.forEach((item: any) => {
-        if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
-          sumItemWeight += Number(item.total_weight);
-          hasItemLevelWeight = true;
-        } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
-          sumItemWeight += Number(item.weight) * (Number(item.quantity) || 1);
-          hasItemLevelWeight = true;
-        }
-      });
-
-      if (hasItemLevelWeight) {
+      if (items && items.length > 0) {
+        let sumItemWeight = 0;
+        items.forEach((item: any) => {
+          if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
+            sumItemWeight += Number(item.total_weight);
+          } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
+            sumItemWeight += Number(item.weight) * (Number(item.quantity) || 1);
+          }
+        });
         totalRawWeight += sumItemWeight;
-      } else if (outItems.length > 0) {
-        totalRawWeight += Number(out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
+      } else {
+        if (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "") {
+          totalRawWeight += Number(inw.total_weight);
+        } else if (inw.weight !== undefined && inw.weight !== null && inw.weight !== "") {
+          totalRawWeight += Number(inw.weight) * (Number(inw.quantity) || 1);
+        }
       }
     });
 
     return totalRawWeight;
-  }, [supplierOutwardVouchers]);
+  }, []);
 
   const handleInwardSelectionChange = (newSelected: any[]) => {
     setSelectedInwards(newSelected);
