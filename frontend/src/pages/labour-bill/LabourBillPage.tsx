@@ -2530,10 +2530,12 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             : (typeof editing.inward_ids === "string" ? (() => { try { return JSON.parse(editing.inward_ids); } catch { return []; } })() : []);
           rawInwIds.forEach((id: number) => matchedInwardIds.add(Number(id)));
         }
-        outwardIdList.forEach((out: any) => {
-          if (out.inward_id) matchedInwardIds.add(out.inward_id);
-          if (Array.isArray(out.inward_ids)) out.inward_ids.forEach((id: number) => matchedInwardIds.add(id));
-        });
+        if (matchedInwardIds.size === 0) {
+          outwardIdList.forEach((out: any) => {
+            if (out.inward_id) matchedInwardIds.add(out.inward_id);
+            if (Array.isArray(out.inward_ids)) out.inward_ids.forEach((id: number) => matchedInwardIds.add(id));
+          });
+        }
         const matchedInws = inwardVouchers.filter((inv: any) => matchedInwardIds.has(inv.id));
         setSelectedInwards(matchedInws);
 
