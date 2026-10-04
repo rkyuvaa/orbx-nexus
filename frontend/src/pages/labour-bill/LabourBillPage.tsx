@@ -2259,10 +2259,24 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
         }
       }
 
+      let sumItemWeight = 0;
+      let hasItemLevelWeight = false;
+
       outItems.forEach((item: any) => {
-        const w = Number(item.total_weight || item.weight || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
-        totalRawWeight += w;
+        if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
+          sumItemWeight += Number(item.total_weight);
+          hasItemLevelWeight = true;
+        } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
+          sumItemWeight += Number(item.weight) * (Number(item.quantity) || 1);
+          hasItemLevelWeight = true;
+        }
       });
+
+      if (hasItemLevelWeight) {
+        totalRawWeight += sumItemWeight;
+      } else if (outItems.length > 0) {
+        totalRawWeight += Number(out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
+      }
     });
 
     return totalRawWeight;
