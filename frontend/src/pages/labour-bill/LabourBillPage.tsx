@@ -2289,20 +2289,6 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
     const selectedInwardIds = newSelected.map((i: any) => Number(i.id));
 
-    // Deduplicate outward vouchers linked to the selected inwards
-    const outwardMap = new Map<number, any>();
-    newSelected.forEach((inw: any) => {
-      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
-        ? inw.unbilledOutwards
-        : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
-          ? inw.linkedOutwards
-          : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
-      outs.forEach((out: any) => {
-        if (out && out.id) outwardMap.set(out.id, out);
-      });
-    });
-
-    const uniqueOutwards = Array.from(outwardMap.values());
     const parseArray = (x: any): any[] => {
       if (typeof x === "string") {
         try { return JSON.parse(x); } catch { return []; }
@@ -2311,34 +2297,47 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     };
 
     const newItems: any[] = [];
-    uniqueOutwards.forEach((out: any) => {
-      const rawOutItems = parseArray(out.items);
-      let outItems: any[] = [];
-      if (rawOutItems.length > 0) {
-        const anyHasInwardId = rawOutItems.some(
-          (i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== ""
-        );
-        if (anyHasInwardId) {
-          outItems = rawOutItems.filter((i: any) => selectedInwardIds.includes(Number(i.inward_id)));
+    newSelected.forEach((inw: any) => {
+      const rawInwItems = parseArray(inw.items);
+      let inwItems = rawInwItems;
+      
+      if (inwItems.length === 0) {
+        let w = 0;
+        if (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "") {
+          w = Number(inw.total_weight);
+        } else if (inw.weight !== undefined && inw.weight !== null && inw.weight !== "") {
+          w = Number(inw.weight) * (Number(inw.quantity) || 1);
         } else {
-          const outHeaderInwardIds: number[] = (() => {
-            if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
-            if (typeof out.inward_ids === "string") {
-              try { return parseArray(out.inward_ids).map(Number); } catch {}
-            }
-            if (out.inward_id !== undefined && out.inward_id !== null) return [Number(out.inward_id)];
-            return [];
-          })();
-          if (outHeaderInwardIds.some((id: number) => selectedInwardIds.includes(id))) {
-            outItems = rawOutItems;
-          }
+          w = Number(inw.quantity) || 0;
         }
+
+        inwItems = [{
+           product_id: inw.product_id,
+           process_id: inw.process_id,
+           computed_weight: w
+        }];
+      } else {
+        inwItems = inwItems.map((item: any) => {
+          let w = 0;
+          if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
+            w = Number(item.total_weight);
+          } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
+            w = Number(item.weight) * (Number(item.quantity) || 1);
+          } else {
+            w = Number(item.quantity) || 0;
+          }
+          return {
+            ...item,
+            computed_weight: w
+          };
+        });
       }
 
-      outItems.forEach((item: any) => {
-        const productId = item.product_id || out.product_id || "";
-        const processIdStr = String(item.process_id || out.process_id || "");
-        const totalWeightVal = Number(item.total_weight || item.weight || out.total_weight || (Number(out.quantity) * Number(out.weight)) || 0);
+      inwItems.forEach((item: any) => {
+        const productId = item.product_id || inw.product_id || "";
+        const processIdStr = String(item.process_id || inw.process_id || "");
+        const totalWeightVal = Number(item.computed_weight) || 0;
+
         const proc = processes.find((p: any) => p.id === Number(processIdStr));
         if (proc && proc.process_ids) {
           const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
