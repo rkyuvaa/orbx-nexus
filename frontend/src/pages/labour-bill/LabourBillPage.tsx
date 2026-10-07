@@ -2336,8 +2336,9 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
       inwItems.forEach((item: any) => {
         const productId = item.product_id || inw.product_id || "";
         let processIdStr = String(item.process_id || inw.process_id || "");
+        let proc = processes.find((p: any) => p.id === Number(processIdStr));
         
-        if (!processIdStr) {
+        if (!proc) {
           const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
             ? inw.unbilledOutwards
             : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
@@ -2349,18 +2350,20 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
             const lineWithProc = lines.find((l: any) => l.process_id !== undefined && l.process_id !== null && String(l.process_id).trim() !== "");
             if (lineWithProc) {
               processIdStr = String(lineWithProc.process_id);
-              break;
+              proc = processes.find((p: any) => p.id === Number(processIdStr));
+              if (proc) break;
             }
-            if (!processIdStr && out.process_id !== undefined && out.process_id !== null && String(out.process_id).trim() !== "") {
+            if (!proc && out.process_id !== undefined && out.process_id !== null && String(out.process_id).trim() !== "") {
               processIdStr = String(out.process_id);
-              break;
+              proc = processes.find((p: any) => p.id === Number(processIdStr));
+              if (proc) break;
             }
           }
         }
+        
+        console.log("DEBUG PROCESS", { inward_id: inw.id, processIdStr, proc_found: !!proc });
 
         const totalWeightVal = Number(item.computed_weight) || 0;
-
-        const proc = processes.find((p: any) => p.id === Number(processIdStr));
         if (proc && proc.process_ids) {
           const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
           childIds.forEach((cid: string) => {
