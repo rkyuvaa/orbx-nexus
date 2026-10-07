@@ -2335,7 +2335,31 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
       inwItems.forEach((item: any) => {
         const productId = item.product_id || inw.product_id || "";
-        const processIdStr = String(item.process_id || inw.process_id || "");
+        let processIdStr = String(item.process_id || inw.process_id || "");
+        
+        if (!processIdStr) {
+          const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
+            ? inw.unbilledOutwards
+            : ((inw.linkedOutwards && inw.linkedOutwards.length > 0)
+              ? inw.linkedOutwards
+              : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
+          
+          for (const out of outs) {
+            const rawOutItems = parseArray(out.items);
+            if (rawOutItems.length > 0) {
+              const match = rawOutItems.find((i: any) => Number(i.inward_id) === Number(inw.id) && i.process_id);
+              if (match) {
+                processIdStr = String(match.process_id);
+                break;
+              }
+            }
+            if (!processIdStr && out.process_id) {
+              processIdStr = String(out.process_id);
+              break;
+            }
+          }
+        }
+
         const totalWeightVal = Number(item.computed_weight) || 0;
 
         const proc = processes.find((p: any) => p.id === Number(processIdStr));
