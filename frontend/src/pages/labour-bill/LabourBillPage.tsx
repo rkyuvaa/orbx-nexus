@@ -2345,15 +2345,13 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
               : supplierOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0));
           
           for (const out of outs) {
-            const rawOutItems = parseArray(out.items);
-            if (rawOutItems.length > 0) {
-              const match = rawOutItems.find((i: any) => Number(i.inward_id) === Number(inw.id) && i.process_id);
-              if (match) {
-                processIdStr = String(match.process_id);
-                break;
-              }
+            const lines = getOutwardLinesForInward(out, inw.id);
+            const lineWithProc = lines.find((l: any) => l.process_id !== undefined && l.process_id !== null && String(l.process_id).trim() !== "");
+            if (lineWithProc) {
+              processIdStr = String(lineWithProc.process_id);
+              break;
             }
-            if (!processIdStr && out.process_id) {
+            if (!processIdStr && out.process_id !== undefined && out.process_id !== null && String(out.process_id).trim() !== "") {
               processIdStr = String(out.process_id);
               break;
             }
