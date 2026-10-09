@@ -259,15 +259,37 @@ async def get_eligible_inwards(
             inward_ref.inward_id,
             COALESCE(SUM(
                 CASE
-                    WHEN jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0
-                    THEN (
+                    -- Case 1: Outward items have explicit line-level inward_id matching this inward
+                    WHEN EXISTS (
+                        SELECT 1 FROM jsonb_array_elements(COALESCE(so.items, '[]'::jsonb)) AS oi
+                        WHERE NULLIF(oi->>'inward_id', '') IS NOT NULL
+                    ) THEN (
                         SELECT COALESCE(SUM(COALESCE(NULLIF(o_item->>'quantity',''),'0')::numeric), 0)
                         FROM jsonb_array_elements(so.items) AS o_item
-                        WHERE
-                            NULLIF(o_item->>'inward_id','') IS NOT NULL
-                            AND NULLIF(o_item->>'inward_id','')::int = inward_ref.inward_id
-                            AND NULLIF(o_item->>'product_id','') IS NOT NULL
+                        WHERE NULLIF(o_item->>'inward_id','')::int = inward_ref.inward_id
                     )
+                    -- Case 2: Outward items do NOT have line-level inward_id, match by product or header link
+                    WHEN jsonb_array_length(COALESCE(so.items, '[]'::jsonb)) > 0 THEN (
+                        SELECT COALESCE(SUM(COALESCE(NULLIF(o_item->>'quantity',''),'0')::numeric), 0)
+                        FROM jsonb_array_elements(so.items) AS o_item
+                        WHERE NULLIF(o_item->>'product_id','') IS NOT NULL
+                          AND (
+                              so.inward_id = inward_ref.inward_id
+                              OR (so.inward_ids IS NOT NULL AND jsonb_array_length(so.inward_ids) = 1)
+                              OR EXISTS (
+                                  SELECT 1 FROM inward_list il_sub
+                                  WHERE il_sub.id = inward_ref.inward_id
+                                    AND (
+                                        il_sub.product_id = NULLIF(o_item->>'product_id','')::int
+                                        OR EXISTS (
+                                            SELECT 1 FROM jsonb_array_elements(COALESCE(il_sub.items, '[]'::jsonb)) AS ii
+                                            WHERE NULLIF(ii->>'product_id','')::int = NULLIF(o_item->>'product_id','')::int
+                                        )
+                                    )
+                              )
+                          )
+                    )
+                    -- Case 3: Outward has no items array, use header quantity
                     ELSE COALESCE(so.quantity, 0)
                 END
             ), 0) AS dispatched_qty
@@ -279,6 +301,10 @@ async def get_eligible_inwards(
             so.inward_id = inward_ref.inward_id
             OR (so.inward_ids IS NOT NULL AND jsonb_typeof(so.inward_ids)='array'
                 AND inward_ref.inward_id::text = ANY(ARRAY(SELECT jsonb_array_elements_text(so.inward_ids))))
+            OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements(COALESCE(so.items, '[]'::jsonb)) AS oi
+                WHERE NULLIF(oi->>'inward_id','')::int = inward_ref.inward_id
+            )
         )
         GROUP BY inward_ref.inward_id
     ),
@@ -294,6 +320,10 @@ async def get_eligible_inwards(
             so.inward_id = inward_ref.inward_id
             OR (so.inward_ids IS NOT NULL AND jsonb_typeof(so.inward_ids)='array'
                 AND inward_ref.inward_id::text = ANY(ARRAY(SELECT jsonb_array_elements_text(so.inward_ids))))
+            OR EXISTS (
+                SELECT 1 FROM jsonb_array_elements(COALESCE(so.items, '[]'::jsonb)) AS oi
+                WHERE NULLIF(oi->>'inward_id','')::int = inward_ref.inward_id
+            )
         )
         GROUP BY inward_ref.inward_id
     ),

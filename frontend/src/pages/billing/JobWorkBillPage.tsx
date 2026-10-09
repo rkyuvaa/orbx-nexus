@@ -117,6 +117,48 @@ export const getBillShotBlastingWeight = (
   return Number(row.quantity || 0);
 };
 
+export const isOutwardLinkedToInward = (out: any, inwId: number): boolean => {
+  if (!out || !inwId) return false;
+  if (Number(out.inward_id) === inwId) return true;
+  const outInwardIds: number[] = (() => {
+    if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+    if (typeof out.inward_ids === "string") {
+      try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch {}
+    }
+    return [];
+  })();
+  if (outInwardIds.includes(inwId)) return true;
+  const rawItems: any[] = (() => {
+    if (Array.isArray(out.items)) return out.items;
+    if (typeof out.items === "string" && out.items.trim() !== "") {
+      try { return JSON.parse(out.items); } catch {}
+    }
+    return [];
+  })();
+  return rawItems.some((it: any) => it.inward_id !== undefined && it.inward_id !== null && Number(it.inward_id) === inwId);
+};
+
+export const isOutwardLinkedToInwardAny = (out: any, inwIdSet: Set<number>): boolean => {
+  if (!out || inwIdSet.size === 0) return false;
+  if (out.inward_id && inwIdSet.has(Number(out.inward_id))) return true;
+  const outInwardIds: number[] = (() => {
+    if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
+    if (typeof out.inward_ids === "string") {
+      try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch {}
+    }
+    return [];
+  })();
+  if (outInwardIds.some((id: number) => inwIdSet.has(id))) return true;
+  const rawItems: any[] = (() => {
+    if (Array.isArray(out.items)) return out.items;
+    if (typeof out.items === "string" && out.items.trim() !== "") {
+      try { return JSON.parse(out.items); } catch {}
+    }
+    return [];
+  })();
+  return rawItems.some((it: any) => it.inward_id !== undefined && it.inward_id !== null && inwIdSet.has(Number(it.inward_id)));
+};
+
 export const getOutwardLinesForInward = (out: any, inwId: number): any[] => {
   if (!out || !inwId) return [];
   let rawItems: any[] = [];
@@ -130,19 +172,7 @@ export const getOutwardLinesForInward = (out: any, inwId: number): any[] => {
   }
 
   if (rawItems.length === 0) {
-    const outHeaderInwardId = Number(out.inward_id);
-    let headerMatch = outHeaderInwardId === inwId;
-    if (!headerMatch) {
-      const outInwardIds: number[] = (() => {
-        if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
-        if (typeof out.inward_ids === "string") {
-          try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch {}
-        }
-        return [];
-      })();
-      headerMatch = outInwardIds.includes(inwId);
-    }
-    if (headerMatch) {
+    if (isOutwardLinkedToInward(out, inwId)) {
       return [{
         product_id: out.product_id || "",
         process_id: out.process_id || "",
@@ -162,21 +192,10 @@ export const getOutwardLinesForInward = (out: any, inwId: number): any[] => {
   if (anyHasInwardId) {
     return rawItems.filter((item: any) => Number(item.inward_id) === inwId);
   } else {
-    const outHeaderInwardId = Number(out.inward_id);
-    let headerMatch = outHeaderInwardId === inwId;
-    if (!headerMatch) {
-      const outInwardIds: number[] = (() => {
-        if (Array.isArray(out.inward_ids)) return out.inward_ids.map(Number);
-        if (typeof out.inward_ids === "string") {
-          try { return (JSON.parse(out.inward_ids) as any[]).map(Number); } catch {}
-        }
-        return [];
-      })();
-      headerMatch = outInwardIds.includes(inwId);
-    }
-    return headerMatch ? rawItems : [];
+    return isOutwardLinkedToInward(out, inwId) ? rawItems : [];
   }
 };
+
 
 export default function JobWorkBillPage() {
   const { activeFY } = useAuthStore();
@@ -281,21 +300,33 @@ export default function JobWorkBillPage() {
     
     const linkedOutwards = (outwardIds || []).map((id: number) => outwardVouchers.find((v: any) => v.id === id)).filter(Boolean);
 
+    const parseJsonArray = (x: any): any[] => {
+      if (typeof x === "string") {
+        try { return JSON.parse(x); } catch (e) { return []; }
+      }
+      return Array.isArray(x) ? x : [];
+    };
+
+    const billInwardIds: number[] = [];
+    parseJsonArray(row.inward_ids).forEach((id: any) => { if (id) billInwardIds.push(Number(id)); });
+    if (billInwardIds.length === 0 && row.inward_id) {
+      billInwardIds.push(Number(row.inward_id));
+    }
+
     const resolvedInwardRefs = new Set<string>();
-    linkedOutwards.forEach((out: any) => {
-      const outInwardIds = out.inward_ids 
-        ? (Array.isArray(out.inward_ids) ? out.inward_ids : (typeof out.inward_ids === 'string' ? (() => { try { return JSON.parse(out.inward_ids); } catch { return []; } })() : []))
-        : (out.inward_id ? [out.inward_id] : []);
-        
-      (outInwardIds || []).forEach((inwId: number) => {
-        const inv = inwardVouchers.find((v: any) => v.id === inwId);
-        if (inv) {
-          const ref = inv.ref_no || inv.serial_no || inv.inward_no;
-          if (ref) resolvedInwardRefs.add(ref);
-        }
-      });
-      if (out.ref_no) resolvedInwardRefs.add(out.ref_no);
+    billInwardIds.forEach((inwId: number) => {
+      const inv = inwardVouchers.find((v: any) => v.id === inwId);
+      if (inv) {
+        const ref = inv.ref_no || inv.serial_no || inv.inward_no;
+        if (ref) resolvedInwardRefs.add(ref);
+      }
     });
+
+    if (resolvedInwardRefs.size === 0) {
+      linkedOutwards.forEach((out: any) => {
+        if (out.ref_no) resolvedInwardRefs.add(out.ref_no);
+      });
+    }
 
     const inwardRefs = Array.from(resolvedInwardRefs).join(", ") || "-";
     const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
@@ -489,31 +520,18 @@ export default function JobWorkBillPage() {
     printWindow.document.close();
   };
 
-  const handlePrintJobWorkDetails = (row: any) => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    const savedConfig = localStorage.getItem("orbx_print_config");
-    let printConfig = { showLogo: true, billPaperSize: "A4" };
-    if (savedConfig) {
-      try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
-    }
-
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
-
+  const buildJobWorkDetailsReportData = (row: any) => {
     const compData = Array.isArray(companyData) ? companyData[0] : companyData;
     const cName = compData?.name || "Company";
     const cAddress1 = compData?.address || "";
-    const cAddress2 = "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
     const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
-    const dateStr = new Date(row.bill_date).toLocaleDateString("en-IN", {
+    const dateStr = row.bill_date ? new Date(row.bill_date).toLocaleDateString("en-IN", {
       day: "2-digit", month: "2-digit", year: "numeric"
-    }).replace(/\//g, "-");
+    }).replace(/\//g, "-") : "-";
 
     const customerLedger = ledgers.find((l: any) => l.id === row.ledger_id);
     const customerName = customerLedger?.name || `Customer #${row.ledger_id}`;
@@ -538,38 +556,21 @@ export default function JobWorkBillPage() {
       } catch (e) { return "-"; }
     };
 
+    // STRICT: Only inwards belonging to THIS bill!
+    const billInwardIdSet = new Set<number>();
+    parseJsonArray(row.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
+    if (row.inward_id) billInwardIdSet.add(Number(row.inward_id));
+
     const storedOutwardIds = parseJsonArray(row.outward_ids).map(Number);
     const linkedOutwards: any[] = (() => {
       if (storedOutwardIds.length > 0) {
         return outwardVouchers.filter((out: any) => storedOutwardIds.includes(out.id));
       }
-      const billInwardIds = parseJsonArray(row.inward_ids).map(Number);
-      if (billInwardIds.length === 0 && row.inward_id) {
-        billInwardIds.push(Number(row.inward_id));
-      }
-      const inwSet = new Set<number>(billInwardIds);
-      if (inwSet.size > 0) {
-        return outwardVouchers.filter((out: any) => {
-          const outInwardIds = out.inward_ids
-            ? parseJsonArray(out.inward_ids).map(Number)
-            : (out.inward_id !== undefined && out.inward_id !== null ? [Number(out.inward_id)] : []);
-          return outInwardIds.some((id: number) => inwSet.has(id));
-        });
+      if (billInwardIdSet.size > 0) {
+        return outwardVouchers.filter((out: any) => isOutwardLinkedToInwardAny(out, billInwardIdSet));
       }
       return [];
     })();
-
-    const billInwardIdSet = new Set<number>();
-    parseJsonArray(row.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
-    if (row.inward_id) billInwardIdSet.add(Number(row.inward_id));
-
-    linkedOutwards.forEach((out: any) => {
-      if (out.inward_id) billInwardIdSet.add(Number(out.inward_id));
-      parseJsonArray(out.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
-      parseJsonArray(out.items).forEach((item: any) => {
-        if (item.inward_id) billInwardIdSet.add(Number(item.inward_id));
-      });
-    });
 
     const billAllInwardIds: number[] = Array.from(billInwardIdSet);
     const linkedInwards = billAllInwardIds
@@ -598,7 +599,16 @@ export default function JobWorkBillPage() {
         } else {
           invItems.forEach((i: any) => {
             if (Number(i.product_id) === prodId) {
-              lines.push({ quantity: i.quantity || 0, weight: i.total_weight || i.weight || 0 });
+              const q = Number(i.quantity) || 0;
+              let w = 0;
+              if (i.total_weight !== undefined && i.total_weight !== null && i.total_weight !== "") {
+                w = Number(i.total_weight);
+              } else if (i.weight !== undefined && i.weight !== null && i.weight !== "") {
+                w = Number(i.weight) * (q || 1);
+              } else {
+                w = q;
+              }
+              lines.push({ quantity: q, weight: w });
             }
           });
         }
@@ -606,7 +616,7 @@ export default function JobWorkBillPage() {
       return lines;
     };
 
-    const billItems = (() => {
+    const billItems: any[] = (() => {
       let parsed: any[] = [];
       if (typeof row.items === "string") {
         try { parsed = JSON.parse(row.items); } catch (e) {}
@@ -652,27 +662,46 @@ export default function JobWorkBillPage() {
     };
 
     const reportRows: any[] = [];
-    const billInwardIds = billAllInwardIds;
 
     linkedOutwards.forEach((out: any) => {
-      const linkedInvForOut = (() => {
+      const outInwardIdNums: number[] = (() => {
         const ids = out.inward_ids
-          ? parseJsonArray(out.inward_ids)
-          : (out.inward_id !== undefined && out.inward_id !== null ? [out.inward_id] : []);
-        return ids.map((id: number | string) => {
-          const numId = Number(id);
-          return linkedInwards.find((v: any) => v.id === numId) || inwardVouchers.find((v: any) => v.id === numId);
-        }).filter(Boolean);
+          ? parseJsonArray(out.inward_ids).map(Number)
+          : (out.inward_id !== undefined && out.inward_id !== null ? [Number(out.inward_id)] : []);
+        parseJsonArray(out.items).forEach((it: any) => {
+          if (it.inward_id) ids.push(Number(it.inward_id));
+        });
+        return Array.from(new Set(ids));
       })();
+
+      const matchedBillInwardIds = outInwardIdNums.filter((id) => billInwardIdSet.has(id));
+      if (matchedBillInwardIds.length === 0 && billInwardIdSet.size > 0) {
+        return; // Skip outward that has no inwards in this bill!
+      }
+
+      const linkedInvForOut = matchedBillInwardIds
+        .map((id) => inwardVouchers.find((v: any) => v.id === id))
+        .filter(Boolean);
 
       const rawOutItems = parseJsonArray(out.items);
       let outItems: any[] = [];
       if (rawOutItems.length > 0) {
         const anyHasInwardId = rawOutItems.some((i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== "");
-        if (anyHasInwardId && billInwardIds.length > 0) {
-          outItems = rawOutItems.filter((i: any) => billInwardIds.includes(Number(i.inward_id)));
+        if (anyHasInwardId && billInwardIdSet.size > 0) {
+          outItems = rawOutItems.filter((i: any) => billInwardIdSet.has(Number(i.inward_id)));
         } else {
-          outItems = rawOutItems;
+          const billProductIds = new Set<number>();
+          linkedInvForOut.forEach((inv: any) => {
+            if (inv.product_id) billProductIds.add(Number(inv.product_id));
+            parseJsonArray(inv.items).forEach((ii: any) => {
+              if (ii.product_id) billProductIds.add(Number(ii.product_id));
+            });
+          });
+          if (billProductIds.size > 0) {
+            outItems = rawOutItems.filter((i: any) => billProductIds.has(Number(i.product_id)));
+          } else {
+            outItems = rawOutItems;
+          }
         }
       }
 
@@ -686,8 +715,10 @@ export default function JobWorkBillPage() {
         let itemInvList = outInv;
         if (item.inward_id) {
           const specificInv = linkedInwards.find((v: any) => v.id === Number(item.inward_id)) || inwardVouchers.find((v: any) => v.id === Number(item.inward_id));
-          if (specificInv) itemInvList = [specificInv];
+          if (specificInv && billInwardIdSet.has(specificInv.id)) itemInvList = [specificInv];
         }
+
+        if (itemInvList.length === 0) return;
 
         const prodId = Number(item.product_id);
         const invLines = collectInwardLines(itemInvList, prodId);
@@ -695,6 +726,7 @@ export default function JobWorkBillPage() {
         const invWeight = invLines.reduce((sum, l) => sum + (Number(l.weight) || 0), 0);
 
         reportRows.push({
+          inward_id: itemInvList[0]?.id,
           raw_inward_date: itemInvList.length > 0 ? new Date(itemInvList[0].inward_date).getTime() : 0,
           raw_outward_date: out.outward_date ? new Date(out.outward_date).getTime() : 0,
           ref: itemInvList.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
@@ -751,16 +783,8 @@ export default function JobWorkBillPage() {
       };
     });
 
-    const fmtCell = (v: any, fmt: (n: number) => string): string =>
-      v === null || v === undefined || v === "" || v === "-" ? "-" : fmt(v);
-
-    const fmtWeightCell = (v: any): string => {
-      const s = fmtCell(v, formatWeight);
-      return s === "-" ? "-" : `${s} kg`;
-    };
-
     const processTotals: Record<number, number> = {};
-    uniqueActiveProcesses.forEach(proc => {
+    uniqueActiveProcesses.forEach((proc) => {
       processTotals[proc.id] = reportRows.reduce((sum, r) => {
         if (isProcessInRow(proc.id, r.processId)) {
           return sum + (Number(r.outward_weight) || 0);
@@ -768,6 +792,44 @@ export default function JobWorkBillPage() {
         return sum;
       }, 0);
     });
+
+    return {
+      cName, cAddress1, cAddress2: "", cCityStatePin, cPhone, cEmail, cTax,
+      dateStr, customerName, customerAddr1, customerCityStatePin, customerPhone, customerGstin,
+      uniqueActiveProcesses, reportRows, scaledReportRows, processTotals, weightScaleFactor,
+      isProcessInRow
+    };
+  };
+
+  const handlePrintJobWorkDetails = (row: any) => {
+    const data = buildJobWorkDetailsReportData(row);
+    if (!data) return;
+    const {
+      cName, cAddress1, cAddress2, cCityStatePin, cPhone, cEmail, cTax,
+      dateStr, customerName, customerAddr1, customerCityStatePin, customerPhone, customerGstin,
+      uniqueActiveProcesses, scaledReportRows, processTotals, weightScaleFactor,
+      isProcessInRow
+    } = data;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const savedConfig = localStorage.getItem("orbx_print_config");
+    let printConfig = { showLogo: true, billPaperSize: "A4" };
+    if (savedConfig) {
+      try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
+    }
+
+    const logoBase64 = localStorage.getItem("company_logo");
+    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+
+    const fmtCell = (v: any, fmt: (n: number) => string): string =>
+      v === null || v === undefined || v === "" || v === "-" ? "-" : fmt(v);
+
+    const fmtWeightCell = (v: any): string => {
+      const s = fmtCell(v, formatWeight);
+      return s === "-" ? "-" : `${s} kg`;
+    };
 
     let reportRowsHtml = "";
     if (scaledReportRows.length === 0) {
@@ -1005,24 +1067,133 @@ export default function JobWorkBillPage() {
   };
 
   const handleExportJobWorkDetailsExcel = (row: any) => {
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "Company";
-    const dateStr = row.bill_date
-      ? new Date(row.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")
-      : "";
-    const customerLedger = ledgers.find((l: any) => l.id === row.ledger_id);
-    const customerName = customerLedger?.name || `Customer #${row.ledger_id}`;
+    const data = buildJobWorkDetailsReportData(row);
+    if (!data) return;
+    const {
+      cName, customerName, customerGstin, dateStr,
+      uniqueActiveProcesses, scaledReportRows, processTotals, isProcessInRow, weightScaleFactor
+    } = data;
 
     const excelRows: any[][] = [
       [cName],
       ["JOB WORK DETAILS"],
       [`Bill No: ${row.bill_no}`, `Date: ${dateStr}`],
-      [`Customer: ${customerName}`],
+      [`Customer: ${customerName} ${customerGstin ? `(${customerGstin})` : ""}`],
       [],
-      ["INWARD REF NO", "DATE", "PRODUCT", "INW QTY", "INW WEIGHT", "OUTWARD NO", "OUT DATE", "OUT QTY", "OUT WEIGHT"]
     ];
 
+    // Super Header row
+    const superHeader = [
+      "INWARD DETAILS", "", "", "", "",
+      "OUTWARD DETAILS", "", "", ""
+    ];
+    if (uniqueActiveProcesses.length === 0) {
+      superHeader.push("PROCESSING");
+    } else {
+      superHeader.push("PROCESSING");
+      for (let i = 1; i < uniqueActiveProcesses.length; i++) {
+        superHeader.push("");
+      }
+    }
+    excelRows.push(superHeader);
+
+    // Sub Header row
+    const subHeader = [
+      "INWARD REF NO", "DATE", "PRODUCT", "QTY", "WEIGHT (kg)",
+      "OUTWARD NO", "DATE", "QTY", "WEIGHT (kg)"
+    ];
+    if (uniqueActiveProcesses.length === 0) {
+      subHeader.push("PROCESS WEIGHT (kg)");
+    } else {
+      uniqueActiveProcesses.forEach((proc: any) => {
+        subHeader.push(`${proc.name.toUpperCase()} (kg)`);
+      });
+    }
+    excelRows.push(subHeader);
+
+    const toExcelNum = (val: any): number | string => {
+      if (val === null || val === undefined || val === "" || val === "-") return "-";
+      const num = typeof val === "number" ? val : Number(String(val).replace(/,/g, ""));
+      if (isNaN(num)) return "-";
+      return Number(num.toFixed(3));
+    };
+
+    const seenForXlsRender = new Set<string>();
+    let lastRefForXlsRender = "";
+    scaledReportRows.forEach((r) => {
+      let isDuplicateItem = false;
+      if (r.inward_qty !== null && r.inward_weight !== null) {
+        const key = `${r.inward_id}_${r.ref}_${r.productName}_${r.inward_qty}_${r.inward_weight}`;
+        isDuplicateItem = seenForXlsRender.has(key);
+        seenForXlsRender.add(key);
+      }
+      
+      const isSameRef = r.ref === lastRefForXlsRender;
+      lastRefForXlsRender = r.ref;
+
+      const displayRef = isDuplicateItem || isSameRef ? "" : r.ref;
+      const displayDate = isDuplicateItem || isSameRef ? "" : r.inward_date;
+      const displayProd = isDuplicateItem ? "" : r.productName;
+      const displayInwQty = isDuplicateItem ? null : r.inward_qty;
+      const displayInwWeight = isDuplicateItem ? null : r.inward_weight;
+
+      const rowData: any[] = [
+        displayRef,
+        displayDate,
+        displayProd,
+        toExcelNum(displayInwQty),
+        toExcelNum(displayInwWeight),
+        r.outward_no,
+        r.outward_date,
+        toExcelNum(r.outward_qty),
+        toExcelNum(r.outward_weight)
+      ];
+
+      if (uniqueActiveProcesses.length === 0) {
+        rowData.push("-");
+      } else {
+        uniqueActiveProcesses.forEach((proc: any) => {
+          if (isProcessInRow(proc.id, r.processId)) {
+            const cellWeight = Number(r.outward_weight) || 0;
+            rowData.push(toExcelNum(cellWeight));
+          } else {
+            rowData.push("-");
+          }
+        });
+      }
+      excelRows.push(rowData);
+    });
+
+    // Total Row
+    const totalRow: any[] = [
+      "Total", "", "",
+      "",
+      "",
+      "", "",
+      "",
+      ""
+    ];
+    if (uniqueActiveProcesses.length === 0) {
+      totalRow.push("-");
+    } else {
+      uniqueActiveProcesses.forEach((proc: any) => {
+        const finalVal = (processTotals[proc.id] || 0) * (weightScaleFactor || 1);
+        totalRow.push(toExcelNum(finalVal));
+      });
+    }
+    excelRows.push(totalRow);
+
     const ws = XLSX.utils.aoa_to_sheet(excelRows);
+    const colWidths = (excelRows[6] || excelRows[5])?.map((_, colIdx) => {
+      let maxLen = 12;
+      excelRows.forEach((r) => {
+        const val = String(r[colIdx] || "");
+        if (val.length > maxLen) maxLen = val.length;
+      });
+      return { wch: Math.min(maxLen + 2, 40) };
+    });
+    if (colWidths) ws["!cols"] = colWidths;
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Work Details");
     const safeBillNo = String(row.bill_no || "Bill").replace(/[/\\?%*:|"<>]/g, "_");
@@ -1205,65 +1376,74 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
     return customerInwards
       .map((inv: any) => {
-        // Exclude if already billed
+        // Exclude if already billed in another bill
         if (billedInwardIdsSet.has(inv.id)) return null;
 
-        const linkedOutwards = customerOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inv.id).length > 0);
-        const unbilledOutwards = linkedOutwards.filter((out: any) => !billedOutwardIdsSet.has(out.id));
-        const unbilledOutwardCount = unbilledOutwards.length;
+        const linkedOutwards = customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inv.id));
+        const outwardCount = linkedOutwards.length;
+        if (outwardCount === 0) return null;
 
-        const unbilledWeight = unbilledOutwards.reduce((sum: number, o: any) => {
-          const lines = getOutwardLinesForInward(o, inv.id);
-          const weightForInward = lines.reduce((s: number, item: any) => s + Number(item.total_weight || item.weight || 0), 0);
-          return sum + weightForInward;
-        }, 0);
-        const outwardNos = unbilledOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
-
-        // Inward balance check
+        // Inward balance check:
         let totalInwQty = Number(inv.quantity || 0);
-        if (Array.isArray(inv.items) && inv.items.length > 0) {
-          totalInwQty = inv.items.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
-        } else if (typeof inv.items === "string") {
-          try {
-            const parsed = JSON.parse(inv.items);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              totalInwQty = parsed.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+        const rawInwItems = Array.isArray(inv.items)
+          ? inv.items
+          : (typeof inv.items === "string" ? (() => { try { return JSON.parse(inv.items); } catch { return []; } })() : []);
+        if (rawInwItems.length > 0) {
+          totalInwQty = rawInwItems.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+        }
+
+        let isFullyCompleted = false;
+        if (inv.balance_qty !== undefined && inv.balance_qty !== null) {
+          isFullyCompleted = Number(inv.balance_qty) <= 0.001;
+        } else {
+          let totalOutQty = 0;
+          linkedOutwards.forEach((out: any) => {
+            const outItems = Array.isArray(out.items)
+              ? out.items
+              : (typeof out.items === "string" ? (() => { try { return JSON.parse(out.items); } catch { return []; } })() : []);
+            if (outItems.length > 0) {
+              const tagged = outItems.filter((it: any) => Number(it.inward_id) === inv.id);
+              if (tagged.length > 0) {
+                totalOutQty += tagged.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+              } else {
+                const outInwardIds = Array.isArray(out.inward_ids)
+                  ? out.inward_ids
+                  : (typeof out.inward_ids === "string" ? (() => { try { return JSON.parse(out.inward_ids); } catch { return []; } })() : []);
+                if (outInwardIds.length <= 1) {
+                  totalOutQty += outItems.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+                } else {
+                  const prodIds = new Set(rawInwItems.map((it: any) => Number(it.product_id)).concat(inv.product_id ? [Number(inv.product_id)] : []));
+                  const matched = outItems.filter((it: any) => prodIds.has(Number(it.product_id)));
+                  totalOutQty += matched.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+                }
+              }
+            } else {
+              totalOutQty += Number(out.quantity || 0);
             }
-          } catch {}
+          });
+          const balQty = Math.max(0, totalInwQty - totalOutQty);
+          isFullyCompleted = balQty <= 0.001;
         }
 
-        const totalOutQty = linkedOutwards.reduce((s: number, out: any) => {
-          const lines = getOutwardLinesForInward(out, inv.id);
-          return s + lines.reduce((ls: number, it: any) => ls + (Number(it.quantity) || 0), 0);
-        }, 0);
+        if (!isFullyCompleted) return null;
 
-        const balQty = Math.max(0, totalInwQty - totalOutQty);
-        const isFullyCompleted = linkedOutwards.length > 0 && balQty <= 0.001;
-
-        if (!isFullyCompleted || unbilledOutwardCount === 0 || unbilledWeight <= 0.0001) {
-          return null;
-        }
-
+        const outwardNos = linkedOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
         return {
           ...inv,
           linkedOutwards,
-          unbilledOutwards,
-          unbilledOutwardCount,
-          unbilledWeight,
           outwardNos,
           isOutwardCompleted: true,
-          hasUnbilledOutward: true,
         };
       })
       .filter(Boolean);
-  }, [inwardVouchers, selectedLedger, customerOutwardVouchers, billedOutwardIdsSet, billedInwardIdsSet]);
+  }, [inwardVouchers, selectedLedger, customerOutwardVouchers, billedInwardIdsSet]);
 
   const selectedOutwards = useMemo(() => {
     const all: any[] = [];
     selectedInwards.forEach((inw: any) => {
-      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
-        ? inw.unbilledOutwards
-        : customerOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0);
+      const outs = (inw.linkedOutwards && inw.linkedOutwards.length > 0)
+        ? inw.linkedOutwards
+        : customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inw.id));
       outs.forEach((out: any) => {
         if (!all.find((o) => o.id === out.id)) all.push(out);
       });
@@ -1353,28 +1533,93 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
       return;
     }
 
+    const parseItems = (x: any): any[] => {
+      if (typeof x === "string") {
+        try { return JSON.parse(x); } catch (e) { return []; }
+      }
+      return Array.isArray(x) ? x : [];
+    };
+
     const missingList: string[] = [];
     const newItems: any[] = [];
 
     newSelected.forEach((inw: any) => {
-      const outs = (inw.unbilledOutwards && inw.unbilledOutwards.length > 0)
-        ? inw.unbilledOutwards
-        : customerOutwardVouchers.filter((out: any) => getOutwardLinesForInward(out, inw.id).length > 0);
+      const outs = customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inw.id));
 
-      outs.forEach((out: any) => {
-        const lines = getOutwardLinesForInward(out, inw.id);
-        lines.forEach((line: any) => {
-          const prodId = line.product_id || out.product_id || inw.product_id || "";
-          const procIdRaw = line.process_id || out.process_id || inw.process_id;
-          const totalWeightVal = Number(line.total_weight || line.weight || out.total_weight || 0);
+      const rawInwItems = parseItems(inw.items);
+      let inwItems = rawInwItems;
+      if (inwItems.length === 0) {
+        let w = 0;
+        if (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "") {
+          w = Number(inw.total_weight);
+        } else if (inw.weight !== undefined && inw.weight !== null && inw.weight !== "") {
+          w = Number(inw.weight) * (Number(inw.quantity) || 1);
+        } else {
+          w = Number(inw.quantity) || 0;
+        }
+        inwItems = [{
+          product_id: inw.product_id,
+          process_id: inw.process_id,
+          computed_weight: w,
+        }];
+      } else {
+        inwItems = inwItems.map((item: any) => {
+          let w = 0;
+          if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
+            w = Number(item.total_weight);
+          } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
+            w = Number(item.weight) * (Number(item.quantity) || 1);
+          } else {
+            w = Number(item.quantity) || 0;
+          }
+          return {
+            ...item,
+            computed_weight: w,
+          };
+        });
+      }
 
-          if (!procIdRaw) return;
+      inwItems.forEach((inwItem: any) => {
+        const prodId = inwItem.product_id || inw.product_id || "";
+        const itemWeight = Number(inwItem.computed_weight) || 0;
 
-          const procIdStr = String(procIdRaw);
-          const proc = processes.find((p: any) => p.id === Number(procIdStr));
+        // Collect processes completed for this inward / item in the outwards
+        const completedProcessIds = new Set<string>();
 
+        outs.forEach((out: any) => {
+          const outLines = parseItems(out.items);
+          if (outLines.length > 0) {
+            const taggedLines = outLines.filter((l: any) => Number(l.inward_id) === inw.id);
+            if (taggedLines.length > 0) {
+              taggedLines.forEach((l: any) => {
+                if (!prodId || !l.product_id || Number(l.product_id) === Number(prodId)) {
+                  const pid = l.process_id || out.process_id;
+                  if (pid) completedProcessIds.add(String(pid));
+                }
+              });
+            } else {
+              outLines.forEach((l: any) => {
+                if (!prodId || !l.product_id || Number(l.product_id) === Number(prodId)) {
+                  const pid = l.process_id || out.process_id;
+                  if (pid) completedProcessIds.add(String(pid));
+                }
+              });
+            }
+          }
+          if (out.process_id) {
+            completedProcessIds.add(String(out.process_id));
+          }
+        });
+
+        if (completedProcessIds.size === 0) {
+          const inwProc = inwItem.process_id || inw.process_id;
+          if (inwProc) completedProcessIds.add(String(inwProc));
+        }
+
+        completedProcessIds.forEach((procIdRaw: string) => {
+          const proc = processes.find((p: any) => p.id === Number(procIdRaw));
           if (proc && proc.process_ids) {
-            const childIds = proc.process_ids.split(",").map((x: string) => x.trim()).filter(Boolean);
+            const childIds = String(proc.process_ids).split(",").map((x: string) => x.trim()).filter(Boolean);
             childIds.forEach((cid: string) => {
               const childProc = processes.find((p: any) => p.id === Number(cid));
               if (childProc) {
@@ -1386,24 +1631,43 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
                 newItems.push({
                   product_id: prodId,
                   process_id: childProc.id,
-                  quantity: totalWeightVal,
+                  quantity: itemWeight,
                   rate,
-                  amount: Number((totalWeightVal * rate).toFixed(2))
+                  amount: Number((itemWeight * rate).toFixed(2))
+                });
+              }
+            });
+          } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
+            const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
+            parts.forEach((part: any) => {
+              const childProc = processes.find((p: any) => p.process_code === part);
+              if (childProc) {
+                const { rate, found, name } = getCompanyRate(childProc.id);
+                if (!found) missingList.push(name);
+                if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
+                  setValue("gst_percent", childProc.gst_percent);
+                }
+                newItems.push({
+                  product_id: prodId,
+                  process_id: childProc.id,
+                  quantity: itemWeight,
+                  rate,
+                  amount: Number((itemWeight * rate).toFixed(2))
                 });
               }
             });
           } else {
-            const { rate, found, name } = getCompanyRate(procIdStr);
+            const { rate, found, name } = getCompanyRate(procIdRaw);
             if (!found) missingList.push(name);
             if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
               setValue("gst_percent", proc.gst_percent);
             }
             newItems.push({
               product_id: prodId,
-              process_id: procIdStr ? Number(procIdStr) : "",
-              quantity: totalWeightVal,
+              process_id: procIdRaw ? Number(procIdRaw) : "",
+              quantity: itemWeight,
               rate,
-              amount: Number((totalWeightVal * rate).toFixed(2))
+              amount: Number((itemWeight * rate).toFixed(2))
             });
           }
         });
