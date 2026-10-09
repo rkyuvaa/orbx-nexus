@@ -208,7 +208,7 @@ function JobWorkBillFormDialog({
               sx={{ maxWidth: 400 }}
             />
             <Grid container spacing={2} sx={{ mt: 2 }}>
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <TextField
                   label="Bill Date"
                   type="date"
@@ -339,19 +339,19 @@ function JobWorkBillFormDialog({
             {/* Inward & Outward Reference */}
             <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: "#f8fffe" }}>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Typography variant="caption" color="text.secondary">Inward No.</Typography>
-                  <Typography fontWeight={700}>{billDetails.inward?.inward_no}</Typography>
+                  <Typography sx={{ fontWeight: 700 }}>{billDetails.inward?.inward_no}</Typography>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Typography variant="caption" color="text.secondary">Inward Date</Typography>
                   <Typography>{fmtDate(billDetails.inward?.inward_date)}</Typography>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Typography variant="caption" color="text.secondary">Ref. No.</Typography>
                   <Typography>{billDetails.inward?.ref_no || billDetails.inward?.serial_no || "-"}</Typography>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                   <Typography variant="caption" color="text.secondary">Outward Ref(s)</Typography>
                   <Typography>{billDetails.outwards?.map((o: any) => o.outward_no).join(", ") || "-"}</Typography>
                 </Grid>
@@ -359,7 +359,7 @@ function JobWorkBillFormDialog({
             </Paper>
 
             {/* Process-wise bill lines */}
-            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Process-wise Charges</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }} sx={{ mb: 1 }}>Process-wise Charges</Typography>
             <Paper variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
               <Table size="small">
                 <TableHead>
@@ -377,7 +377,7 @@ function JobWorkBillFormDialog({
                     return (
                       <TableRow key={idx}>
                         <TableCell>
-                          <Typography fontWeight={600} variant="body2">{line.process_name}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{line.process_name}</Typography>
                           {line.process_code && <Typography variant="caption" color="text.secondary">{line.process_code}</Typography>}
                         </TableCell>
                         <TableCell>
@@ -396,27 +396,27 @@ function JobWorkBillFormDialog({
 
             {/* Bill Summary & Tax fields */}
             <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Charges & Tax</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} sx={{ mb: 1.5 }}>Charges & Tax</Typography>
                   <Grid container spacing={1.5}>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <TextField label="Additional Charges (₹)" size="small" type="number" fullWidth
                         value={additionalCharges} onChange={(e) => setAdditionalCharges(Number(e.target.value) || 0)} />
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <TextField label="Discount (₹)" size="small" type="number" fullWidth
                         value={discount} onChange={(e) => setDiscount(Number(e.target.value) || 0)} />
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <TextField label="CGST %" size="small" type="number" fullWidth
                         value={cgstPct} onChange={(e) => setCgstPct(Number(e.target.value) || 0)} />
                     </Grid>
-                    <Grid item xs={6}>
+                    <Grid size={{ xs: 6 }}>
                       <TextField label="SGST %" size="small" type="number" fullWidth
                         value={sgstPct} onChange={(e) => setSgstPct(Number(e.target.value) || 0)} />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={{ xs: 12 }}>
                       <TextField label="Narration / Notes" size="small" multiline rows={2} fullWidth
                         value={narration} onChange={(e) => setNarration(e.target.value)} />
                     </Grid>
@@ -424,9 +424,9 @@ function JobWorkBillFormDialog({
                 </Paper>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Bill Summary</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} sx={{ mb: 1.5 }}>Bill Summary</Typography>
                   {[
                     ["Process Charges", totalProcessCharges],
                     ["Additional Charges", additionalCharges],
@@ -443,8 +443,8 @@ function JobWorkBillFormDialog({
                   ))}
                   <Divider sx={{ my: 1 }} />
                   <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                    <Typography fontWeight={700}>Net Payable</Typography>
-                    <Typography fontWeight={700} color="#023020" fontSize={16}>₹ {fmtAmt(netTotal)}</Typography>
+                    <Typography sx={{ fontWeight: 700 }}>Net Payable</Typography>
+                    <Typography sx={{ fontWeight: 700 }} color="#023020" fontSize={16}>₹ {fmtAmt(netTotal)}</Typography>
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block", fontStyle: "italic" }}>
                     {toWords(Math.round(netTotal))} Only
@@ -589,7 +589,7 @@ export default function JobWorkBillPage() {
 
   const columns: ColDef[] = [
     { field: "bill_no", headerName: "Bill No.", width: 130, renderCell: (r) => (
-      <Typography fontWeight={600} variant="body2" color="#023020">{r.bill_no}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600 }} color="#023020">{r.bill_no}</Typography>
     )},
     { field: "bill_date", headerName: "Bill Date", width: 110, renderCell: (r) => fmtDate(r.bill_date) },
     { field: "customer_name", headerName: "Customer", flex: 1, minWidth: 160 },
@@ -599,7 +599,7 @@ export default function JobWorkBillPage() {
     { field: "total_process_charges", headerName: "Process Charges", width: 140, align: "right",
       renderCell: (r) => `₹ ${fmtAmt(r.total_process_charges)}` },
     { field: "total_amount", headerName: "Total (₹)", width: 130, align: "right",
-      renderCell: (r) => <Typography fontWeight={700}>₹ {fmtAmt(r.total_amount)}</Typography> },
+      renderCell: (r) => <Typography sx={{ fontWeight: 700 }}>₹ {fmtAmt(r.total_amount)}</Typography> },
     { field: "payment_status", headerName: "Status", width: 100, renderCell: (r) => {
       const st = r.payment_status || "UNPAID";
       const color = st === "PAID" ? "success" : st === "PARTIAL" ? "warning" : "error";
@@ -636,7 +636,7 @@ export default function JobWorkBillPage() {
     if (!lines.length) return null;
     return (
       <Box sx={{ px: 3, py: 1.5, bgcolor: "#f8fffe" }}>
-        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 1, display: "block" }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
           PROCESS LINES
         </Typography>
         <Table size="small">
@@ -692,11 +692,11 @@ export default function JobWorkBillPage() {
 
       <Box sx={{ px: 3, pb: 3 }}>
         <OrbxGrid
-          rows={bills}
-          columns={columns}
+          rowData={bills}
+          columnDefs={columns}
           loading={isLoading}
-          getRowId={(r: any) => r.id}
-          expandedRowRenderer={renderExpanded}
+          rowKey={(r: any) => r.id}
+          
         />
       </Box>
 
