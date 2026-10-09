@@ -571,20 +571,36 @@ export default function JobWorkBillPage() {
     if (row.inward_id) billInwardIdSet.add(Number(row.inward_id));
 
     const storedOutwardIds = parseJsonArray(row.outward_ids).map(Number);
-    const linkedOutwards: any[] = (() => {
-      if (storedOutwardIds.length > 0) {
-        return outwardVouchers.filter((out: any) => storedOutwardIds.includes(out.id));
-      }
-      if (billInwardIdSet.size > 0) {
-        return outwardVouchers.filter((out: any) => isOutwardLinkedToInwardAny(out, billInwardIdSet));
-      }
-      return [];
-    })();
+    if (billInwardIdSet.size === 0 && storedOutwardIds.length > 0) {
+      storedOutwardIds.forEach((oid: number) => {
+        const out = outwardVouchers.find((o: any) => o.id === oid);
+        if (out) {
+          if (out.inward_id) billInwardIdSet.add(Number(out.inward_id));
+          parseJsonArray(out.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
+          parseJsonArray(out.items).forEach((it: any) => { if (it.inward_id) billInwardIdSet.add(Number(it.inward_id)); });
+        }
+      });
+    }
 
     const billAllInwardIds: number[] = Array.from(billInwardIdSet);
     const linkedInwards = billAllInwardIds
-      .map((id: number) => inwardVouchers.find((v: any) => v.id === id))
+      .map((id: number) => {
+        const found = inwardVouchers.find((v: any) => v.id === id);
+        if (found) return found;
+        return { id, inward_no: `#${id}`, ref_no: `#${id}`, items: [] };
+      })
       .filter(Boolean);
+
+    // Keep inwards strictly in stable order so all lines for an inward remain contiguous
+    linkedInwards.sort((a: any, b: any) => {
+      const dateA = a.inward_date ? new Date(a.inward_date).getTime() : 0;
+      const dateB = b.inward_date ? new Date(b.inward_date).getTime() : 0;
+      if (dateA !== dateB) return dateA - dateB;
+      const numA = (a.ref_no || a.serial_no || a.inward_no || "").toLowerCase();
+      const numB = (b.ref_no || b.serial_no || b.inward_no || "").toLowerCase();
+      if (numA !== numB) return numA.localeCompare(numB, undefined, { numeric: true });
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
 
     const resolveSeparateProcesses = (procId: any): string => {
       if (!procId) return "-";
@@ -595,34 +611,6 @@ export default function JobWorkBillPage() {
         return names.join(" / ") || "-";
       }
       return resolveProcessName(procId, processes) || "-";
-    };
-
-    const collectInwardLines = (invList: any[], prodId: number): any[] => {
-      const lines: any[] = [];
-      invList.forEach((inv: any) => {
-        const invItems = parseJsonArray(inv.items);
-        if (invItems.length === 0) {
-          if (inv.product_id && Number(inv.product_id) === prodId) {
-            lines.push({ quantity: inv.quantity || 0, weight: inv.total_weight || inv.weight || 0 });
-          }
-        } else {
-          invItems.forEach((i: any) => {
-            if (Number(i.product_id) === prodId) {
-              const q = Number(i.quantity) || 0;
-              let w = 0;
-              if (i.total_weight !== undefined && i.total_weight !== null && i.total_weight !== "") {
-                w = Number(i.total_weight);
-              } else if (i.weight !== undefined && i.weight !== null && i.weight !== "") {
-                w = Number(i.weight) * (q || 1);
-              } else {
-                w = q;
-              }
-              lines.push({ quantity: q, weight: w });
-            }
-          });
-        }
-      });
-      return lines;
     };
 
     const billItems: any[] = (() => {
@@ -681,125 +669,167 @@ export default function JobWorkBillPage() {
 
     const reportRows: any[] = [];
 
-    linkedOutwards.forEach((out: any) => {
-      const outInwardIdNums: number[] = (() => {
-        const ids = out.inward_ids
-          ? parseJsonArray(out.inward_ids).map(Number)
-          : (out.inward_id !== undefined && out.inward_id !== null ? [Number(out.inward_id)] : []);
-        parseJsonArray(out.items).forEach((it: any) => {
-          if (it.inward_id) ids.push(Number(it.inward_id));
-        });
-        return Array.from(new Set(ids));
-      })();
+    linkedInwards.forEach((inv: any) => {
+      const invRef = inv.ref_no || inv.serial_no || inv.inward_no || "-";
+      const invDateStr = toDateStr(inv.inward_date);
+      const rawInwItems = parseJsonArray(inv.items);
 
-      const matchedBillInwardIds = outInwardIdNums.filter((id) => billInwardIdSet.has(id));
-      if (matchedBillInwardIds.length === 0 && billInwardIdSet.size > 0) {
-        return; // Skip outward that has no inwards in this bill!
+      interface InwProdInfo {
+        productId: number;
+        productName: string;
+        quantity: number;
+        weight: number;
+      }
+      const inwProducts: InwProdInfo[] = [];
+
+      if (rawInwItems.length === 0) {
+        const pid = Number(inv.product_id) || 0;
+        const pObj = products.find((p: any) => p.id === pid);
+        inwProducts.push({
+          productId: pid,
+          productName: pObj?.name || (pid ? `Product #${pid}` : "-"),
+          quantity: Number(inv.quantity) || 0,
+          weight: Number(inv.total_weight || inv.weight || 0),
+        });
+      } else {
+        const prodMap = new Map<number, { qty: number; weight: number }>();
+        rawInwItems.forEach((it: any) => {
+          const pid = Number(it.product_id) || Number(inv.product_id) || 0;
+          const q = Number(it.quantity) || 0;
+          let w = 0;
+          if (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "") {
+            w = Number(it.total_weight);
+          } else if (it.weight !== undefined && it.weight !== null && it.weight !== "") {
+            w = Number(it.weight) * (q || 1);
+          } else {
+            w = q;
+          }
+          const curr = prodMap.get(pid) || { qty: 0, weight: 0 };
+          prodMap.set(pid, { qty: curr.qty + q, weight: curr.weight + w });
+        });
+
+        prodMap.forEach((val, pid) => {
+          const pObj = products.find((p: any) => p.id === pid);
+          inwProducts.push({
+            productId: pid,
+            productName: pObj?.name || (pid ? `Product #${pid}` : "-"),
+            quantity: val.qty,
+            weight: val.weight,
+          });
+        });
       }
 
-      const linkedInvForOut = matchedBillInwardIds
-        .map((id) => inwardVouchers.find((v: any) => v.id === id))
-        .filter(Boolean);
+      // Outward vouchers linked to THIS specific inward
+      const outsForInv = outwardVouchers.filter((out: any) => {
+        if (storedOutwardIds.length > 0 && !storedOutwardIds.includes(out.id)) return false;
+        return isOutwardLinkedToInward(out, inv.id);
+      });
 
-      const rawOutItems = parseJsonArray(out.items);
-      let outItems: any[] = [];
-      if (rawOutItems.length > 0) {
-        const anyHasInwardId = rawOutItems.some((i: any) => i.inward_id !== undefined && i.inward_id !== null && i.inward_id !== "");
-        if (anyHasInwardId && billInwardIdSet.size > 0) {
-          outItems = rawOutItems.filter((i: any) => billInwardIdSet.has(Number(i.inward_id)));
-        } else {
-          const billProductIds = new Set<number>();
-          linkedInvForOut.forEach((inv: any) => {
-            if (inv.product_id) billProductIds.add(Number(inv.product_id));
-            parseJsonArray(inv.items).forEach((ii: any) => {
-              if (ii.product_id) billProductIds.add(Number(ii.product_id));
+      outsForInv.sort((a: any, b: any) => {
+        const dateA = a.outward_date ? new Date(a.outward_date).getTime() : 0;
+        const dateB = b.outward_date ? new Date(b.outward_date).getTime() : 0;
+        if (dateA !== dateB) return dateA - dateB;
+        const noA = (a.outward_no || "").toLowerCase();
+        const noB = (b.outward_no || "").toLowerCase();
+        return noA.localeCompare(noB, undefined, { numeric: true });
+      });
+
+      inwProducts.forEach((inwProd) => {
+        const outRowsForProd: any[] = [];
+
+        outsForInv.forEach((out: any) => {
+          const rawOutItems = parseJsonArray(out.items);
+          let matchingLines: any[] = [];
+
+          if (rawOutItems.length > 0) {
+            const tagged = rawOutItems.filter((it: any) => Number(it.inward_id) === inv.id);
+            if (tagged.length > 0) {
+              matchingLines = tagged;
+            } else {
+              const outInwardIds = parseJsonArray(out.inward_ids).map(Number);
+              if (out.inward_id) outInwardIds.push(Number(out.inward_id));
+              const uniqueOutInwIds = Array.from(new Set(outInwardIds));
+              if (uniqueOutInwIds.length <= 1) {
+                matchingLines = rawOutItems;
+              } else {
+                matchingLines = rawOutItems.filter((it: any) => {
+                  const itemPid = Number(it.product_id);
+                  return inwProd.productId ? itemPid === inwProd.productId : true;
+                });
+              }
+            }
+
+            if (inwProd.productId && matchingLines.length > 1) {
+              const byProd = matchingLines.filter((it: any) => Number(it.product_id) === inwProd.productId);
+              if (byProd.length > 0) matchingLines = byProd;
+            }
+          } else {
+            const outPid = Number(out.product_id) || 0;
+            if (!inwProd.productId || !outPid || outPid === inwProd.productId) {
+              matchingLines = [{
+                product_id: out.product_id,
+                process_id: out.process_id,
+                quantity: out.quantity || 0,
+                total_weight: out.total_weight || out.weight || 0,
+                weight: out.total_weight || out.weight || 0,
+              }];
+            }
+          }
+
+          matchingLines.forEach((line: any) => {
+            const itemProcId = line.process_id || out.process_id;
+            if (uniqueActiveProcesses.length > 0) {
+              const matchesActive = uniqueActiveProcesses.some((proc: any) => isProcessInRow(proc.id, itemProcId));
+              if (!matchesActive) return;
+            }
+
+            outRowsForProd.push({
+              inward_id: inv.id,
+              raw_inward_date: inv.inward_date ? new Date(inv.inward_date).getTime() : 0,
+              raw_outward_date: out.outward_date ? new Date(out.outward_date).getTime() : 0,
+              ref: invRef,
+              inward_date: invDateStr,
+              productName: inwProd.productName,
+              inward_qty: inwProd.quantity,
+              inward_weight: inwProd.weight,
+              outward_no: out.outward_no || `#${out.id}`,
+              outward_date: toDateStr(out.outward_date),
+              outward_qty: Number(line.quantity) || 0,
+              outward_weight: Number(line.total_weight || line.weight || 0),
+              processName: resolveSeparateProcesses(itemProcId),
+              processId: itemProcId,
             });
           });
-          if (billProductIds.size > 0) {
-            outItems = rawOutItems.filter((i: any) => billProductIds.has(Number(i.product_id)));
-          } else {
-            outItems = rawOutItems;
-          }
-        }
-      }
-
-      const pushReportRow = (item: any, outInv: any[]) => {
-        const itemProcId = item.process_id || out.process_id;
-        if (uniqueActiveProcesses.length > 0) {
-          const matchesAnyActive = uniqueActiveProcesses.some((proc: any) => isProcessInRow(proc.id, itemProcId));
-          if (!matchesAnyActive) return;
-        }
-
-        let itemInvList = outInv;
-        if (item.inward_id) {
-          const specificInv = linkedInwards.find((v: any) => v.id === Number(item.inward_id)) || inwardVouchers.find((v: any) => v.id === Number(item.inward_id));
-          if (specificInv && billInwardIdSet.has(specificInv.id)) itemInvList = [specificInv];
-        }
-
-        if (itemInvList.length === 0) return;
-
-        const prodId = Number(item.product_id);
-        const invLines = collectInwardLines(itemInvList, prodId);
-        const invQty = invLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
-        const invWeight = invLines.reduce((sum, l) => sum + (Number(l.weight) || 0), 0);
-
-        reportRows.push({
-          inward_id: itemInvList[0]?.id,
-          raw_inward_date: itemInvList.length > 0 ? new Date(itemInvList[0].inward_date).getTime() : 0,
-          raw_outward_date: out.outward_date ? new Date(out.outward_date).getTime() : 0,
-          ref: itemInvList.map((v: any) => v.ref_no || v.serial_no).filter(Boolean).join(", ") || "-",
-          inward_date: itemInvList.map((v: any) => toDateStr(v.inward_date)).filter((d: string) => d !== "-").join(", ") || "-",
-          productName: products.find((p: any) => p.id === prodId)?.name || `Product #${item.product_id}`,
-          inward_qty: invLines.length > 0 ? invQty : null,
-          inward_weight: invLines.length > 0 ? invWeight : null,
-          outward_no: out.outward_no,
-          outward_date: toDateStr(out.outward_date),
-          outward_qty: item.quantity || 0,
-          outward_weight: item.total_weight || item.weight || 0,
-          processName: resolveSeparateProcesses(item.process_id || out.process_id),
-          processId: item.process_id || out.process_id,
         });
-      };
 
-      if (outItems.length === 0) {
-        pushReportRow(out, linkedInvForOut);
-      } else {
-        outItems.forEach((item: any) => {
-          const prodId = Number(item.product_id);
-          const productMatched = linkedInvForOut.filter((inv: any) => {
-            if (inv.product_id && Number(inv.product_id) === prodId) return true;
-            const invItems = parseJsonArray(inv.items);
-            return invItems.some((i: any) => Number(i.product_id) === prodId);
+        if (outRowsForProd.length > 0) {
+          reportRows.push(...outRowsForProd);
+        } else {
+          reportRows.push({
+            inward_id: inv.id,
+            raw_inward_date: inv.inward_date ? new Date(inv.inward_date).getTime() : 0,
+            raw_outward_date: 0,
+            ref: invRef,
+            inward_date: invDateStr,
+            productName: inwProd.productName,
+            inward_qty: inwProd.quantity,
+            inward_weight: inwProd.weight,
+            outward_no: "-",
+            outward_date: "-",
+            outward_qty: null,
+            outward_weight: null,
+            processName: "-",
+            processId: null,
           });
-          pushReportRow(item, productMatched.length > 0 ? productMatched : linkedInvForOut);
-        });
-      }
+        }
+      });
     });
 
-    reportRows.sort((a, b) => {
-      const dateA = a.raw_inward_date || a.raw_outward_date || 0;
-      const dateB = b.raw_inward_date || b.raw_outward_date || 0;
-      return dateA - dateB;
-    });
-
-    const rawTotalOutwardWeight = reportRows.reduce((sum, r) => sum + (Number(r.outward_weight) || 0), 0);
-    const billTotalWeight = Number(row.quantity) > 0 ? Number(row.quantity) : rawTotalOutwardWeight;
-    const weightScaleFactor = (billTotalWeight > 0 && rawTotalOutwardWeight > 0) ? billTotalWeight / rawTotalOutwardWeight : 1;
-
-    const scaledReportRows = reportRows.map((r) => {
-      const rawOutW = Number(r.outward_weight) || 0;
-      const rawInwW = Number(r.inward_weight) || 0;
-      const rawOutQ = Number(r.outward_qty) || 0;
-      const rawInwQ = Number(r.inward_qty) || 0;
-      return {
-        ...r,
-        outward_weight: rawOutW > 0 ? rawOutW * weightScaleFactor : r.outward_weight,
-        inward_weight: rawInwW > 0 ? rawInwW * weightScaleFactor : r.inward_weight,
-        outward_qty: rawOutQ > 0 ? Math.max(1, Math.round(rawOutQ * weightScaleFactor)) : r.outward_qty,
-        inward_qty: rawInwQ > 0 ? Math.max(1, Math.round(rawInwQ * weightScaleFactor)) : r.inward_qty,
-        raw_outward_weight: rawOutW,
-      };
-    });
+    const weightScaleFactor = 1;
+    const scaledReportRows = reportRows.map((r) => ({
+      ...r,
+      raw_outward_weight: Number(r.outward_weight) || 0,
+    }));
 
     const processTotals: Record<number, number> = {};
     uniqueActiveProcesses.forEach((proc) => {
@@ -863,6 +893,7 @@ export default function JobWorkBillPage() {
         transactions: any[];
       }
       interface GroupedRef {
+        inward_id?: any;
         ref: string;
         inward_date: string;
         rowSpan: number;
@@ -874,8 +905,9 @@ export default function JobWorkBillPage() {
       let currentProdGroup: GroupedProduct | null = null;
 
       scaledReportRows.forEach((r) => {
-        if (!currentRefGroup || currentRefGroup.ref !== r.ref || currentRefGroup.inward_date !== r.inward_date) {
-          currentRefGroup = { ref: r.ref || "-", inward_date: r.inward_date || "-", rowSpan: 0, products: [] };
+        const isNewRefGroup = !currentRefGroup || (r.inward_id !== undefined && r.inward_id !== null ? currentRefGroup.inward_id !== r.inward_id : (currentRefGroup.ref !== r.ref || currentRefGroup.inward_date !== r.inward_date));
+        if (isNewRefGroup) {
+          currentRefGroup = { inward_id: r.inward_id, ref: r.ref || "-", inward_date: r.inward_date || "-", rowSpan: 0, products: [] };
           groups.push(currentRefGroup);
           currentProdGroup = null;
         }
@@ -1137,6 +1169,7 @@ export default function JobWorkBillPage() {
     };
 
     const seenForXlsRender = new Set<string>();
+    let lastInwIdForXlsRender: any = null;
     let lastRefForXlsRender = "";
     scaledReportRows.forEach((r) => {
       let isDuplicateItem = false;
@@ -1146,11 +1179,12 @@ export default function JobWorkBillPage() {
         seenForXlsRender.add(key);
       }
       
-      const isSameRef = r.ref === lastRefForXlsRender;
+      const isSameInward = r.inward_id !== undefined && r.inward_id !== null ? (r.inward_id === lastInwIdForXlsRender) : (r.ref === lastRefForXlsRender);
+      lastInwIdForXlsRender = r.inward_id;
       lastRefForXlsRender = r.ref;
 
-      const displayRef = isDuplicateItem || isSameRef ? "" : r.ref;
-      const displayDate = isDuplicateItem || isSameRef ? "" : r.inward_date;
+      const displayRef = isDuplicateItem || isSameInward ? "" : r.ref;
+      const displayDate = isDuplicateItem || isSameInward ? "" : r.inward_date;
       const displayProd = isDuplicateItem ? "" : r.productName;
       const displayInwQty = isDuplicateItem ? null : r.inward_qty;
       const displayInwWeight = isDuplicateItem ? null : r.inward_weight;
