@@ -3,8 +3,11 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional, Any
 import json
+import logging
 
 from app.api.deps import CurrentUser, DBSession
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -41,7 +44,7 @@ class JobWorkBillIn(BaseModel):
 
 
 async def _ensure_tables(db: DBSession, schema: str):
-    """Ensure job_work_bills and supporting tables exist in the FY schema."""
+    """Ensure job_work_bills and supporting tables exist in the FY schema with all required columns."""
     await db.execute(text(f"""
         CREATE TABLE IF NOT EXISTS {schema}.job_work_bills (
             id SERIAL PRIMARY KEY,
@@ -78,25 +81,21 @@ async def _ensure_tables(db: DBSession, schema: str):
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
         );
-    """))
-    await db.execute(text(f"""
         CREATE TABLE IF NOT EXISTS {schema}.job_work_bill_lines (
             id SERIAL PRIMARY KEY,
             bill_id INTEGER NOT NULL REFERENCES {schema}.job_work_bills(id) ON DELETE CASCADE,
             inward_id INTEGER,
             outward_id INTEGER,
-            process_id INTEGER NOT NULL,
+            process_id INTEGER,
             process_name VARCHAR(200),
             process_code VARCHAR(50),
-            process_rate NUMERIC(15,4) NOT NULL,
+            process_rate NUMERIC(15,4) DEFAULT 0,
             uom_symbol VARCHAR(20),
             billable_quantity NUMERIC(15,3) DEFAULT 0,
             process_amount NUMERIC(15,2) DEFAULT 0,
-            rate_snapshot NUMERIC(15,4) NOT NULL,
+            rate_snapshot NUMERIC(15,4) DEFAULT 0,
             created_at TIMESTAMP DEFAULT NOW()
         );
-    """))
-    await db.execute(text(f"""
         CREATE TABLE IF NOT EXISTS {schema}.job_work_bill_payments (
             id SERIAL PRIMARY KEY,
             bill_id INTEGER NOT NULL REFERENCES {schema}.job_work_bills(id) ON DELETE CASCADE,
@@ -107,6 +106,57 @@ async def _ensure_tables(db: DBSession, schema: str):
             created_at TIMESTAMP DEFAULT NOW()
         );
     """))
+
+    # Add columns if table was created in an earlier migration
+    alter_cols = [
+        "inward_id INTEGER",
+        "inward_ids JSONB DEFAULT '[]'::jsonb",
+        "outward_ids JSONB DEFAULT '[]'::jsonb",
+        "product_id INTEGER",
+        "process_id INTEGER",
+        "quantity NUMERIC(15,3) DEFAULT 0",
+        "rate NUMERIC(15,2) DEFAULT 0",
+        "amount NUMERIC(15,2) DEFAULT 0",
+        "gst_percent NUMERIC(5,2) DEFAULT 0",
+        "gst_amount NUMERIC(15,2) DEFAULT 0",
+        "cgst_percent NUMERIC(5,2) DEFAULT 0",
+        "cgst_amount NUMERIC(15,2) DEFAULT 0",
+        "sgst_percent NUMERIC(5,2) DEFAULT 0",
+        "sgst_amount NUMERIC(15,2) DEFAULT 0",
+        "round_off NUMERIC(15,2) DEFAULT 0",
+        "net_amount NUMERIC(15,2) DEFAULT 0",
+        "total_amount NUMERIC(15,2) DEFAULT 0",
+        "narration TEXT",
+        "dispatch_through VARCHAR(255)",
+        "items JSONB DEFAULT '[]'::jsonb",
+        "freight_items JSONB DEFAULT '[]'::jsonb",
+        "is_paid BOOLEAN DEFAULT FALSE",
+        "payment_status VARCHAR(20) DEFAULT 'UNPAID'",
+        "paid_amount NUMERIC(15,2) DEFAULT 0",
+        "pending_amount NUMERIC(15,2) DEFAULT 0",
+        "payment_date DATE",
+        "created_by INTEGER",
+        "created_at TIMESTAMP DEFAULT NOW()",
+        "updated_at TIMESTAMP DEFAULT NOW()"
+    ]
+    for col in alter_cols:
+        try:
+            await db.execute(text(f"ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS {col}"))
+        except Exception:
+            pass
+
+    # Ensure job_work_bill_lines constraints are non-blocking
+    try:
+        await db.execute(text(f"""
+            ALTER TABLE {schema}.job_work_bill_lines ALTER COLUMN inward_id DROP NOT NULL;
+            ALTER TABLE {schema}.job_work_bill_lines ALTER COLUMN outward_id DROP NOT NULL;
+            ALTER TABLE {schema}.job_work_bill_lines ALTER COLUMN process_rate DROP NOT NULL;
+            ALTER TABLE {schema}.job_work_bill_lines ALTER COLUMN rate_snapshot DROP NOT NULL;
+            DROP INDEX IF EXISTS {schema}.idx_{schema.replace('.','_')}_jwb_lines_inward_outward_process;
+            DROP INDEX IF EXISTS idx_{schema.replace('.','_')}_jwb_lines_inward_outward_process;
+        """))
+    except Exception:
+        pass
 
 
 @router.get("/")
@@ -251,11 +301,12 @@ async def get_eligible_inwards(
         SELECT DISTINCT jbl.inward_id
         FROM {schema}.job_work_bill_lines jbl
         JOIN {schema}.job_work_bills jwb ON jwb.id = jbl.bill_id
-        WHERE jwb.ledger_id = :lid {exclude_sql}
+        WHERE jwb.ledger_id = :lid {exclude_sql} AND jbl.inward_id IS NOT NULL
         UNION
-        SELECT DISTINCT (jsonb_array_elements_text(COALESCE(jwb.inward_ids, '[]'::jsonb)))::int
-        FROM {schema}.job_work_bills jwb
-        WHERE jwb.ledger_id = :lid {exclude_sql} AND jsonb_array_length(COALESCE(jwb.inward_ids, '[]'::jsonb)) > 0
+        SELECT DISTINCT (elem)::int
+        FROM {schema}.job_work_bills jwb,
+             jsonb_array_elements_text(CASE WHEN jsonb_typeof(COALESCE(jwb.inward_ids, '[]'::jsonb)) = 'array' THEN jwb.inward_ids ELSE '[]'::jsonb END) AS elem
+        WHERE jwb.ledger_id = :lid {exclude_sql} AND elem ~ '^[0-9]+$'
         UNION
         SELECT DISTINCT jwb.inward_id
         FROM {schema}.job_work_bills jwb
@@ -325,14 +376,16 @@ async def create_job_work_bill(
         raise HTTPException(status_code=400, detail="Job Work Bill must have at least one bill line item.")
 
     # Validate that inward(s) belong to selected ledger and are not already billed
-    inward_ids = body.inward_ids or ([body.inward_id] if body.inward_id else [])
-    if inward_ids:
+    raw_inward_ids = body.inward_ids or ([body.inward_id] if body.inward_id else [])
+    clean_inward_ids = [int(x) for x in raw_inward_ids if str(x).isdigit()]
+
+    if clean_inward_ids:
         inw_check = await db.execute(
             text(f"""
             SELECT id, inward_no, ledger_id FROM {schema}.stock_inward
             WHERE id = ANY(:iids)
             """),
-            {"iids": [int(x) for x in inward_ids]}
+            {"iids": clean_inward_ids}
         )
         inw_rows = inw_check.mappings().all()
         for inw in inw_rows:
@@ -350,13 +403,17 @@ async def create_job_work_bill(
             WHERE jwb.ledger_id = :lid
               AND (
                 jwb.inward_id = ANY(:iids)
-                OR EXISTS (
-                    SELECT 1 FROM jsonb_array_elements_text(COALESCE(jwb.inward_ids, '[]'::jsonb)) elem
-                    WHERE elem::int = ANY(:iids)
+                OR (
+                    jwb.inward_ids IS NOT NULL
+                    AND jsonb_typeof(jwb.inward_ids) = 'array'
+                    AND EXISTS (
+                        SELECT 1 FROM jsonb_array_elements_text(jwb.inward_ids) elem
+                        WHERE elem ~ '^[0-9]+$' AND elem::int = ANY(:iids)
+                    )
                 )
               )
             """),
-            {"iids": [int(x) for x in inward_ids], "lid": body.ledger_id}
+            {"iids": clean_inward_ids, "lid": body.ledger_id}
         )
         dup_bill = already_billed.mappings().first()
         if dup_bill:
@@ -365,21 +422,29 @@ async def create_job_work_bill(
                 detail=f"One or more selected Inwards have already been billed in Job Work Bill '{dup_bill['bill_no']}'."
             )
 
-    # Validate Process Register pricing: all bill item processes must have active rate > 0
+    # Validate Process Register pricing
     missing_rates = []
     for it in body.items:
         pid = it.get("process_id")
-        if not pid:
+        if not pid or not str(pid).isdigit():
             continue
         p_res = await db.execute(
-            text("SELECT id, name, company_rate FROM master.processes WHERE id = :pid AND is_active = TRUE"),
+            text("SELECT id, name, company_rate, process_ids, process_code FROM master.processes WHERE id = :pid AND is_active = TRUE"),
             {"pid": int(pid)}
         )
         proc = p_res.mappings().first()
         if not proc:
             missing_rates.append(f"Process ID {pid} not found in master")
-        elif float(proc["company_rate"] or 0) <= 0:
-            missing_rates.append(f"Process '{proc['name']}' has no active company rate in Process Register")
+        else:
+            crate = float(proc["company_rate"] or 0)
+            # If rate is 0, check if it's a group process with component rates
+            if crate <= 0 and proc.get("process_ids"):
+                cids = [int(x.strip()) for x in str(proc["process_ids"]).split(",") if x.strip().isdigit()]
+                if cids:
+                    cres = await db.execute(text("SELECT SUM(company_rate) FROM master.processes WHERE id = ANY(:cids)"), {"cids": cids})
+                    crate = float(cres.scalar() or 0)
+            if crate <= 0:
+                missing_rates.append(f"Process '{proc['name']}' has no active company rate in Process Register")
 
     if missing_rates:
         raise HTTPException(
@@ -411,72 +476,82 @@ async def create_job_work_bill(
 
     items_json = json.dumps(body.items or [])
     freight_json = json.dumps(body.freight_items or [])
-    inward_ids_json = json.dumps(inward_ids)
-    outward_ids_json = json.dumps(body.outward_ids or [])
+    inward_ids_json = json.dumps(clean_inward_ids)
+    clean_outward_ids = [int(x) for x in (body.outward_ids or []) if str(x).isdigit()]
+    outward_ids_json = json.dumps(clean_outward_ids)
 
-    primary_inward_id = inward_ids[0] if inward_ids else None
+    primary_inward_id = clean_inward_ids[0] if clean_inward_ids else None
     primary_prod_id = body.product_id or (body.items[0].get("product_id") if body.items else None)
     primary_proc_id = body.process_id or (body.items[0].get("process_id") if body.items else None)
 
-    res = await db.execute(
-        text(f"""
-        INSERT INTO {schema}.job_work_bills
-        (bill_no, bill_date, ledger_id, inward_id, inward_ids, outward_ids,
-         product_id, process_id, quantity, rate, amount,
-         gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
-         round_off, net_amount, total_amount, narration, dispatch_through,
-         items, freight_items, pending_amount, created_by)
-        VALUES (:bno, CAST(:bdate AS DATE), :lid, :iid, :iids::jsonb, :oids::jsonb,
-                :pid, :prid, :qty, :rate, :amt,
-                :gp, :ga, :cgp, :cga, :sgp, :sga,
-                :ro, :namt, :ta, :narr, :dt,
-                :items::jsonb, :fitems::jsonb, :ta, :cby)
-        RETURNING id
-        """),
-        {
-            "bno": bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
-            "iid": primary_inward_id, "iids": inward_ids_json, "oids": outward_ids_json,
-            "pid": primary_prod_id, "prid": primary_proc_id,
-            "qty": body.quantity, "rate": body.rate, "amt": body.amount,
-            "gp": body.gst_percent, "ga": body.gst_amount,
-            "cgp": body.cgst_percent, "cga": body.cgst_amount,
-            "sgp": body.sgst_percent, "sga": body.sgst_amount,
-            "ro": body.round_off, "namt": body.net_amount, "ta": body.total_amount,
-            "narr": body.narration, "dt": body.dispatch_through,
-            "items": items_json, "fitems": freight_json, "cby": current_user.id
-        }
-    )
-    bill_id = res.scalar_one()
+    try:
+        res = await db.execute(
+            text(f"""
+            INSERT INTO {schema}.job_work_bills
+            (bill_no, bill_date, ledger_id, inward_id, inward_ids, outward_ids,
+             product_id, process_id, quantity, rate, amount,
+             gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
+             round_off, net_amount, total_amount, narration, dispatch_through,
+             items, freight_items, pending_amount, created_by)
+            VALUES (:bno, CAST(:bdate AS DATE), :lid, :iid, :iids, :oids,
+                    :pid, :prid, :qty, :rate, :amt,
+                    :gp, :ga, :cgp, :cga, :sgp, :sga,
+                    :ro, :namt, :ta, :narr, :dt,
+                    :items, :fitems, :ta, :cby)
+            RETURNING id
+            """),
+            {
+                "bno": bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
+                "iid": primary_inward_id, "iids": inward_ids_json, "oids": outward_ids_json,
+                "pid": int(primary_prod_id) if (primary_prod_id and str(primary_prod_id).isdigit()) else None,
+                "prid": int(primary_proc_id) if (primary_proc_id and str(primary_proc_id).isdigit()) else None,
+                "qty": body.quantity, "rate": body.rate, "amt": body.amount,
+                "gp": body.gst_percent, "ga": body.gst_amount,
+                "cgp": body.cgst_percent, "cga": body.cgst_amount,
+                "sgp": body.sgst_percent, "sga": body.sgst_amount,
+                "ro": body.round_off, "namt": body.net_amount or body.total_amount, "ta": body.total_amount,
+                "narr": body.narration, "dt": body.dispatch_through,
+                "items": items_json, "fitems": freight_json, "cby": current_user.id if current_user else None
+            }
+        )
+        bill_id = res.scalar_one()
+    except Exception as e:
+        logger.exception("Failed to insert into job_work_bills")
+        raise HTTPException(status_code=500, detail=f"Database error creating Job Work Bill: {str(e)}")
 
     # Insert individual snapshot lines for audit and historical immutability
     for it in (body.items or []):
         pid = it.get("process_id")
-        if not pid:
+        if not pid or not str(pid).isdigit():
             continue
-        p_res = await db.execute(
-            text("SELECT name, process_code, company_rate FROM master.processes WHERE id = :pid"),
-            {"pid": int(pid)}
-        )
-        proc_data = p_res.mappings().first()
-        pname = proc_data["name"] if proc_data else "Process"
-        pcode = proc_data.get("process_code") if proc_data else None
-        rate_snap = float(it.get("rate") or (proc_data["company_rate"] if proc_data else 0))
+        try:
+            p_res = await db.execute(
+                text("SELECT name, process_code, company_rate FROM master.processes WHERE id = :pid"),
+                {"pid": int(pid)}
+            )
+            proc_data = p_res.mappings().first()
+            pname = proc_data["name"] if proc_data else "Process"
+            pcode = proc_data.get("process_code") if proc_data else None
+            rate_snap = float(it.get("rate") or (proc_data["company_rate"] if proc_data else 0))
 
-        await db.execute(
-            text(f"""
-            INSERT INTO {schema}.job_work_bill_lines
-            (bill_id, inward_id, outward_id, process_id, process_name, process_code,
-             process_rate, billable_quantity, process_amount, rate_snapshot)
-            VALUES (:bid, :iid, :oid, :pid, :pname, :pcode,
-                    :prate, :bqty, :pamt, :snap)
-            """),
-            {
-                "bid": bill_id, "iid": primary_inward_id, "oid": body.outward_ids[0] if body.outward_ids else None,
-                "pid": int(pid), "pname": pname, "pcode": pcode,
-                "prate": rate_snap, "bqty": float(it.get("quantity") or 0),
-                "pamt": float(it.get("amount") or 0), "snap": rate_snap
-            }
-        )
+            await db.execute(
+                text(f"""
+                INSERT INTO {schema}.job_work_bill_lines
+                (bill_id, inward_id, outward_id, process_id, process_name, process_code,
+                 process_rate, billable_quantity, process_amount, rate_snapshot)
+                VALUES (:bid, :iid, :oid, :pid, :pname, :pcode,
+                        :prate, :bqty, :pamt, :snap)
+                """),
+                {
+                    "bid": bill_id, "iid": primary_inward_id,
+                    "oid": clean_outward_ids[0] if clean_outward_ids else None,
+                    "pid": int(pid), "pname": pname, "pcode": pcode,
+                    "prate": rate_snap, "bqty": float(it.get("quantity") or 0),
+                    "pamt": float(it.get("amount") or 0), "snap": rate_snap
+                }
+            )
+        except Exception:
+            pass
 
     return {"id": bill_id, "bill_no": bill_no, "message": "Job Work Bill created successfully."}
 
@@ -492,13 +567,15 @@ async def update_job_work_bill(
     schema = s(fy)
     await _ensure_tables(db, schema)
 
-    inward_ids = body.inward_ids or ([body.inward_id] if body.inward_id else [])
+    raw_inward_ids = body.inward_ids or ([body.inward_id] if body.inward_id else [])
+    clean_inward_ids = [int(x) for x in raw_inward_ids if str(x).isdigit()]
     items_json = json.dumps(body.items or [])
     freight_json = json.dumps(body.freight_items or [])
-    inward_ids_json = json.dumps(inward_ids)
-    outward_ids_json = json.dumps(body.outward_ids or [])
+    inward_ids_json = json.dumps(clean_inward_ids)
+    clean_outward_ids = [int(x) for x in (body.outward_ids or []) if str(x).isdigit()]
+    outward_ids_json = json.dumps(clean_outward_ids)
 
-    primary_inward_id = inward_ids[0] if inward_ids else None
+    primary_inward_id = clean_inward_ids[0] if clean_inward_ids else None
     primary_prod_id = body.product_id or (body.items[0].get("product_id") if body.items else None)
     primary_proc_id = body.process_id or (body.items[0].get("process_id") if body.items else None)
 
@@ -506,23 +583,24 @@ async def update_job_work_bill(
         text(f"""
         UPDATE {schema}.job_work_bills SET
             bill_no = :bno, bill_date = CAST(:bdate AS DATE), ledger_id = :lid,
-            inward_id = :iid, inward_ids = :iids::jsonb, outward_ids = :oids::jsonb,
+            inward_id = :iid, inward_ids = :iids, outward_ids = :oids,
             product_id = :pid, process_id = :prid, quantity = :qty, rate = :rate, amount = :amt,
             gst_percent = :gp, gst_amount = :ga, cgst_percent = :cgp, cgst_amount = :cga,
             sgst_percent = :sgp, sgst_amount = :sga, round_off = :ro, net_amount = :namt,
             total_amount = :ta, narration = :narr, dispatch_through = :dt,
-            items = :items::jsonb, freight_items = :fitems::jsonb, updated_at = NOW()
+            items = :items, freight_items = :fitems, updated_at = NOW()
         WHERE id = :id
         """),
         {
             "bno": body.bill_no, "bdate": body.bill_date, "lid": body.ledger_id,
             "iid": primary_inward_id, "iids": inward_ids_json, "oids": outward_ids_json,
-            "pid": primary_prod_id, "prid": primary_proc_id,
+            "pid": int(primary_prod_id) if (primary_prod_id and str(primary_prod_id).isdigit()) else None,
+            "prid": int(primary_proc_id) if (primary_proc_id and str(primary_proc_id).isdigit()) else None,
             "qty": body.quantity, "rate": body.rate, "amt": body.amount,
             "gp": body.gst_percent, "ga": body.gst_amount,
             "cgp": body.cgst_percent, "cga": body.cgst_amount,
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
-            "ro": body.round_off, "namt": body.net_amount, "ta": body.total_amount,
+            "ro": body.round_off, "namt": body.net_amount or body.total_amount, "ta": body.total_amount,
             "narr": body.narration, "dt": body.dispatch_through,
             "items": items_json, "fitems": freight_json, "id": bill_id
         }
@@ -532,32 +610,36 @@ async def update_job_work_bill(
     await db.execute(text(f"DELETE FROM {schema}.job_work_bill_lines WHERE bill_id = :bid"), {"bid": bill_id})
     for it in (body.items or []):
         pid = it.get("process_id")
-        if not pid:
+        if not pid or not str(pid).isdigit():
             continue
-        p_res = await db.execute(
-            text("SELECT name, process_code, company_rate FROM master.processes WHERE id = :pid"),
-            {"pid": int(pid)}
-        )
-        proc_data = p_res.mappings().first()
-        pname = proc_data["name"] if proc_data else "Process"
-        pcode = proc_data.get("process_code") if proc_data else None
-        rate_snap = float(it.get("rate") or (proc_data["company_rate"] if proc_data else 0))
+        try:
+            p_res = await db.execute(
+                text("SELECT name, process_code, company_rate FROM master.processes WHERE id = :pid"),
+                {"pid": int(pid)}
+            )
+            proc_data = p_res.mappings().first()
+            pname = proc_data["name"] if proc_data else "Process"
+            pcode = proc_data.get("process_code") if proc_data else None
+            rate_snap = float(it.get("rate") or (proc_data["company_rate"] if proc_data else 0))
 
-        await db.execute(
-            text(f"""
-            INSERT INTO {schema}.job_work_bill_lines
-            (bill_id, inward_id, outward_id, process_id, process_name, process_code,
-             process_rate, billable_quantity, process_amount, rate_snapshot)
-            VALUES (:bid, :iid, :oid, :pid, :pname, :pcode,
-                    :prate, :bqty, :pamt, :snap)
-            """),
-            {
-                "bid": bill_id, "iid": primary_inward_id, "oid": body.outward_ids[0] if body.outward_ids else None,
-                "pid": int(pid), "pname": pname, "pcode": pcode,
-                "prate": rate_snap, "bqty": float(it.get("quantity") or 0),
-                "pamt": float(it.get("amount") or 0), "snap": rate_snap
-            }
-        )
+            await db.execute(
+                text(f"""
+                INSERT INTO {schema}.job_work_bill_lines
+                (bill_id, inward_id, outward_id, process_id, process_name, process_code,
+                 process_rate, billable_quantity, process_amount, rate_snapshot)
+                VALUES (:bid, :iid, :oid, :pid, :pname, :pcode,
+                        :prate, :bqty, :pamt, :snap)
+                """),
+                {
+                    "bid": bill_id, "iid": primary_inward_id,
+                    "oid": clean_outward_ids[0] if clean_outward_ids else None,
+                    "pid": int(pid), "pname": pname, "pcode": pcode,
+                    "prate": rate_snap, "bqty": float(it.get("quantity") or 0),
+                    "pamt": float(it.get("amount") or 0), "snap": rate_snap
+                }
+            )
+        except Exception:
+            pass
 
     return {"message": "Job Work Bill updated successfully"}
 

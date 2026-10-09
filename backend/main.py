@@ -181,6 +181,11 @@ async def lifespan(app: FastAPI):
             async with engine.begin() as conn:
                 for col in ("items JSONB DEFAULT '[]'::jsonb", "outward_ids JSONB DEFAULT '[]'::jsonb", "dispatch_through VARCHAR(255)", "freight_items JSONB DEFAULT '[]'::jsonb"):
                     await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.labour_bills ADD COLUMN IF NOT EXISTS {col}"))
+                for col in ("items JSONB DEFAULT '[]'::jsonb", "inward_ids JSONB DEFAULT '[]'::jsonb", "outward_ids JSONB DEFAULT '[]'::jsonb", "dispatch_through VARCHAR(255)", "freight_items JSONB DEFAULT '[]'::jsonb", "quantity NUMERIC(15,3) DEFAULT 0", "rate NUMERIC(15,2) DEFAULT 0", "amount NUMERIC(15,2) DEFAULT 0", "is_paid BOOLEAN DEFAULT FALSE", "payment_status VARCHAR(20) DEFAULT 'UNPAID'", "paid_amount NUMERIC(15,2) DEFAULT 0", "pending_amount NUMERIC(15,2) DEFAULT 0"):
+                    try:
+                        await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.job_work_bills ADD COLUMN IF NOT EXISTS {col}"))
+                    except Exception:
+                        pass
                 # Recalculate quantity for existing labour bills to shotblasting weight if items present
                 try:
                     await conn.execute(text(f"""

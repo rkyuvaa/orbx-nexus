@@ -162,6 +162,68 @@ CREATE TABLE IF NOT EXISTS {schema}.labour_bills (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS {schema}.job_work_bills (
+    id SERIAL PRIMARY KEY,
+    bill_no VARCHAR(50) UNIQUE NOT NULL,
+    bill_date DATE NOT NULL,
+    ledger_id INTEGER NOT NULL,
+    inward_id INTEGER,
+    inward_ids JSONB DEFAULT '[]'::jsonb,
+    outward_ids JSONB DEFAULT '[]'::jsonb,
+    product_id INTEGER,
+    process_id INTEGER,
+    quantity NUMERIC(15,3) DEFAULT 0,
+    rate NUMERIC(15,2) DEFAULT 0,
+    amount NUMERIC(15,2) DEFAULT 0,
+    gst_percent NUMERIC(5,2) DEFAULT 0,
+    gst_amount NUMERIC(15,2) DEFAULT 0,
+    cgst_percent NUMERIC(5,2) DEFAULT 0,
+    cgst_amount NUMERIC(15,2) DEFAULT 0,
+    sgst_percent NUMERIC(5,2) DEFAULT 0,
+    sgst_amount NUMERIC(15,2) DEFAULT 0,
+    round_off NUMERIC(15,2) DEFAULT 0,
+    net_amount NUMERIC(15,2) DEFAULT 0,
+    total_amount NUMERIC(15,2) DEFAULT 0,
+    narration TEXT,
+    dispatch_through VARCHAR(255),
+    items JSONB DEFAULT '[]'::jsonb,
+    freight_items JSONB DEFAULT '[]'::jsonb,
+    is_paid BOOLEAN DEFAULT FALSE,
+    payment_status VARCHAR(20) DEFAULT 'UNPAID',
+    paid_amount NUMERIC(15,2) DEFAULT 0,
+    pending_amount NUMERIC(15,2) DEFAULT 0,
+    payment_date DATE,
+    created_by INTEGER,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.job_work_bill_lines (
+    id SERIAL PRIMARY KEY,
+    bill_id INTEGER NOT NULL REFERENCES {schema}.job_work_bills(id) ON DELETE CASCADE,
+    inward_id INTEGER,
+    outward_id INTEGER,
+    process_id INTEGER,
+    process_name VARCHAR(200),
+    process_code VARCHAR(50),
+    process_rate NUMERIC(15,4) DEFAULT 0,
+    uom_symbol VARCHAR(20),
+    billable_quantity NUMERIC(15,3) DEFAULT 0,
+    process_amount NUMERIC(15,2) DEFAULT 0,
+    rate_snapshot NUMERIC(15,4) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.job_work_bill_payments (
+    id SERIAL PRIMARY KEY,
+    bill_id INTEGER NOT NULL REFERENCES {schema}.job_work_bills(id) ON DELETE CASCADE,
+    payment_date DATE NOT NULL,
+    payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
+    amount NUMERIC(15,2) DEFAULT 0,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS {schema}.salary_vouchers (
     id SERIAL PRIMARY KEY,
     voucher_no VARCHAR(50) UNIQUE NOT NULL,
