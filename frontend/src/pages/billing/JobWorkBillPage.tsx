@@ -359,7 +359,7 @@ function JobWorkBillFormDialog({
             </Paper>
 
             {/* Process-wise bill lines */}
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }} sx={{ mb: 1 }}>Process-wise Charges</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Process-wise Charges</Typography>
             <Paper variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
               <Table size="small">
                 <TableHead>
@@ -398,7 +398,7 @@ function JobWorkBillFormDialog({
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} sx={{ mb: 1.5 }}>Charges & Tax</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Charges & Tax</Typography>
                   <Grid container spacing={1.5}>
                     <Grid size={{ xs: 6 }}>
                       <TextField label="Additional Charges (₹)" size="small" type="number" fullWidth
@@ -426,7 +426,7 @@ function JobWorkBillFormDialog({
 
               <Grid size={{ xs: 12, md: 6 }}>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }} sx={{ mb: 1.5 }}>Bill Summary</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Bill Summary</Typography>
                   {[
                     ["Process Charges", totalProcessCharges],
                     ["Additional Charges", additionalCharges],
@@ -444,7 +444,7 @@ function JobWorkBillFormDialog({
                   <Divider sx={{ my: 1 }} />
                   <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                     <Typography sx={{ fontWeight: 700 }}>Net Payable</Typography>
-                    <Typography sx={{ fontWeight: 700 }} color="#023020" fontSize={16}>₹ {fmtAmt(netTotal)}</Typography>
+                    <Typography sx={{ fontWeight: 700, color: "#023020", fontSize: 16 }}>₹ {fmtAmt(netTotal)}</Typography>
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block", fontStyle: "italic" }}>
                     {toWords(Math.round(netTotal))} Only
