@@ -1606,80 +1606,116 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
     newSelected.forEach((inw: any) => {
       const outs = customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inw.id));
-
       const rawInwItems = parseItems(inw.items);
-      let inwItems = rawInwItems;
-      if (inwItems.length === 0) {
-        let w = 0;
-        if (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "") {
-          w = Number(inw.total_weight);
-        } else if (inw.weight !== undefined && inw.weight !== null && inw.weight !== "") {
-          w = Number(inw.weight) * (Number(inw.quantity) || 1);
-        } else {
-          w = Number(inw.quantity) || 0;
-        }
-        inwItems = [{
-          product_id: inw.product_id,
-          process_id: inw.process_id,
-          computed_weight: w,
-        }];
+
+      let inwTotalWeight = 0;
+      if (rawInwItems && rawInwItems.length > 0) {
+        inwTotalWeight = rawInwItems.reduce((acc: number, it: any) => {
+          const w = (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "")
+            ? Number(it.total_weight)
+            : (it.weight !== undefined && it.weight !== null && it.weight !== "")
+            ? Number(it.weight) * (Number(it.quantity) || 1)
+            : (Number(it.quantity) || 0);
+          return acc + (isNaN(w) ? 0 : w);
+        }, 0);
       } else {
-        inwItems = inwItems.map((item: any) => {
-          let w = 0;
-          if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
-            w = Number(item.total_weight);
-          } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
-            w = Number(item.weight) * (Number(item.quantity) || 1);
-          } else {
-            w = Number(item.quantity) || 0;
-          }
-          return {
-            ...item,
-            computed_weight: w,
-          };
-        });
+        inwTotalWeight = (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "")
+          ? Number(inw.total_weight)
+          : (inw.weight !== undefined && inw.weight !== null && inw.weight !== "")
+          ? Number(inw.weight) * (Number(inw.quantity) || 1)
+          : (Number(inw.quantity) || 0);
       }
 
-      inwItems.forEach((inwItem: any) => {
-        const prodId = inwItem.product_id || inw.product_id || "";
-        const itemWeight = Number(inwItem.computed_weight) || 0;
+      // Track completed outward process weights specifically for this inward
+      const inwProcWeightMap = new Map<number, number>();
 
-        // Collect completed processes for this inward item across linked outwards
-        const completedProcessIds = new Set<string>();
+      outs.forEach((out: any) => {
+        const outLines = parseItems(out.items);
+        const taggedLines = outLines.filter((l: any) => Number(l.inward_id) === inw.id);
 
-        outs.forEach((out: any) => {
-          const outLines = getOutwardLinesForInward(out, inw.id);
-          if (outLines.length > 0) {
-            const linesToUse = outLines.filter(
-              (l: any) => !prodId || !l.product_id || Number(l.product_id) === Number(prodId)
-            );
-            linesToUse.forEach((l: any) => {
-              const pid = l.process_id || (outLines.length === 1 ? out.process_id : null);
-              if (pid) completedProcessIds.add(String(pid));
+        if (taggedLines.length > 0) {
+          // Exactly tagged outward lines for this inward
+          taggedLines.forEach((l: any) => {
+            const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+              ? Number(l.total_weight)
+              : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+              ? Number(l.weight) * (Number(l.quantity) || 1)
+              : (Number(l.quantity) || 0);
+            const procRef = l.process_id || out.process_id || inw.process_id;
+            const leafIds = resolveLeafProcessIds(procRef, processes);
+            leafIds.forEach((leafId: number) => {
+              inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
             });
-          } else if (out.process_id) {
-            completedProcessIds.add(String(out.process_id));
+          });
+        } else if (outLines.length > 0) {
+          const outInwardIds = Array.isArray(out.inward_ids)
+            ? out.inward_ids
+            : (typeof out.inward_ids === "string" ? (() => { try { return JSON.parse(out.inward_ids); } catch { return []; } })() : []);
+          const isSoleInward = outInwardIds.length <= 1;
+
+          if (isSoleInward) {
+            outLines.forEach((l: any) => {
+              const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+                ? Number(l.total_weight)
+                : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+                ? Number(l.weight) * (Number(l.quantity) || 1)
+                : (Number(l.quantity) || 0);
+              const procRef = l.process_id || out.process_id || inw.process_id;
+              const leafIds = resolveLeafProcessIds(procRef, processes);
+              leafIds.forEach((leafId: number) => {
+                inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
+              });
+            });
+          } else {
+            const inwProdIds = new Set(rawInwItems.map((it: any) => Number(it.product_id)).concat(inw.product_id ? [Number(inw.product_id)] : []));
+            const matchedLines = outLines.filter((l: any) => inwProdIds.has(Number(l.product_id)));
+            const linesToProcess = matchedLines.length > 0 ? matchedLines : outLines;
+            linesToProcess.forEach((l: any) => {
+              const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+                ? Number(l.total_weight)
+                : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+                ? Number(l.weight) * (Number(l.quantity) || 1)
+                : (Number(l.quantity) || 0);
+              const procRef = l.process_id || out.process_id || inw.process_id;
+              const leafIds = resolveLeafProcessIds(procRef, processes);
+              leafIds.forEach((leafId: number) => {
+                inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
+              });
+            });
           }
-        });
-
-        if (completedProcessIds.size === 0) {
-          const inwProc = inwItem.process_id || (inwItems.length === 1 ? inw.process_id : null);
-          if (inwProc) completedProcessIds.add(String(inwProc));
+        } else {
+          // Outward has no line items, use header total_weight and process_id
+          const outWeight = (out.total_weight !== undefined && out.total_weight !== null && out.total_weight !== "")
+            ? Number(out.total_weight)
+            : (out.weight !== undefined && out.weight !== null && out.weight !== "")
+            ? Number(out.weight) * (Number(out.quantity) || 1)
+            : (Number(out.quantity) || 0);
+          const procRef = out.process_id || inw.process_id;
+          const leafIds = resolveLeafProcessIds(procRef, processes);
+          leafIds.forEach((leafId: number) => {
+            inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + outWeight);
+          });
         }
+      });
 
-        // Decompose all completed processes into distinct leaf process IDs (STRICTLY DEDUPLICATED)
-        const leafProcessIdsSet = new Set<number>();
-        completedProcessIds.forEach((procIdRaw: string) => {
-          const leafIds = resolveLeafProcessIds(procIdRaw, processes);
-          leafIds.forEach((id: number) => leafProcessIdsSet.add(id));
-        });
-
-        // Each distinct leaf process performed on this inward item receives itemWeight ONCE
-        leafProcessIdsSet.forEach((leafId: number) => {
-          globalProcessWeights.set(leafId, (globalProcessWeights.get(leafId) || 0) + itemWeight);
-        });
+      // Safety clamp: No process for this inward can exceed the received material weight of this inward
+      inwProcWeightMap.forEach((w, leafId) => {
+        const billableWeight = inwTotalWeight > 0 ? Math.min(w, inwTotalWeight) : w;
+        globalProcessWeights.set(leafId, (globalProcessWeights.get(leafId) || 0) + billableWeight);
       });
     });
+
+    // Anchor Shotblasting to total received inward weight (resolving the 93.76 kg weighment tare variation)
+    const totalRawInwardWeight = computeRawWeightForInwardsList(newSelected);
+    if (totalRawInwardWeight > 0) {
+      globalProcessWeights.forEach((_, leafId) => {
+        const proc = processes.find((p: any) => p.id === leafId);
+        const name = (proc?.name || proc?.process_code || resolveProcessName(leafId, processes) || "").toLowerCase();
+        if (name.includes("shot") || name.includes("blast")) {
+          globalProcessWeights.set(leafId, totalRawInwardWeight);
+        }
+      });
+    }
 
     const newItems: any[] = [];
     globalProcessWeights.forEach((totalProcWeight, leafId) => {
