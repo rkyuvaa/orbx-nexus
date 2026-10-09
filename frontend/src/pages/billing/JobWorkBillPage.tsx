@@ -1274,6 +1274,55 @@ export default function JobWorkBillPage() {
   );
 }
 
+export const resolveLeafProcessIds = (processIdOrCode: any, processesList: any[]): number[] => {
+  if (!processIdOrCode) return [];
+  const str = String(processIdOrCode).trim();
+  if (!str) return [];
+
+  if (str.includes(",")) {
+    const parts = str.split(",").map((s) => s.trim()).filter(Boolean);
+    const leafSet = new Set<number>();
+    parts.forEach((p) => {
+      resolveLeafProcessIds(p, processesList).forEach((id) => leafSet.add(id));
+    });
+    return Array.from(leafSet);
+  }
+
+  const numId = Number(str);
+  const proc = !isNaN(numId)
+    ? processesList.find((p: any) => p.id === numId)
+    : processesList.find((p: any) => p.process_code === str || p.name === str);
+
+  if (!proc) {
+    return !isNaN(numId) && numId > 0 ? [numId] : [];
+  }
+
+  // 1. Composite process defined with process_ids field (e.g. "1, 2")
+  if (proc.process_ids && String(proc.process_ids).trim() !== "") {
+    const childIds = String(proc.process_ids).split(",").map((s: string) => s.trim()).filter(Boolean);
+    const leafSet = new Set<number>();
+    childIds.forEach((cid: string) => {
+      resolveLeafProcessIds(cid, processesList).forEach((id) => leafSet.add(id));
+    });
+    if (leafSet.size > 0) return Array.from(leafSet);
+  }
+
+  // 2. Composite process defined with process_code containing "/" (e.g. "SB / FET")
+  if (proc.process_code && proc.process_code.includes("/")) {
+    const parts = proc.process_code.split("/").map((s: string) => s.trim()).filter(Boolean);
+    const leafSet = new Set<number>();
+    parts.forEach((part: string) => {
+      const childProc = processesList.find((p: any) => p.process_code === part || p.name?.toLowerCase() === part.toLowerCase());
+      if (childProc) {
+        resolveLeafProcessIds(childProc.id, processesList).forEach((id) => leafSet.add(id));
+      }
+    });
+    if (leafSet.size > 0) return Array.from(leafSet);
+  }
+
+  return [proc.id];
+};
+
 interface JobWorkBillDialogProps {
   open: boolean;
   onClose: () => void;
@@ -1461,8 +1510,9 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
     return { rate: r, found: r > 0, name: proc.name };
   };
 
-  const getShotBlastingWeight = () => {
-    const shotItems = lineItems.filter((item: any) => {
+  const getShotBlastingWeight = (itemsList?: any[]) => {
+    const list = itemsList || lineItems;
+    const shotItems = list.filter((item: any) => {
       const proc = processMapObj[item.process_id] || processes.find((p: any) => p.id === Number(item.process_id));
       const name = (proc && (proc.name || proc.process_name || proc.process_code)) || "";
       if (/shot/i.test(name)) return true;
@@ -1473,7 +1523,7 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
       const sumQty = shotItems.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
       if (sumQty > 0) return sumQty;
     }
-    return Number(lineItems[0]?.quantity) || 0;
+    return Number(list[0]?.quantity) || 0;
   };
 
   const computeRawWeightForInwardsList = useCallback((inws: any[]) => {
@@ -1541,136 +1591,133 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
     };
 
     const missingList: string[] = [];
-    const newItems: any[] = [];
+    const globalProcessWeights = new Map<number, number>();
 
     newSelected.forEach((inw: any) => {
       const outs = customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inw.id));
 
       const rawInwItems = parseItems(inw.items);
-      let inwItems = rawInwItems;
-      if (inwItems.length === 0) {
-        let w = 0;
-        if (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "") {
-          w = Number(inw.total_weight);
-        } else if (inw.weight !== undefined && inw.weight !== null && inw.weight !== "") {
-          w = Number(inw.weight) * (Number(inw.quantity) || 1);
-        } else {
-          w = Number(inw.quantity) || 0;
-        }
-        inwItems = [{
-          product_id: inw.product_id,
-          process_id: inw.process_id,
-          computed_weight: w,
-        }];
+      let inwTotalWeight = 0;
+      if (rawInwItems.length > 0) {
+        inwTotalWeight = rawInwItems.reduce((acc: number, it: any) => {
+          const w = (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "")
+            ? Number(it.total_weight)
+            : (it.weight !== undefined && it.weight !== null && it.weight !== "")
+            ? Number(it.weight) * (Number(it.quantity) || 1)
+            : (Number(it.quantity) || 0);
+          return acc + (isNaN(w) ? 0 : w);
+        }, 0);
       } else {
-        inwItems = inwItems.map((item: any) => {
-          let w = 0;
-          if (item.total_weight !== undefined && item.total_weight !== null && item.total_weight !== "") {
-            w = Number(item.total_weight);
-          } else if (item.weight !== undefined && item.weight !== null && item.weight !== "") {
-            w = Number(item.weight) * (Number(item.quantity) || 1);
+        inwTotalWeight = (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "")
+          ? Number(inw.total_weight)
+          : (inw.weight !== undefined && inw.weight !== null && inw.weight !== "")
+          ? Number(inw.weight) * (Number(inw.quantity) || 1)
+          : (Number(inw.quantity) || 0);
+      }
+
+      // Track completed outward process weights specifically for this inward
+      const inwProcWeightMap = new Map<number, number>();
+
+      outs.forEach((out: any) => {
+        const outLines = parseItems(out.items);
+        const taggedLines = outLines.filter((l: any) => Number(l.inward_id) === inw.id);
+
+        if (taggedLines.length > 0) {
+          // Exactly tagged outward lines for this inward
+          taggedLines.forEach((l: any) => {
+            const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+              ? Number(l.total_weight)
+              : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+              ? Number(l.weight) * (Number(l.quantity) || 1)
+              : (Number(l.quantity) || 0);
+            const procRef = l.process_id || out.process_id || inw.process_id;
+            const leafIds = resolveLeafProcessIds(procRef, processes);
+            leafIds.forEach((leafId: number) => {
+              inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
+            });
+          });
+        } else if (outLines.length > 0) {
+          const outInwardIds = Array.isArray(out.inward_ids)
+            ? out.inward_ids
+            : (typeof out.inward_ids === "string" ? (() => { try { return JSON.parse(out.inward_ids); } catch { return []; } })() : []);
+          const isSoleInward = outInwardIds.length <= 1;
+
+          if (isSoleInward) {
+            outLines.forEach((l: any) => {
+              const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+                ? Number(l.total_weight)
+                : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+                ? Number(l.weight) * (Number(l.quantity) || 1)
+                : (Number(l.quantity) || 0);
+              const procRef = l.process_id || out.process_id || inw.process_id;
+              const leafIds = resolveLeafProcessIds(procRef, processes);
+              leafIds.forEach((leafId: number) => {
+                inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
+              });
+            });
           } else {
-            w = Number(item.quantity) || 0;
+            const inwProdIds = new Set(rawInwItems.map((it: any) => Number(it.product_id)).concat(inw.product_id ? [Number(inw.product_id)] : []));
+            const matchedLines = outLines.filter((l: any) => inwProdIds.has(Number(l.product_id)));
+            const linesToProcess = matchedLines.length > 0 ? matchedLines : outLines;
+            linesToProcess.forEach((l: any) => {
+              const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+                ? Number(l.total_weight)
+                : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+                ? Number(l.weight) * (Number(l.quantity) || 1)
+                : (Number(l.quantity) || 0);
+              const procRef = l.process_id || out.process_id || inw.process_id;
+              const leafIds = resolveLeafProcessIds(procRef, processes);
+              leafIds.forEach((leafId: number) => {
+                inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
+              });
+            });
           }
-          return {
-            ...item,
-            computed_weight: w,
-          };
+        } else {
+          // Outward has no line items, use header total_weight and process_id
+          const outWeight = (out.total_weight !== undefined && out.total_weight !== null && out.total_weight !== "")
+            ? Number(out.total_weight)
+            : (out.weight !== undefined && out.weight !== null && out.weight !== "")
+            ? Number(out.weight) * (Number(out.quantity) || 1)
+            : (Number(out.quantity) || 0);
+          const procRef = out.process_id || inw.process_id;
+          const leafIds = resolveLeafProcessIds(procRef, processes);
+          leafIds.forEach((leafId: number) => {
+            inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + outWeight);
+          });
+        }
+      });
+
+      // Fallback if outwards did not record a process
+      if (inwProcWeightMap.size === 0) {
+        const procRef = inw.process_id;
+        const leafIds = resolveLeafProcessIds(procRef, processes);
+        leafIds.forEach((leafId: number) => {
+          inwProcWeightMap.set(leafId, inwTotalWeight);
         });
       }
 
-      inwItems.forEach((inwItem: any) => {
-        const prodId = inwItem.product_id || inw.product_id || "";
-        const itemWeight = Number(inwItem.computed_weight) || 0;
+      // Safety clamp: No process for this inward can exceed the received material weight of this inward
+      inwProcWeightMap.forEach((w, leafId) => {
+        const billableWeight = inwTotalWeight > 0 ? Math.min(w, inwTotalWeight) : w;
+        globalProcessWeights.set(leafId, (globalProcessWeights.get(leafId) || 0) + billableWeight);
+      });
+    });
 
-        // Collect processes completed for this inward / item in the outwards
-        const completedProcessIds = new Set<string>();
-
-        outs.forEach((out: any) => {
-          const outLines = parseItems(out.items);
-          if (outLines.length > 0) {
-            const taggedLines = outLines.filter((l: any) => Number(l.inward_id) === inw.id);
-            if (taggedLines.length > 0) {
-              taggedLines.forEach((l: any) => {
-                if (!prodId || !l.product_id || Number(l.product_id) === Number(prodId)) {
-                  const pid = l.process_id || out.process_id;
-                  if (pid) completedProcessIds.add(String(pid));
-                }
-              });
-            } else {
-              outLines.forEach((l: any) => {
-                if (!prodId || !l.product_id || Number(l.product_id) === Number(prodId)) {
-                  const pid = l.process_id || out.process_id;
-                  if (pid) completedProcessIds.add(String(pid));
-                }
-              });
-            }
-          }
-          if (out.process_id) {
-            completedProcessIds.add(String(out.process_id));
-          }
-        });
-
-        if (completedProcessIds.size === 0) {
-          const inwProc = inwItem.process_id || inw.process_id;
-          if (inwProc) completedProcessIds.add(String(inwProc));
-        }
-
-        completedProcessIds.forEach((procIdRaw: string) => {
-          const proc = processes.find((p: any) => p.id === Number(procIdRaw));
-          if (proc && proc.process_ids) {
-            const childIds = String(proc.process_ids).split(",").map((x: string) => x.trim()).filter(Boolean);
-            childIds.forEach((cid: string) => {
-              const childProc = processes.find((p: any) => p.id === Number(cid));
-              if (childProc) {
-                const { rate, found, name } = getCompanyRate(childProc.id);
-                if (!found) missingList.push(name);
-                if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
-                  setValue("gst_percent", childProc.gst_percent);
-                }
-                newItems.push({
-                  product_id: prodId,
-                  process_id: childProc.id,
-                  quantity: itemWeight,
-                  rate,
-                  amount: Number((itemWeight * rate).toFixed(2))
-                });
-              }
-            });
-          } else if (proc && proc.process_code && proc.process_code.includes(" / ")) {
-            const parts = proc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
-            parts.forEach((part: any) => {
-              const childProc = processes.find((p: any) => p.process_code === part);
-              if (childProc) {
-                const { rate, found, name } = getCompanyRate(childProc.id);
-                if (!found) missingList.push(name);
-                if (childProc.gst_percent !== undefined && childProc.gst_percent !== null) {
-                  setValue("gst_percent", childProc.gst_percent);
-                }
-                newItems.push({
-                  product_id: prodId,
-                  process_id: childProc.id,
-                  quantity: itemWeight,
-                  rate,
-                  amount: Number((itemWeight * rate).toFixed(2))
-                });
-              }
-            });
-          } else {
-            const { rate, found, name } = getCompanyRate(procIdRaw);
-            if (!found) missingList.push(name);
-            if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
-              setValue("gst_percent", proc.gst_percent);
-            }
-            newItems.push({
-              product_id: prodId,
-              process_id: procIdRaw ? Number(procIdRaw) : "",
-              quantity: itemWeight,
-              rate,
-              amount: Number((itemWeight * rate).toFixed(2))
-            });
-          }
-        });
+    const newItems: any[] = [];
+    globalProcessWeights.forEach((totalProcWeight, leafId) => {
+      const proc = processes.find((p: any) => p.id === leafId);
+      const { rate, found, name } = getCompanyRate(leafId);
+      if (!found) missingList.push(name);
+      if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
+        setValue("gst_percent", proc.gst_percent);
+      }
+      const roundedQty = Number(totalProcWeight.toFixed(3));
+      newItems.push({
+        product_id: "",
+        process_id: leafId,
+        quantity: roundedQty.toFixed(3),
+        rate,
+        amount: Number((roundedQty * rate).toFixed(2))
       });
     });
 
@@ -1683,25 +1730,20 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
       return;
     }
 
-    // Merge items by process_id
-    const merged: Record<number | string, any> = {};
-    newItems.forEach((item: any) => {
-      if (!item.process_id) {
-        merged[`temp_${Math.random()}`] = { ...item };
-      } else {
-        const key = Number(item.process_id);
-        if (merged[key]) {
-          const sumQty = Number(merged[key].quantity || 0) + Number(item.quantity || 0);
-          merged[key].quantity = sumQty.toFixed(3);
-          merged[key].amount = Number((sumQty * Number(merged[key].rate || 0)).toFixed(2));
-        } else {
-          merged[key] = { ...item, quantity: Number(item.quantity || 0).toFixed(3) };
-        }
-      }
-    });
+    setLineItems(newItems);
 
-    const result = Object.values(merged);
-    setLineItems(result.length > 0 ? result : [{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+    // Keep freight item weight synchronized if already configured
+    const newShotWeight = getShotBlastingWeight(newItems);
+    setFreightItem((prev: any) => {
+      if (!prev.process_id) return prev;
+      const q = newShotWeight.toFixed(3);
+      const amt = Number((newShotWeight * Number(prev.rate || 0)).toFixed(2));
+      return {
+        ...prev,
+        quantity: q,
+        amount: amt
+      };
+    });
   };
 
   const handleSupplierChange = () => {
