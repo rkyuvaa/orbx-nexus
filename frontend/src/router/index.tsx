@@ -8,7 +8,6 @@ import LedgerPage from "../pages/accounts/LedgerPage";
 import { ProductRegisterPage, ProcessRegisterPage, ProcessGroupsPage, RateRegisterPage, UoMPage } from "../pages/process/ProcessInfoPages";
 import { InwardVoucherPage, OutwardVoucherPage } from "../pages/process-voucher/ProcessVoucherPages";
 import LabourBillPage from "../pages/labour-bill/LabourBillPage";
-import JobWorkBillPage from "../pages/billing/JobWorkBillPage";
 import {
   ContractorAdvancePaymentPage, ContractorAdvanceReceiptPage,
   SalaryVoucherPage
@@ -97,7 +96,6 @@ export const router = createBrowserRouter([
 
       // Labour Bill & Billing
       { path: "labour-bill", element: <LabourBillPage /> },
-      { path: "billing/job-work-bill", element: <JobWorkBillPage /> },
       { path: "billing/receivables", element: <ReceivablesReport /> },
 
       // Payroll

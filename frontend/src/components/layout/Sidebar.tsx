@@ -80,7 +80,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Assignment sx={{ fontSize: 20 }} />,
     children: [
       { label: "Labour Bill", path: "/labour-bill", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Job Work Bill", path: "/billing/job-work-bill", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Bills Receivable", path: "/billing/receivables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },

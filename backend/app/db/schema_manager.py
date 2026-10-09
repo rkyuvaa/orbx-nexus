@@ -162,35 +162,6 @@ CREATE TABLE IF NOT EXISTS {schema}.labour_bills (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS {schema}.job_work_bills (
-    id SERIAL PRIMARY KEY,
-    bill_no VARCHAR(50) UNIQUE NOT NULL,
-    bill_date DATE NOT NULL,
-    ledger_id INTEGER NOT NULL,
-    inward_id INTEGER,
-    product_id INTEGER,
-    process_id INTEGER,
-    quantity NUMERIC(15,3) DEFAULT 0,
-    rate NUMERIC(15,2) DEFAULT 0,
-    amount NUMERIC(15,2) DEFAULT 0,
-    gst_percent NUMERIC(5,2) DEFAULT 0,
-    gst_amount NUMERIC(15,2) DEFAULT 0,
-    cgst_percent NUMERIC(5,2) DEFAULT 0,
-    cgst_amount NUMERIC(15,2) DEFAULT 0,
-    sgst_percent NUMERIC(5,2) DEFAULT 0,
-    sgst_amount NUMERIC(15,2) DEFAULT 0,
-    round_off NUMERIC(15,2) DEFAULT 0,
-    net_amount NUMERIC(15,2) DEFAULT 0,
-    total_amount NUMERIC(15,2) DEFAULT 0,
-    narration TEXT,
-    is_paid BOOLEAN DEFAULT FALSE,
-    payment_date DATE,
-    freight_items JSONB DEFAULT '[]'::jsonb,
-    created_by INTEGER,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS {schema}.salary_vouchers (
     id SERIAL PRIMARY KEY,
     voucher_no VARCHAR(50) UNIQUE NOT NULL,
@@ -276,7 +247,6 @@ CREATE INDEX IF NOT EXISTS idx_{schema_safe}_vouchers_type ON {schema}.vouchers(
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_inward_date ON {schema}.stock_inward(inward_date);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_outward_date ON {schema}.stock_outward(outward_date);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_labour_date ON {schema}.labour_bills(bill_date);
-CREATE INDEX IF NOT EXISTS idx_{schema_safe}_job_work_bill_date ON {schema}.job_work_bills(bill_date);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_audit_date ON {schema}.audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_vouchers_ledger ON {schema}.vouchers(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_voucher_lines_voucher ON {schema}.voucher_lines(voucher_id);
@@ -284,7 +254,6 @@ CREATE INDEX IF NOT EXISTS idx_{schema_safe}_voucher_lines_ledger ON {schema}.vo
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_inward_ledger ON {schema}.stock_inward(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_outward_ledger ON {schema}.stock_outward(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_labour_ledger ON {schema}.labour_bills(ledger_id);
-CREATE INDEX IF NOT EXISTS idx_{schema_safe}_job_work_bill_ledger ON {schema}.job_work_bills(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_job_work_ledger ON {schema}.job_work_entries(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_{schema_safe}_biometric_ledger ON {schema}.biometric_entries(ledger_id);
 """
@@ -347,8 +316,6 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS freight_items JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS inward_ids JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS outward_ids JSONB DEFAULT '[]'::jsonb;
-        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS inward_ids JSONB DEFAULT '[]'::jsonb;
-        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS outward_ids JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS to_location_id INTEGER;
