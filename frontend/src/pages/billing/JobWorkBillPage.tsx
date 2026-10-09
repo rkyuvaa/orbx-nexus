@@ -358,6 +358,15 @@ export default function JobWorkBillPage() {
     }
     if (!itemsArray || itemsArray.length === 0) {
       itemsArray = [{ product_id: row.product_id, process_id: row.process_id, quantity: row.quantity || 0, rate: row.rate || 0, amount: row.amount || 0 }];
+    } else {
+      itemsArray.sort((a: any, b: any) => {
+        const rankA = getProcessOrderRank(a.process_id, processes);
+        const rankB = getProcessOrderRank(b.process_id, processes);
+        if (rankA !== rankB) return rankA - rankB;
+        const nameA = (resolveProcessName(a.process_id, processes) || "").toLowerCase();
+        const nameB = (resolveProcessName(b.process_id, processes) || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
     }
 
     let itemsHtml = "";
@@ -642,6 +651,15 @@ export default function JobWorkBillPage() {
       const proc = processes.find((p: any) => p.id === Number(row.process_id));
       if (proc) uniqueActiveProcesses.push(proc);
     }
+
+    uniqueActiveProcesses.sort((a: any, b: any) => {
+      const rankA = getProcessOrderRank(a.id, processes);
+      const rankB = getProcessOrderRank(b.id, processes);
+      if (rankA !== rankB) return rankA - rankB;
+      const nameA = (a.name || "").toLowerCase();
+      const nameB = (b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
 
     const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
       if (!rowProcId) return false;
@@ -1323,6 +1341,16 @@ export const resolveLeafProcessIds = (processIdOrCode: any, processesList: any[]
   return [proc.id];
 };
 
+export const getProcessOrderRank = (procId: any, procList: any[] = []): number => {
+  if (!procId) return 99;
+  const proc = procList.find((p: any) => p.id === Number(procId));
+  const name = (proc?.name || proc?.process_code || resolveProcessName(procId, procList) || "").toLowerCase();
+  if (name.includes("shot") || name.includes("blast")) return 1;
+  if (name.includes("fettl")) return 2;
+  if (name.includes("paint") || name.includes("dipp") || name.includes("gp")) return 3;
+  return 10;
+};
+
 interface JobWorkBillDialogProps {
   open: boolean;
   onClose: () => void;
@@ -1620,24 +1648,22 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
         const completedProcessIds = new Set<string>();
 
         outs.forEach((out: any) => {
-          const outLines = parseItems(out.items);
+          const outLines = getOutwardLinesForInward(out, inw.id);
           if (outLines.length > 0) {
-            const taggedLines = outLines.filter((l: any) => Number(l.inward_id) === inw.id);
-            const linesToUse = taggedLines.length > 0 ? taggedLines : outLines;
+            const linesToUse = outLines.filter(
+              (l: any) => !prodId || !l.product_id || Number(l.product_id) === Number(prodId)
+            );
             linesToUse.forEach((l: any) => {
-              if (!prodId || !l.product_id || Number(l.product_id) === Number(prodId)) {
-                const pid = l.process_id || out.process_id;
-                if (pid) completedProcessIds.add(String(pid));
-              }
+              const pid = l.process_id || (outLines.length === 1 ? out.process_id : null);
+              if (pid) completedProcessIds.add(String(pid));
             });
-          }
-          if (out.process_id) {
+          } else if (out.process_id) {
             completedProcessIds.add(String(out.process_id));
           }
         });
 
         if (completedProcessIds.size === 0) {
-          const inwProc = inwItem.process_id || inw.process_id;
+          const inwProc = inwItem.process_id || (inwItems.length === 1 ? inw.process_id : null);
           if (inwProc) completedProcessIds.add(String(inwProc));
         }
 
@@ -1671,6 +1697,16 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
         rate,
         amount: Number((roundedQty * rate).toFixed(2))
       });
+    });
+
+    // Enforce strict order: 1. Shotblasting, 2. Fettling, 3. GP Painting, 4. Others
+    newItems.sort((a: any, b: any) => {
+      const rankA = getProcessOrderRank(a.process_id, processes);
+      const rankB = getProcessOrderRank(b.process_id, processes);
+      if (rankA !== rankB) return rankA - rankB;
+      const nameA = (resolveProcessName(a.process_id, processes) || "").toLowerCase();
+      const nameB = (resolveProcessName(b.process_id, processes) || "").toLowerCase();
+      return nameA.localeCompare(nameB);
     });
 
     if (missingList.length > 0) {
@@ -1794,6 +1830,16 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
             rate: editing.rate || "",
             amount: editing.amount || ""
           }];
+        }
+        if (loadedLineItems.length > 1) {
+          loadedLineItems.sort((a: any, b: any) => {
+            const rankA = getProcessOrderRank(a.process_id, processes);
+            const rankB = getProcessOrderRank(b.process_id, processes);
+            if (rankA !== rankB) return rankA - rankB;
+            const nameA = (resolveProcessName(a.process_id, processes) || "").toLowerCase();
+            const nameB = (resolveProcessName(b.process_id, processes) || "").toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
         }
         setLineItems(loadedLineItems);
         initialLineItemsRef.current = loadedLineItems;
