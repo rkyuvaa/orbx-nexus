@@ -25,7 +25,7 @@ from app.api import (
     stock, labour_bill, salary, contractor,
     reports, biometrics, backups,
     audit, financial_years, sequences,
-    payroll_config,
+    payroll_config, job_work_bill,
 )
 
 DEFAULT_YEARS = [
@@ -280,6 +280,7 @@ async def lifespan(app: FastAPI):
             {"document_type": "voucher_purchase", "prefix": "PUR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "voucher_misc_expenses", "prefix": "EXP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "labour_bill", "prefix": "LBB-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
+            {"document_type": "job_work_bill", "prefix": "JWB-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "staff_advance_payment", "prefix": "SAP-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "staff_advance_receipt", "prefix": "SAR-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
             {"document_type": "salary_voucher", "prefix": "SAL-", "suffix": "/26-27", "current_number": 0, "padding_width": 3},
@@ -374,6 +375,7 @@ async def audit_logger_middleware(request: Request, call_next):
                     "vouchers": "Vouchers",
                     "stock": "Stock",
                     "labour-bills": "LabourBills",
+                    "job-work-bills": "JobWorkBills",
                     "payroll": "Payroll",
                     "contractor": "Contractor",
                     "biometrics": "Biometrics",
@@ -416,6 +418,7 @@ app.include_router(products.router, prefix=f"{settings.API_V1_STR}/products", ta
 app.include_router(vouchers.router, prefix=f"{settings.API_V1_STR}/vouchers", tags=["Vouchers"])
 app.include_router(stock.router, prefix=f"{settings.API_V1_STR}/stock", tags=["Stock"])
 app.include_router(labour_bill.router, prefix=f"{settings.API_V1_STR}/labour-bills", tags=["Labour Bills"])
+app.include_router(job_work_bill.router, prefix=f"{settings.API_V1_STR}/job-work-bills", tags=["Job Work Bills"])
 app.include_router(salary.router, prefix=f"{settings.API_V1_STR}/payroll", tags=["Payroll"])
 app.include_router(contractor.router, prefix=f"{settings.API_V1_STR}/contractor", tags=["Contractor"])
 app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["Reports"])
