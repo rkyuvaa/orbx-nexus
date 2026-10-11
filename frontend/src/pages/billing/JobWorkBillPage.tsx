@@ -217,11 +217,11 @@ export default function JobWorkBillPage() {
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
   const { data: outwardVouchers = [] } = useQuery<any>({
-    queryKey: ["outward-vouchers"],
+    queryKey: ["stock-outward", activeFY],
     queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data
   });
   const { data: inwardVouchers = [] } = useQuery<any>({
-    queryKey: ["inward-vouchers-list", activeFY],
+    queryKey: ["stock-inward", activeFY],
     queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data
   });
 
@@ -570,10 +570,10 @@ export default function JobWorkBillPage() {
     parseJsonArray(row.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
     if (row.inward_id) billInwardIdSet.add(Number(row.inward_id));
 
-    const storedOutwardIds = parseJsonArray(row.outward_ids).map(Number);
+    const storedOutwardIds = parseJsonArray(row.outward_ids).map(Number).filter(Boolean);
     if (billInwardIdSet.size === 0 && storedOutwardIds.length > 0) {
       storedOutwardIds.forEach((oid: number) => {
-        const out = outwardVouchers.find((o: any) => o.id === oid);
+        const out = outwardVouchers.find((o: any) => Number(o.id) === oid);
         if (out) {
           if (out.inward_id) billInwardIdSet.add(Number(out.inward_id));
           parseJsonArray(out.inward_ids).forEach((id: any) => { if (id) billInwardIdSet.add(Number(id)); });
@@ -585,7 +585,7 @@ export default function JobWorkBillPage() {
     const billAllInwardIds: number[] = Array.from(billInwardIdSet);
     const linkedInwards = billAllInwardIds
       .map((id: number) => {
-        const found = inwardVouchers.find((v: any) => v.id === id);
+        const found = inwardVouchers.find((v: any) => Number(v.id) === id);
         if (found) return found;
         return { id, inward_no: `#${id}`, ref_no: `#${id}`, items: [] };
       })
@@ -604,11 +604,12 @@ export default function JobWorkBillPage() {
 
     const resolveSeparateProcesses = (procId: any): string => {
       if (!procId) return "-";
-      const proc = processes.find((p: any) => p.id === Number(procId));
-      if (proc && proc.process_ids) {
-        const pids = String(proc.process_ids).split(",").map((x: string) => x.trim()).filter(Boolean);
-        const names = pids.map((pid: string) => processes.find((p: any) => p.id === Number(pid))?.name || pid).filter(Boolean);
-        return names.join(" / ") || "-";
+      const leafIds = resolveLeafProcessIds(procId, processes);
+      if (leafIds.length > 0) {
+        const names = leafIds
+          .map((lid: number) => processes.find((p: any) => Number(p.id) === lid)?.name || resolveProcessName(lid, processes))
+          .filter(Boolean);
+        if (names.length > 0) return names.join(" / ");
       }
       return resolveProcessName(procId, processes) || "-";
     };
@@ -627,17 +628,37 @@ export default function JobWorkBillPage() {
     const seenProcIds = new Set<number>();
     billItems.forEach((item: any) => {
       if (item.process_id) {
-        const proc = processes.find((p: any) => p.id === Number(item.process_id));
-        if (proc && !seenProcIds.has(proc.id)) {
-          seenProcIds.add(proc.id);
+        const proc = processes.find((p: any) => Number(p.id) === Number(item.process_id));
+        if (proc && !seenProcIds.has(Number(proc.id))) {
+          seenProcIds.add(Number(proc.id));
           uniqueActiveProcesses.push(proc);
+        } else if (!proc) {
+          const leafIds = resolveLeafProcessIds(item.process_id, processes);
+          leafIds.forEach((lid) => {
+            const lProc = processes.find((p: any) => Number(p.id) === lid);
+            if (lProc && !seenProcIds.has(Number(lProc.id))) {
+              seenProcIds.add(Number(lProc.id));
+              uniqueActiveProcesses.push(lProc);
+            }
+          });
         }
       }
     });
 
     if (uniqueActiveProcesses.length === 0 && row.process_id) {
-      const proc = processes.find((p: any) => p.id === Number(row.process_id));
-      if (proc) uniqueActiveProcesses.push(proc);
+      const leafIds = resolveLeafProcessIds(row.process_id, processes);
+      if (leafIds.length > 0) {
+        leafIds.forEach((lid) => {
+          const proc = processes.find((p: any) => Number(p.id) === lid);
+          if (proc && !seenProcIds.has(Number(proc.id))) {
+            seenProcIds.add(Number(proc.id));
+            uniqueActiveProcesses.push(proc);
+          }
+        });
+      } else {
+        const proc = processes.find((p: any) => Number(p.id) === Number(row.process_id));
+        if (proc) uniqueActiveProcesses.push(proc);
+      }
     }
 
     uniqueActiveProcesses.sort((a: any, b: any) => {
@@ -650,28 +671,34 @@ export default function JobWorkBillPage() {
     });
 
     const isProcessInRow = (targetProcId: number, rowProcId: any): boolean => {
-      if (!rowProcId) return false;
-      if (Number(rowProcId) === targetProcId) return true;
-      const rowProc = processes.find((p: any) => p.id === Number(rowProcId));
-      if (rowProc) {
-        if (rowProc.process_ids) {
-          const childIds = String(rowProc.process_ids).split(",").map((x: string) => Number(x.trim())).filter(Boolean);
-          if (childIds.includes(targetProcId)) return true;
-        }
-        if (rowProc.process_code && rowProc.process_code.includes(" / ")) {
-          const parts = rowProc.process_code.split("/").map((p: any) => p.trim()).filter(Boolean);
-          const targetProc = processes.find((p: any) => p.id === targetProcId);
-          if (targetProc && parts.includes(targetProc.process_code)) return true;
-        }
+      if (!targetProcId || rowProcId === null || rowProcId === undefined) return false;
+      // Shotblasting is the primary process applied across all castings in the bill
+      if (getProcessOrderRank(targetProcId, processes) === 1 && String(rowProcId).trim() !== "") {
+        return true;
       }
+      if (!rowProcId) return false;
+      if (Number(rowProcId) === Number(targetProcId)) return true;
+      const rowLeafs = resolveLeafProcessIds(rowProcId, processes);
+      if (rowLeafs.includes(Number(targetProcId))) return true;
+      const targetLeafs = resolveLeafProcessIds(targetProcId, processes);
+      if (targetLeafs.length > 0 && rowLeafs.some((rl) => targetLeafs.includes(rl))) return true;
       return false;
     };
 
+    const doesInwardHaveProduct = (inwardObj: any, prodId: number): boolean => {
+      if (!inwardObj || !prodId) return false;
+      if (Number(inwardObj.product_id) === prodId) return true;
+      const items = parseJsonArray(inwardObj.items);
+      return items.some((i: any) => Number(i.product_id) === prodId);
+    };
+
+    const fallbackBillProcIds = uniqueActiveProcesses.map((p: any) => p.id).filter(Boolean).join(",");
+    const consumedOutLineKeys = new Set<string>();
     const reportRows: any[] = [];
 
     linkedInwards.forEach((inv: any) => {
       const invRef = inv.ref_no || inv.serial_no || inv.inward_no || "-";
-      const invDateStr = toDateStr(inv.inward_date);
+      const invDateStr = toDateStr(inv.inward_date || inv.ref_date);
       const rawInwItems = parseJsonArray(inv.items);
 
       interface InwProdInfo {
@@ -679,50 +706,67 @@ export default function JobWorkBillPage() {
         productName: string;
         quantity: number;
         weight: number;
+        processId: any;
       }
       const inwProducts: InwProdInfo[] = [];
 
       if (rawInwItems.length === 0) {
         const pid = Number(inv.product_id) || 0;
-        const pObj = products.find((p: any) => p.id === pid);
+        const pObj = products.find((p: any) => Number(p.id) === pid);
+        const q = Number(inv.quantity) || 0;
+        const w = (inv.total_weight !== undefined && inv.total_weight !== null && inv.total_weight !== "" && Number(inv.total_weight) > 0)
+          ? Number(inv.total_weight)
+          : (inv.weight !== undefined && inv.weight !== null && inv.weight !== "" && Number(inv.weight) > 0)
+          ? Number(inv.weight) * (q || 1)
+          : Number(inv.total_weight || inv.weight || 0);
         inwProducts.push({
           productId: pid,
-          productName: pObj?.name || (pid ? `Product #${pid}` : "-"),
-          quantity: Number(inv.quantity) || 0,
-          weight: Number(inv.total_weight || inv.weight || 0),
+          productName: pObj?.name || inv.product_name || (pid ? `Product #${pid}` : "-"),
+          quantity: q,
+          weight: w,
+          processId: inv.process_id || null,
         });
       } else {
-        const prodMap = new Map<number, { qty: number; weight: number }>();
-        rawInwItems.forEach((it: any) => {
+        const prodMap = new Map<string, { pid: number; qty: number; weight: number; processId: any; fallbackName?: string }>();
+        rawInwItems.forEach((it: any, idx: number) => {
           const pid = Number(it.product_id) || Number(inv.product_id) || 0;
+          const mapKey = pid > 0 ? String(pid) : `idx_${idx}`;
           const q = Number(it.quantity) || 0;
           let w = 0;
-          if (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "") {
+          if (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "" && Number(it.total_weight) > 0) {
             w = Number(it.total_weight);
-          } else if (it.weight !== undefined && it.weight !== null && it.weight !== "") {
+          } else if (it.weight !== undefined && it.weight !== null && it.weight !== "" && Number(it.weight) > 0) {
             w = Number(it.weight) * (q || 1);
           } else {
-            w = q;
+            w = Number(it.total_weight || it.weight || 0);
           }
-          const curr = prodMap.get(pid) || { qty: 0, weight: 0 };
-          prodMap.set(pid, { qty: curr.qty + q, weight: curr.weight + w });
+          const curr = prodMap.get(mapKey) || { pid, qty: 0, weight: 0, processId: it.process_id || inv.process_id || null, fallbackName: it.product_name };
+          prodMap.set(mapKey, {
+            pid,
+            qty: curr.qty + q,
+            weight: curr.weight + w,
+            processId: curr.processId || it.process_id || inv.process_id || null,
+            fallbackName: curr.fallbackName || it.product_name,
+          });
         });
 
-        prodMap.forEach((val, pid) => {
-          const pObj = products.find((p: any) => p.id === pid);
+        prodMap.forEach((val) => {
+          const pObj = products.find((p: any) => Number(p.id) === val.pid);
           inwProducts.push({
-            productId: pid,
-            productName: pObj?.name || (pid ? `Product #${pid}` : "-"),
+            productId: val.pid,
+            productName: pObj?.name || val.fallbackName || (val.pid ? `Product #${val.pid}` : "-"),
             quantity: val.qty,
             weight: val.weight,
+            processId: val.processId,
           });
         });
       }
 
       // Outward vouchers linked to THIS specific inward
       const outsForInv = outwardVouchers.filter((out: any) => {
-        if (storedOutwardIds.length > 0 && !storedOutwardIds.includes(out.id)) return false;
-        return isOutwardLinkedToInward(out, inv.id);
+        if (isOutwardLinkedToInward(out, Number(inv.id))) return true;
+        if (linkedInwards.length === 1 && storedOutwardIds.includes(Number(out.id))) return true;
+        return false;
       });
 
       outsForInv.sort((a: any, b: any) => {
@@ -742,60 +786,106 @@ export default function JobWorkBillPage() {
           let matchingLines: any[] = [];
 
           if (rawOutItems.length > 0) {
-            const tagged = rawOutItems.filter((it: any) => Number(it.inward_id) === inv.id);
-            if (tagged.length > 0) {
-              matchingLines = tagged;
-            } else {
-              const outInwardIds = parseJsonArray(out.inward_ids).map(Number);
-              if (out.inward_id) outInwardIds.push(Number(out.inward_id));
-              const uniqueOutInwIds = Array.from(new Set(outInwardIds));
-              if (uniqueOutInwIds.length <= 1) {
-                matchingLines = rawOutItems;
-              } else {
-                matchingLines = rawOutItems.filter((it: any) => {
-                  const itemPid = Number(it.product_id);
-                  return inwProd.productId ? itemPid === inwProd.productId : true;
-                });
-              }
-            }
+            const outInwardIds = Array.from(
+              new Set(
+                [Number(out.inward_id), ...parseJsonArray(out.inward_ids).map(Number)].filter(Boolean)
+              )
+            );
+            const linkedInwardsWithSameProd = inwProd.productId > 0
+              ? outInwardIds.filter((iid) => {
+                  const v = inwardVouchers.find((x: any) => Number(x.id) === iid);
+                  return v ? doesInwardHaveProduct(v, inwProd.productId) : false;
+                })
+              : outInwardIds;
 
-            if (inwProd.productId && matchingLines.length > 1) {
-              const byProd = matchingLines.filter((it: any) => Number(it.product_id) === inwProd.productId);
-              if (byProd.length > 0) matchingLines = byProd;
-            }
+            let untaggedAccumQty = 0;
+
+            rawOutItems.forEach((it: any, lineIdx: number) => {
+              const lineKey = `${out.id}_${lineIdx}`;
+              if (consumedOutLineKeys.has(lineKey)) return;
+
+              const itemPid = Number(it.product_id) || (rawOutItems.length === 1 ? Number(out.product_id) : 0) || 0;
+
+              // 1. Strict Product Match
+              if (inwProd.productId > 0 && itemPid > 0) {
+                if (itemPid !== inwProd.productId) return;
+              } else if ((inwProd.productId > 0 && itemPid === 0) || (inwProd.productId === 0 && itemPid > 0)) {
+                if (inwProducts.length > 1) return;
+              }
+
+              // 2. Strict Inward Match
+              const itemInwId = Number(it.inward_id) || 0;
+              if (itemInwId === Number(inv.id)) {
+                consumedOutLineKeys.add(lineKey);
+                matchingLines.push(it);
+                return;
+              }
+
+              if (itemInwId > 0 && itemInwId !== Number(inv.id)) {
+                const otherInv = inwardVouchers.find((v: any) => Number(v.id) === itemInwId);
+                if (otherInv && itemPid > 0 && !doesInwardHaveProduct(otherInv, itemPid) && doesInwardHaveProduct(inv, itemPid)) {
+                  consumedOutLineKeys.add(lineKey);
+                  matchingLines.push(it);
+                }
+                return;
+              }
+
+              // itemInwId === 0 (untagged outward line)
+              if (linkedInwardsWithSameProd.length <= 1) {
+                consumedOutLineKeys.add(lineKey);
+                matchingLines.push(it);
+              } else {
+                const lineQty = Number(it.quantity) || 0;
+                if (inwProd.quantity > 0 && untaggedAccumQty >= inwProd.quantity) return;
+                consumedOutLineKeys.add(lineKey);
+                untaggedAccumQty += lineQty;
+                matchingLines.push(it);
+              }
+            });
           } else {
-            const outPid = Number(out.product_id) || 0;
-            if (!inwProd.productId || !outPid || outPid === inwProd.productId) {
-              matchingLines = [{
-                product_id: out.product_id,
-                process_id: out.process_id,
-                quantity: out.quantity || 0,
-                total_weight: out.total_weight || out.weight || 0,
-                weight: out.total_weight || out.weight || 0,
-              }];
+            const lineKey = `${out.id}_hdr`;
+            if (!consumedOutLineKeys.has(lineKey)) {
+              const outPid = Number(out.product_id) || 0;
+              if (!inwProd.productId || !outPid || outPid === inwProd.productId || inwProducts.length === 1) {
+                consumedOutLineKeys.add(lineKey);
+                matchingLines = [{
+                  product_id: out.product_id,
+                  process_id: out.process_id,
+                  quantity: out.quantity || 0,
+                  total_weight: out.total_weight || out.weight || 0,
+                  weight: out.weight || out.total_weight || 0,
+                }];
+              }
             }
           }
 
           matchingLines.forEach((line: any) => {
-            const itemProcId = line.process_id || out.process_id;
-            if (uniqueActiveProcesses.length > 0) {
-              const matchesActive = uniqueActiveProcesses.some((proc: any) => isProcessInRow(proc.id, itemProcId));
-              if (!matchesActive) return;
-            }
+            const itemProcId = line.process_id || out.process_id || inwProd.processId || inv.process_id || row.process_id || fallbackBillProcIds;
+            const outQty = Number(line.quantity) || 0;
+            const outWeight = (line.total_weight !== undefined && line.total_weight !== null && line.total_weight !== "" && Number(line.total_weight) > 0)
+              ? Number(line.total_weight)
+              : (line.weight !== undefined && line.weight !== null && line.weight !== "" && Number(line.weight) > 0)
+              ? Number(line.weight) * (outQty || 1)
+              : Number(line.total_weight || line.weight || 0);
+
+            const resolvedProdName = inwProd.productName !== "-"
+              ? inwProd.productName
+              : (products.find((p: any) => Number(p.id) === Number(line.product_id))?.name || "-");
 
             outRowsForProd.push({
               inward_id: inv.id,
+              productId: inwProd.productId || Number(line.product_id) || 0,
               raw_inward_date: inv.inward_date ? new Date(inv.inward_date).getTime() : 0,
               raw_outward_date: out.outward_date ? new Date(out.outward_date).getTime() : 0,
               ref: invRef,
               inward_date: invDateStr,
-              productName: inwProd.productName,
+              productName: resolvedProdName,
               inward_qty: inwProd.quantity,
               inward_weight: inwProd.weight,
               outward_no: out.outward_no || `#${out.id}`,
               outward_date: toDateStr(out.outward_date),
-              outward_qty: Number(line.quantity) || 0,
-              outward_weight: Number(line.total_weight || line.weight || 0),
+              outward_qty: outQty,
+              outward_weight: outWeight,
               processName: resolveSeparateProcesses(itemProcId),
               processId: itemProcId,
             });
@@ -807,6 +897,7 @@ export default function JobWorkBillPage() {
         } else {
           reportRows.push({
             inward_id: inv.id,
+            productId: inwProd.productId || 0,
             raw_inward_date: inv.inward_date ? new Date(inv.inward_date).getTime() : 0,
             raw_outward_date: 0,
             ref: invRef,
@@ -833,12 +924,18 @@ export default function JobWorkBillPage() {
 
     const processTotals: Record<number, number> = {};
     uniqueActiveProcesses.forEach((proc) => {
-      processTotals[proc.id] = reportRows.reduce((sum, r) => {
+      const colSum = reportRows.reduce((sum, r) => {
         if (isProcessInRow(proc.id, r.processId)) {
           return sum + (Number(r.outward_weight) || 0);
         }
         return sum;
       }, 0);
+      if (colSum > 0) {
+        processTotals[proc.id] = colSum;
+      } else {
+        const billProcItem = billItems.find((bi: any) => Number(bi.process_id) === Number(proc.id));
+        processTotals[proc.id] = billProcItem ? (Number(billProcItem.quantity) || 0) : 0;
+      }
     });
 
     return {
@@ -1341,11 +1438,25 @@ export const resolveLeafProcessIds = (processIdOrCode: any, processesList: any[]
   }
 
   const numId = Number(str);
+  const lowerStr = str.toLowerCase();
   const proc = !isNaN(numId)
-    ? processesList.find((p: any) => p.id === numId)
-    : processesList.find((p: any) => p.process_code === str || p.name === str);
+    ? processesList.find((p: any) => Number(p.id) === numId)
+    : processesList.find((p: any) =>
+        p.process_code === str ||
+        p.name === str ||
+        p.process_code?.toLowerCase() === lowerStr ||
+        p.name?.toLowerCase() === lowerStr
+      );
 
   if (!proc) {
+    if (str.includes("/") || str.includes("+")) {
+      const parts = str.split(/[\/+]/).map((s) => s.trim()).filter(Boolean);
+      const leafSet = new Set<number>();
+      parts.forEach((part) => {
+        resolveLeafProcessIds(part, processesList).forEach((id) => leafSet.add(id));
+      });
+      if (leafSet.size > 0) return Array.from(leafSet);
+    }
     return !isNaN(numId) && numId > 0 ? [numId] : [];
   }
 
@@ -1359,12 +1470,25 @@ export const resolveLeafProcessIds = (processIdOrCode: any, processesList: any[]
     if (leafSet.size > 0) return Array.from(leafSet);
   }
 
-  // 2. Composite process defined with process_code containing "/" (e.g. "SB / FET")
-  if (proc.process_code && proc.process_code.includes("/")) {
-    const parts = proc.process_code.split("/").map((s: string) => s.trim()).filter(Boolean);
+  // 2. Composite process defined with process_code or name containing "/" or "+" (e.g. "SB / FET")
+  const compositeText = (proc.process_code && (proc.process_code.includes("/") || proc.process_code.includes("+")))
+    ? proc.process_code
+    : (proc.name && (proc.name.includes("/") || proc.name.includes("+")))
+    ? proc.name
+    : "";
+
+  if (compositeText) {
+    const parts = compositeText.split(/[\/+]/).map((s: string) => s.trim()).filter(Boolean);
     const leafSet = new Set<number>();
     parts.forEach((part: string) => {
-      const childProc = processesList.find((p: any) => p.process_code === part || p.name?.toLowerCase() === part.toLowerCase());
+      const lowerPart = part.toLowerCase();
+      const childProc = processesList.find((p: any) =>
+        p.id !== proc.id && (
+          p.process_code === part ||
+          p.process_code?.toLowerCase() === lowerPart ||
+          p.name?.toLowerCase() === lowerPart
+        )
+      );
       if (childProc) {
         resolveLeafProcessIds(childProc.id, processesList).forEach((id) => leafSet.add(id));
       }
@@ -1372,7 +1496,7 @@ export const resolveLeafProcessIds = (processIdOrCode: any, processesList: any[]
     if (leafSet.size > 0) return Array.from(leafSet);
   }
 
-  return [proc.id];
+  return [Number(proc.id)];
 };
 
 export const getProcessOrderRank = (procId: any, procList: any[] = []): number => {
@@ -1417,12 +1541,12 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: outwardVouchers = [] } = useQuery<any>({
-    queryKey: ["outward-vouchers"],
+    queryKey: ["stock-outward", activeFY],
     queryFn: async () => (await api.get(`/stock/outward?fy=${activeFY}`)).data,
     enabled: open
   });
   const { data: inwardVouchers = [] } = useQuery<any>({
-    queryKey: ["inward-vouchers-list", activeFY],
+    queryKey: ["stock-inward", activeFY],
     queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data,
     enabled: open
   });
@@ -1494,13 +1618,22 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
         const outwardCount = linkedOutwards.length;
         if (outwardCount === 0) return null;
 
-        // Inward balance check:
+        // Inward balance & weight check:
         let totalInwQty = Number(inv.quantity || 0);
+        let totalInwWeight = Number(inv.total_weight || inv.weight || 0);
         const rawInwItems = Array.isArray(inv.items)
           ? inv.items
           : (typeof inv.items === "string" ? (() => { try { return JSON.parse(inv.items); } catch { return []; } })() : []);
         if (rawInwItems.length > 0) {
           totalInwQty = rawInwItems.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0);
+          totalInwWeight = rawInwItems.reduce((s: number, it: any) => {
+            const w = (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "" && Number(it.total_weight) > 0)
+              ? Number(it.total_weight)
+              : (it.weight !== undefined && it.weight !== null && it.weight !== "" && Number(it.weight) > 0)
+              ? Number(it.weight) * (Number(it.quantity) || 1)
+              : Number(it.total_weight || it.weight || 0);
+            return s + (isNaN(w) ? 0 : w);
+          }, 0);
         }
 
         let isFullyCompleted = false;
@@ -1543,6 +1676,7 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
           ...inv,
           linkedOutwards,
           outwardNos,
+          unbilledWeight: totalInwWeight,
           isOutwardCompleted: true,
         };
       })
@@ -1635,12 +1769,23 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
       return Array.isArray(x) ? x : [];
     };
 
+    const doesInwardHaveProduct = (inwardObj: any, prodId: number): boolean => {
+      if (!inwardObj || !prodId) return false;
+      if (Number(inwardObj.product_id) === prodId) return true;
+      const items = parseItems(inwardObj.items);
+      return items.some((i: any) => Number(i.product_id) === prodId);
+    };
+
     const missingList: string[] = [];
     const globalProcessWeights = new Map<number, number>();
+    const consumedOutLineKeys = new Set<string>();
 
     newSelected.forEach((inw: any) => {
       const outs = customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inw.id));
       const rawInwItems = parseItems(inw.items);
+      const inwProdIds = new Set<number>(
+        rawInwItems.map((it: any) => Number(it.product_id)).concat(inw.product_id ? [Number(inw.product_id)] : []).filter(Boolean)
+      );
 
       let inwTotalWeight = 0;
       if (rawInwItems && rawInwItems.length > 0) {
@@ -1665,65 +1810,44 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
       outs.forEach((out: any) => {
         const outLines = parseItems(out.items);
-        const taggedLines = outLines.filter((l: any) => Number(l.inward_id) === inw.id);
+        if (outLines.length > 0) {
+          outLines.forEach((l: any, lineIdx: number) => {
+            const lineKey = `${out.id}_${lineIdx}`;
+            if (consumedOutLineKeys.has(lineKey)) return;
 
-        if (taggedLines.length > 0) {
-          // Exactly tagged outward lines for this inward
-          taggedLines.forEach((l: any) => {
-            const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
+            const itemPid = Number(l.product_id) || (outLines.length === 1 ? Number(out.product_id) : 0) || 0;
+            if (inwProdIds.size > 0 && itemPid > 0 && !inwProdIds.has(itemPid)) return;
+
+            const itemInwId = Number(l.inward_id) || 0;
+            if (itemInwId > 0 && itemInwId !== Number(inw.id)) {
+              const otherInv = inwardVouchers.find((v: any) => Number(v.id) === itemInwId);
+              if (!(otherInv && itemPid > 0 && !doesInwardHaveProduct(otherInv, itemPid) && doesInwardHaveProduct(inw, itemPid))) {
+                return;
+              }
+            }
+
+            consumedOutLineKeys.add(lineKey);
+            const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "" && Number(l.total_weight) > 0)
               ? Number(l.total_weight)
-              : (l.weight !== undefined && l.weight !== null && l.weight !== "")
+              : (l.weight !== undefined && l.weight !== null && l.weight !== "" && Number(l.weight) > 0)
               ? Number(l.weight) * (Number(l.quantity) || 1)
-              : (Number(l.quantity) || 0);
+              : (Number(l.total_weight || l.weight || l.quantity) || 0);
             const procRef = l.process_id || out.process_id || inw.process_id;
             const leafIds = resolveLeafProcessIds(procRef, processes);
             leafIds.forEach((leafId: number) => {
               inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
             });
           });
-        } else if (outLines.length > 0) {
-          const outInwardIds = Array.isArray(out.inward_ids)
-            ? out.inward_ids
-            : (typeof out.inward_ids === "string" ? (() => { try { return JSON.parse(out.inward_ids); } catch { return []; } })() : []);
-          const isSoleInward = outInwardIds.length <= 1;
-
-          if (isSoleInward) {
-            outLines.forEach((l: any) => {
-              const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
-                ? Number(l.total_weight)
-                : (l.weight !== undefined && l.weight !== null && l.weight !== "")
-                ? Number(l.weight) * (Number(l.quantity) || 1)
-                : (Number(l.quantity) || 0);
-              const procRef = l.process_id || out.process_id || inw.process_id;
-              const leafIds = resolveLeafProcessIds(procRef, processes);
-              leafIds.forEach((leafId: number) => {
-                inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
-              });
-            });
-          } else {
-            const inwProdIds = new Set(rawInwItems.map((it: any) => Number(it.product_id)).concat(inw.product_id ? [Number(inw.product_id)] : []));
-            const matchedLines = outLines.filter((l: any) => inwProdIds.has(Number(l.product_id)));
-            const linesToProcess = matchedLines.length > 0 ? matchedLines : outLines;
-            linesToProcess.forEach((l: any) => {
-              const lineWeight = (l.total_weight !== undefined && l.total_weight !== null && l.total_weight !== "")
-                ? Number(l.total_weight)
-                : (l.weight !== undefined && l.weight !== null && l.weight !== "")
-                ? Number(l.weight) * (Number(l.quantity) || 1)
-                : (Number(l.quantity) || 0);
-              const procRef = l.process_id || out.process_id || inw.process_id;
-              const leafIds = resolveLeafProcessIds(procRef, processes);
-              leafIds.forEach((leafId: number) => {
-                inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
-              });
-            });
-          }
         } else {
           // Outward has no line items, use header total_weight and process_id
-          const outWeight = (out.total_weight !== undefined && out.total_weight !== null && out.total_weight !== "")
+          const lineKey = `${out.id}_hdr`;
+          if (consumedOutLineKeys.has(lineKey)) return;
+          consumedOutLineKeys.add(lineKey);
+          const outWeight = (out.total_weight !== undefined && out.total_weight !== null && out.total_weight !== "" && Number(out.total_weight) > 0)
             ? Number(out.total_weight)
-            : (out.weight !== undefined && out.weight !== null && out.weight !== "")
+            : (out.weight !== undefined && out.weight !== null && out.weight !== "" && Number(out.weight) > 0)
             ? Number(out.weight) * (Number(out.quantity) || 1)
-            : (Number(out.quantity) || 0);
+            : (Number(out.total_weight || out.weight || out.quantity) || 0);
           const procRef = out.process_id || inw.process_id;
           const leafIds = resolveLeafProcessIds(procRef, processes);
           leafIds.forEach((leafId: number) => {
@@ -1851,32 +1975,46 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
   useEffect(() => {
     if (open) {
-      const currentInit = editing ? editing.id : "new";
+      const currentInit = editing ? `${editing.id}_${inwardVouchers.length > 0 ? 1 : 0}_${outwardVouchers.length > 0 ? 1 : 0}` : "new";
       if (initRef.current === currentInit) return;
       initRef.current = currentInit;
 
       if (editing) {
         const outwardIdList = (() => {
-          const ids = editing.outward_ids || [];
-          if (!Array.isArray(ids)) return [];
-          return ids.map((id: number) => outwardVouchers.find((v: any) => v.id === id)).filter(Boolean);
+          const rawIds = Array.isArray(editing.outward_ids)
+            ? editing.outward_ids
+            : (typeof editing.outward_ids === "string" ? (() => { try { return JSON.parse(editing.outward_ids); } catch { return []; } })() : []);
+          return (rawIds || []).map((id: number) => outwardVouchers.find((v: any) => Number(v.id) === Number(id))).filter(Boolean);
         })();
 
         const matchedInwardIds = new Set<number>();
-        if (editing.inward_id) matchedInwardIds.add(editing.inward_id);
+        if (editing.inward_id) matchedInwardIds.add(Number(editing.inward_id));
         if (editing.inward_ids) {
           const rawInwIds = Array.isArray(editing.inward_ids)
             ? editing.inward_ids
             : (typeof editing.inward_ids === "string" ? (() => { try { return JSON.parse(editing.inward_ids); } catch { return []; } })() : []);
-          rawInwIds.forEach((id: number) => matchedInwardIds.add(Number(id)));
+          rawInwIds.forEach((id: number) => { if (id) matchedInwardIds.add(Number(id)); });
         }
         if (matchedInwardIds.size === 0) {
           outwardIdList.forEach((out: any) => {
-            if (out.inward_id) matchedInwardIds.add(out.inward_id);
-            if (Array.isArray(out.inward_ids)) out.inward_ids.forEach((id: number) => matchedInwardIds.add(id));
+            if (out.inward_id) matchedInwardIds.add(Number(out.inward_id));
+            if (Array.isArray(out.inward_ids)) out.inward_ids.forEach((id: number) => { if (id) matchedInwardIds.add(Number(id)); });
           });
         }
-        const matchedInws = inwardVouchers.filter((inv: any) => matchedInwardIds.has(inv.id));
+        const matchedInws = inwardVouchers
+          .filter((inv: any) => matchedInwardIds.has(Number(inv.id)))
+          .map((inv: any) => {
+            const linkedOutwards = outwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, Number(inv.id)));
+            const outwardNos = linkedOutwards.map((o: any) => o.outward_no || `#${o.id}`).filter(Boolean).join(", ");
+            const unbilledWeight = computeRawWeightForInwardsList([inv]);
+            return {
+              ...inv,
+              linkedOutwards,
+              outwardNos,
+              unbilledWeight,
+              isOutwardCompleted: true,
+            };
+          });
         setSelectedInwards(matchedInws);
 
         let parsedItems: any[] = [];
@@ -1963,7 +2101,7 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
     } else {
       initRef.current = null;
     }
-  }, [open, editing, reset, setValue, outwardVouchers, inwardVouchers, computeRawWeightForInwardsList]);
+  }, [open, editing, reset, setValue, outwardVouchers, inwardVouchers, computeRawWeightForInwardsList, processes]);
 
   const saveMutation = useMutation({
     mutationFn: (formData: any) => {
