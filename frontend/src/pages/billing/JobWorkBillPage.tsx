@@ -331,25 +331,6 @@ export default function JobWorkBillPage() {
     const inwardRefs = Array.from(resolvedInwardRefs).join(", ") || "-";
     const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
 
-    let freightArray: any[] = [];
-    if (typeof row.freight_items === "string") {
-      try { freightArray = JSON.parse(row.freight_items); } catch (e) {}
-    } else if (Array.isArray(row.freight_items)) {
-      freightArray = row.freight_items;
-    }
-    if (!Array.isArray(freightArray)) freightArray = [];
-    const freightAmount = freightArray.reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0);
-    const taxableBasePrint = Number(row.amount || 0) + freightAmount;
-
-    const gstP = Number(row.gst_percent || 0);
-    const cgstP = Number(row.cgst_percent !== undefined && row.cgst_percent !== null ? row.cgst_percent : (gstP / 2));
-    const sgstP = Number(row.sgst_percent !== undefined && row.sgst_percent !== null ? row.sgst_percent : (gstP / 2));
-    const cgstAmt = row.cgst_amount !== undefined && row.cgst_amount !== null ? Number(row.cgst_amount) : Number(((taxableBasePrint * cgstP) / 100).toFixed(2));
-    const sgstAmt = row.sgst_amount !== undefined && row.sgst_amount !== null ? Number(row.sgst_amount) : Number(((taxableBasePrint * sgstP) / 100).toFixed(2));
-    const roundOffVal = Number(row.round_off || 0);
-    const netPayableVal = Number(row.net_amount || row.total_amount || 0);
-    const amountInWordsStr = toWords(netPayableVal);
-
     let itemsArray: any[] = [];
     if (typeof row.items === "string") {
       try { itemsArray = JSON.parse(row.items); } catch (e) {}
@@ -359,6 +340,7 @@ export default function JobWorkBillPage() {
     if (!itemsArray || itemsArray.length === 0) {
       itemsArray = [{ product_id: row.product_id, process_id: row.process_id, quantity: row.quantity || 0, rate: row.rate || 0, amount: row.amount || 0 }];
     } else {
+      itemsArray = itemsArray.map((it: any) => ({ ...it }));
       itemsArray.sort((a: any, b: any) => {
         const rankA = getProcessOrderRank(a.process_id, processes);
         const rankB = getProcessOrderRank(b.process_id, processes);
@@ -368,6 +350,58 @@ export default function JobWorkBillPage() {
         return nameA.localeCompare(nameB);
       });
     }
+
+    let freightArray: any[] = [];
+    if (typeof row.freight_items === "string") {
+      try { freightArray = JSON.parse(row.freight_items); } catch (e) {}
+    } else if (Array.isArray(row.freight_items)) {
+      freightArray = row.freight_items.map((f: any) => ({ ...f }));
+    }
+    if (!Array.isArray(freightArray)) freightArray = [];
+
+    const detailsData = buildJobWorkDetailsReportData(row);
+    if (detailsData && detailsData.reportRows.length > 0) {
+      itemsArray = itemsArray.map((item: any) => {
+        const derivedWt = detailsData.processTotals[Number(item.process_id)];
+        if (derivedWt !== undefined && derivedWt > 0) {
+          const roundedQty = Number(derivedWt.toFixed(3));
+          const rate = Number(item.rate || 0);
+          return {
+            ...item,
+            quantity: roundedQty,
+            amount: Number((roundedQty * rate).toFixed(2))
+          };
+        }
+        return item;
+      });
+      const sbItem = itemsArray.find((it: any) => getProcessOrderRank(it.process_id, processes) === 1) || itemsArray[0];
+      const sbWeight = sbItem ? Number(sbItem.quantity || 0) : 0;
+      if (sbWeight > 0 && freightArray.length > 0) {
+        freightArray = freightArray.map((f: any) => {
+          const fRate = Number(f.rate || 0);
+          const roundedQty = Number(sbWeight.toFixed(3));
+          return {
+            ...f,
+            quantity: roundedQty,
+            amount: Number((roundedQty * fRate).toFixed(2))
+          };
+        });
+      }
+    }
+
+    const subtotalPrint = Number(itemsArray.reduce((sum: number, it: any) => sum + (Number(it.amount) || 0), 0).toFixed(2));
+    const freightAmount = Number(freightArray.reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0).toFixed(2));
+    const taxableBasePrint = subtotalPrint + freightAmount;
+
+    const gstP = Number(row.gst_percent || 0);
+    const cgstP = Number(row.cgst_percent !== undefined && row.cgst_percent !== null ? row.cgst_percent : (gstP / 2));
+    const sgstP = Number(row.sgst_percent !== undefined && row.sgst_percent !== null ? row.sgst_percent : (gstP / 2));
+    const cgstAmt = Number(((taxableBasePrint * cgstP) / 100).toFixed(2));
+    const sgstAmt = Number(((taxableBasePrint * sgstP) / 100).toFixed(2));
+    const unroundedTotalPrint = taxableBasePrint + cgstAmt + sgstAmt;
+    const netPayableVal = Math.round(unroundedTotalPrint);
+    const roundOffVal = Number((netPayableVal - unroundedTotalPrint).toFixed(2));
+    const amountInWordsStr = toWords(netPayableVal);
 
     let itemsHtml = "";
     itemsArray.forEach((item, idx) => {
@@ -468,7 +502,7 @@ export default function JobWorkBillPage() {
             <div class="calculation-box">
               <div class="calculation-row">
                 <span>Taxable Subtotal:</span>
-                <span>₹${formatAmount(row.amount)}</span>
+                <span>₹${formatAmount(subtotalPrint)}</span>
               </div>
               <div class="calculation-row">
                 <span>CGST (${cgstP}%):</span>
@@ -1752,16 +1786,7 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
     return totalRawWeight;
   }, []);
 
-  // Strict inward-to-outward process derivation
-  const handleInwardSelectionChange = (newSelected: any[]) => {
-    setSelectedInwards(newSelected);
-    setMissingRatesWarning([]);
-
-    if (newSelected.length === 0) {
-      setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
-      return;
-    }
-
+  const deriveProcessItemsFromInwards = useCallback((inwardsList: any[], existingItems?: any[]) => {
     const parseItems = (x: any): any[] => {
       if (typeof x === "string") {
         try { return JSON.parse(x); } catch (e) { return []; }
@@ -1779,34 +1804,34 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
     const missingList: string[] = [];
     const globalProcessWeights = new Map<number, number>();
     const consumedOutLineKeys = new Set<string>();
+    let totalOutwardWeight = 0;
 
-    newSelected.forEach((inw: any) => {
-      const outs = customerOutwardVouchers.filter((out: any) => isOutwardLinkedToInward(out, inw.id));
+    const sortedInwards = [...inwardsList].sort((a: any, b: any) => {
+      const dateA = a.inward_date ? new Date(a.inward_date).getTime() : 0;
+      const dateB = b.inward_date ? new Date(b.inward_date).getTime() : 0;
+      if (dateA !== dateB) return dateA - dateB;
+      const numA = (a.ref_no || a.serial_no || a.inward_no || "").toLowerCase();
+      const numB = (b.ref_no || b.serial_no || b.inward_no || "").toLowerCase();
+      if (numA !== numB) return numA.localeCompare(numB, undefined, { numeric: true });
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+
+    sortedInwards.forEach((inw: any) => {
+      const outs = outwardVouchers
+        .filter((out: any) => isOutwardLinkedToInward(out, Number(inw.id)))
+        .sort((a: any, b: any) => {
+          const dateA = a.outward_date ? new Date(a.outward_date).getTime() : 0;
+          const dateB = b.outward_date ? new Date(b.outward_date).getTime() : 0;
+          if (dateA !== dateB) return dateA - dateB;
+          const noA = (a.outward_no || "").toLowerCase();
+          const noB = (b.outward_no || "").toLowerCase();
+          return noA.localeCompare(noB, undefined, { numeric: true });
+        });
+
       const rawInwItems = parseItems(inw.items);
       const inwProdIds = new Set<number>(
         rawInwItems.map((it: any) => Number(it.product_id)).concat(inw.product_id ? [Number(inw.product_id)] : []).filter(Boolean)
       );
-
-      let inwTotalWeight = 0;
-      if (rawInwItems && rawInwItems.length > 0) {
-        inwTotalWeight = rawInwItems.reduce((acc: number, it: any) => {
-          const w = (it.total_weight !== undefined && it.total_weight !== null && it.total_weight !== "")
-            ? Number(it.total_weight)
-            : (it.weight !== undefined && it.weight !== null && it.weight !== "")
-            ? Number(it.weight) * (Number(it.quantity) || 1)
-            : (Number(it.quantity) || 0);
-          return acc + (isNaN(w) ? 0 : w);
-        }, 0);
-      } else {
-        inwTotalWeight = (inw.total_weight !== undefined && inw.total_weight !== null && inw.total_weight !== "")
-          ? Number(inw.total_weight)
-          : (inw.weight !== undefined && inw.weight !== null && inw.weight !== "")
-          ? Number(inw.weight) * (Number(inw.quantity) || 1)
-          : (Number(inw.quantity) || 0);
-      }
-
-      // Track completed outward process weights specifically for this inward
-      const inwProcWeightMap = new Map<number, number>();
 
       outs.forEach((out: any) => {
         const outLines = parseItems(out.items);
@@ -1832,10 +1857,12 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
               : (l.weight !== undefined && l.weight !== null && l.weight !== "" && Number(l.weight) > 0)
               ? Number(l.weight) * (Number(l.quantity) || 1)
               : (Number(l.total_weight || l.weight || l.quantity) || 0);
+            totalOutwardWeight += lineWeight;
+
             const procRef = l.process_id || out.process_id || inw.process_id;
-            const leafIds = resolveLeafProcessIds(procRef, processes);
+            const leafIds = Array.from(new Set(resolveLeafProcessIds(procRef, processes)));
             leafIds.forEach((leafId: number) => {
-              inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + lineWeight);
+              globalProcessWeights.set(leafId, (globalProcessWeights.get(leafId) || 0) + lineWeight);
             });
           });
         } else {
@@ -1848,44 +1875,40 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
             : (out.weight !== undefined && out.weight !== null && out.weight !== "" && Number(out.weight) > 0)
             ? Number(out.weight) * (Number(out.quantity) || 1)
             : (Number(out.total_weight || out.weight || out.quantity) || 0);
+          totalOutwardWeight += outWeight;
+
           const procRef = out.process_id || inw.process_id;
-          const leafIds = resolveLeafProcessIds(procRef, processes);
+          const leafIds = Array.from(new Set(resolveLeafProcessIds(procRef, processes)));
           leafIds.forEach((leafId: number) => {
-            inwProcWeightMap.set(leafId, (inwProcWeightMap.get(leafId) || 0) + outWeight);
+            globalProcessWeights.set(leafId, (globalProcessWeights.get(leafId) || 0) + outWeight);
           });
         }
       });
-
-      // Safety clamp: No process for this inward can exceed the received material weight of this inward
-      inwProcWeightMap.forEach((w, leafId) => {
-        const billableWeight = inwTotalWeight > 0 ? Math.min(w, inwTotalWeight) : w;
-        globalProcessWeights.set(leafId, (globalProcessWeights.get(leafId) || 0) + billableWeight);
-      });
     });
 
-    // Anchor Shotblasting to total received inward weight (resolving the 93.76 kg weighment tare variation)
-    const totalRawInwardWeight = computeRawWeightForInwardsList(newSelected);
-    if (totalRawInwardWeight > 0) {
+    // Ensure primary Shotblasting process reflects full completed outward weight across all rows
+    if (totalOutwardWeight > 0) {
       globalProcessWeights.forEach((_, leafId) => {
-        const proc = processes.find((p: any) => p.id === leafId);
-        const name = (proc?.name || proc?.process_code || resolveProcessName(leafId, processes) || "").toLowerCase();
-        if (name.includes("shot") || name.includes("blast")) {
-          globalProcessWeights.set(leafId, totalRawInwardWeight);
+        if (getProcessOrderRank(leafId, processes) === 1) {
+          globalProcessWeights.set(leafId, totalOutwardWeight);
         }
       });
     }
 
     const newItems: any[] = [];
+    let gstFromProc: any = undefined;
     globalProcessWeights.forEach((totalProcWeight, leafId) => {
       const proc = processes.find((p: any) => p.id === leafId);
-      const { rate, found, name } = getCompanyRate(leafId);
-      if (!found) missingList.push(name);
+      const { rate: masterRate, found, name } = getCompanyRate(leafId);
+      const existingMatch = existingItems?.find((it: any) => Number(it.process_id) === Number(leafId));
+      const rate = existingMatch && Number(existingMatch.rate) > 0 ? Number(existingMatch.rate) : masterRate;
+      if (!found && !(rate > 0)) missingList.push(name);
       if (proc && proc.gst_percent !== undefined && proc.gst_percent !== null) {
-        setValue("gst_percent", proc.gst_percent);
+        gstFromProc = proc.gst_percent;
       }
       const roundedQty = Number(totalProcWeight.toFixed(3));
       newItems.push({
-        product_id: "",
+        product_id: existingMatch?.product_id || "",
         process_id: leafId,
         quantity: roundedQty.toFixed(3),
         rate,
@@ -1903,8 +1926,26 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
       return nameA.localeCompare(nameB);
     });
 
+    return { newItems, missingList: Array.from(new Set(missingList)), gstFromProc };
+  }, [outwardVouchers, inwardVouchers, processes]);
+
+  // Strict inward-to-outward process derivation
+  const handleInwardSelectionChange = (newSelected: any[]) => {
+    setSelectedInwards(newSelected);
+    setMissingRatesWarning([]);
+
+    if (newSelected.length === 0) {
+      setLineItems([{ product_id: "", process_id: "", quantity: "", rate: "", amount: "" }]);
+      return;
+    }
+
+    const { newItems, missingList, gstFromProc } = deriveProcessItemsFromInwards(newSelected);
+    if (gstFromProc !== undefined) {
+      setValue("gst_percent", gstFromProc);
+    }
+
     if (missingList.length > 0) {
-      setMissingRatesWarning(Array.from(new Set(missingList)));
+      setMissingRatesWarning(missingList);
     }
 
     if (newItems.length === 0) {
@@ -1975,7 +2016,9 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
   useEffect(() => {
     if (open) {
-      const currentInit = editing ? `${editing.id}_${inwardVouchers.length > 0 ? 1 : 0}_${outwardVouchers.length > 0 ? 1 : 0}` : "new";
+      const currentInit = editing
+        ? `${editing.id}_${inwardVouchers.length > 0 ? 1 : 0}_${outwardVouchers.length > 0 ? 1 : 0}_${processes.length > 0 ? 1 : 0}`
+        : "new";
       if (initRef.current === currentInit) return;
       initRef.current = currentInit;
 
@@ -2039,7 +2082,13 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
             amount: editing.amount || ""
           }];
         }
-        if (loadedLineItems.length > 1) {
+
+        if (matchedInws.length > 0 && outwardVouchers.length > 0 && processes.length > 0) {
+          const { newItems } = deriveProcessItemsFromInwards(matchedInws, loadedLineItems);
+          if (newItems.length > 0) {
+            loadedLineItems = newItems;
+          }
+        } else if (loadedLineItems.length > 1) {
           loadedLineItems.sort((a: any, b: any) => {
             const rankA = getProcessOrderRank(a.process_id, processes);
             const rankB = getProcessOrderRank(b.process_id, processes);
@@ -2060,9 +2109,13 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
           parsedFreight = editing.freight_items;
         }
         if (parsedFreight && parsedFreight.length > 0) {
+          const shotWt = getShotBlastingWeight(loadedLineItems);
+          const fRate = Number(parsedFreight[0].rate || 0);
+          const fQty = shotWt > 0 ? shotWt : Number(parsedFreight[0].quantity || 0);
           setFreightItem({
             ...parsedFreight[0],
-            quantity: parsedFreight[0].quantity !== undefined && parsedFreight[0].quantity !== "" && parsedFreight[0].quantity !== null ? Number(parsedFreight[0].quantity).toFixed(3) : ""
+            quantity: fQty > 0 ? fQty.toFixed(3) : "",
+            amount: Number((fQty * fRate).toFixed(2))
           });
           setFreightOpen(true);
         } else {
