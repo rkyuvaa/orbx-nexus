@@ -168,24 +168,25 @@ export default function OrbxGrid<T = any>({
 
   const getColAlignment = (col: ColDef) => {
     if (col.align) return col.align;
+    if (col.type === "numericColumn") return "right";
     
     const fieldName = (col.field || "").toLowerCase();
     const headerName = (col.headerName || "").toLowerCase();
-    
-    const rightAlignKeys = [
-      "qty", "quantity", "rate", "amount", "weight", "price", "val", "value", 
-      "balance", "total", "units", "prev", "current", "salary", "hours", 
-      "work", "reading", "meter", "consumed", "gst", "cgst", "sgst", "bill", "payment"
-    ];
-    if (col.type === "numericColumn" || rightAlignKeys.some(k => fieldName.includes(k) || headerName.includes(k))) {
-      return "right";
-    }
     
     const centerAlignKeys = [
       "no", "number", "code", "date", "status", "id", "serial", "ref", "year", "active"
     ];
     if (centerAlignKeys.some(k => fieldName.includes(k) || headerName.includes(k))) {
       return "center";
+    }
+
+    const rightAlignKeys = [
+      "qty", "quantity", "rate", "amount", "weight", "price", "val", "value", 
+      "balance", "total", "units", "prev", "current", "salary", "hours", 
+      "work", "reading", "meter", "consumed", "gst", "cgst", "sgst", "bill", "payment"
+    ];
+    if (rightAlignKeys.some(k => fieldName.includes(k) || headerName.includes(k))) {
+      return "right";
     }
     
     return "left";

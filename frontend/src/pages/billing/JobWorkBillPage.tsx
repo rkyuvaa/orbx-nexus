@@ -1383,6 +1383,179 @@ export default function JobWorkBillPage() {
     XLSX.writeFile(wb, `JobWorkDetails_${safeBillNo}.xlsx`);
   };
 
+  const syncedBillIdsRef = useRef<Set<number>>(new Set());
+
+  const normalizedBills = useMemo(() => {
+    if (!Array.isArray(bills) || bills.length === 0) return [];
+    if (inwardVouchers.length === 0 || outwardVouchers.length === 0 || processes.length === 0) {
+      return bills;
+    }
+
+    return bills.map((row: any) => {
+      const detailsData = buildJobWorkDetailsReportData(row);
+      const hasOutwardWeights =
+        detailsData &&
+        Array.isArray(detailsData.reportRows) &&
+        detailsData.reportRows.some((r: any) => Number(r.outward_weight) > 0);
+
+      if (!hasOutwardWeights) return row;
+
+      let itemsArray: any[] = [];
+      if (typeof row.items === "string") {
+        try { itemsArray = JSON.parse(row.items); } catch (e) {}
+      } else if (Array.isArray(row.items)) {
+        itemsArray = row.items.map((it: any) => ({ ...it }));
+      }
+      if (!itemsArray || itemsArray.length === 0) {
+        itemsArray = [{
+          product_id: row.product_id || null,
+          process_id: row.process_id || null,
+          quantity: Number(row.quantity || 0),
+          rate: Number(row.rate || 0),
+          amount: Number(row.amount || 0)
+        }];
+      }
+
+      itemsArray = itemsArray.map((item: any) => {
+        const derivedWt = detailsData.processTotals[Number(item.process_id)];
+        if (derivedWt !== undefined && derivedWt > 0) {
+          const roundedQty = Number(derivedWt.toFixed(3));
+          const procObj = processes.find((p: any) => Number(p.id) === Number(item.process_id));
+          const rate = Number(item.rate) > 0 ? Number(item.rate) : Number(procObj?.company_rate || 0);
+          return {
+            ...item,
+            quantity: roundedQty,
+            rate,
+            amount: Number((roundedQty * rate).toFixed(2))
+          };
+        }
+        return item;
+      });
+
+      itemsArray.sort((a: any, b: any) => {
+        const rankA = getProcessOrderRank(a.process_id, processes);
+        const rankB = getProcessOrderRank(b.process_id, processes);
+        if (rankA !== rankB) return rankA - rankB;
+        const nameA = (resolveProcessName(a.process_id, processes) || "").toLowerCase();
+        const nameB = (resolveProcessName(b.process_id, processes) || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      const sbItem = itemsArray.find((it: any) => getProcessOrderRank(it.process_id, processes) === 1) || itemsArray[0];
+      const sbWeight = sbItem ? Number(Number(sbItem.quantity || 0).toFixed(3)) : Number(row.quantity || 0);
+
+      let freightArray: any[] = [];
+      if (typeof row.freight_items === "string") {
+        try { freightArray = JSON.parse(row.freight_items); } catch (e) {}
+      } else if (Array.isArray(row.freight_items)) {
+        freightArray = row.freight_items.map((f: any) => ({ ...f }));
+      }
+      if (!Array.isArray(freightArray)) freightArray = [];
+
+      if (sbWeight > 0 && freightArray.length > 0) {
+        freightArray = freightArray.map((f: any) => {
+          const fRate = Number(f.rate || 0);
+          const roundedQty = Number(sbWeight.toFixed(3));
+          return {
+            ...f,
+            quantity: roundedQty,
+            amount: Number((roundedQty * fRate).toFixed(2))
+          };
+        });
+      }
+
+      const subtotal = Number(itemsArray.reduce((sum: number, it: any) => sum + (Number(it.amount) || 0), 0).toFixed(2));
+      const freightAmount = Number(freightArray.reduce((sum: number, f: any) => sum + (Number(f.amount) || 0), 0).toFixed(2));
+      const taxableBase = Number((subtotal + freightAmount).toFixed(2));
+
+      const gstP = Number(row.gst_percent || 0);
+      const cgstP = Number(row.cgst_percent !== undefined && row.cgst_percent !== null ? row.cgst_percent : (gstP / 2));
+      const sgstP = Number(row.sgst_percent !== undefined && row.sgst_percent !== null ? row.sgst_percent : (gstP / 2));
+      const cgstAmt = Number(((taxableBase * cgstP) / 100).toFixed(2));
+      const sgstAmt = Number(((taxableBase * sgstP) / 100).toFixed(2));
+      const gstAmt = Number((cgstAmt + sgstAmt).toFixed(2));
+      const unroundedTotal = taxableBase + gstAmt;
+      const netPayableVal = Math.round(unroundedTotal);
+      const roundOffVal = Number((netPayableVal - unroundedTotal).toFixed(2));
+
+      const needsDbSync =
+        Math.abs(Number(row.quantity || 0) - sbWeight) > 0.001 ||
+        Math.abs(Number(row.total_amount || row.net_amount || 0) - netPayableVal) > 0.01;
+
+      return {
+        ...row,
+        quantity: sbWeight,
+        amount: subtotal,
+        gst_amount: gstAmt,
+        cgst_amount: cgstAmt,
+        sgst_amount: sgstAmt,
+        round_off: roundOffVal,
+        net_amount: netPayableVal,
+        total_amount: netPayableVal,
+        items: itemsArray,
+        freight_items: freightArray,
+        _needsDbSync: needsDbSync
+      };
+    });
+  }, [bills, inwardVouchers, outwardVouchers, processes, products, ledgers, companyData]);
+
+  useEffect(() => {
+    const toSync = normalizedBills.filter(
+      (b: any) => b._needsDbSync && b.id && !syncedBillIdsRef.current.has(Number(b.id))
+    );
+    if (toSync.length === 0) return;
+
+    toSync.forEach((b: any) => syncedBillIdsRef.current.add(Number(b.id)));
+
+    Promise.all(
+      toSync.map((b: any) => {
+        const parseIds = (x: any): number[] => {
+          if (Array.isArray(x)) return x.map(Number).filter(Boolean);
+          if (typeof x === "string") {
+            try { return JSON.parse(x).map(Number).filter(Boolean); } catch { return []; }
+          }
+          return [];
+        };
+        const inwIds = parseIds(b.inward_ids);
+        if (inwIds.length === 0 && b.inward_id) inwIds.push(Number(b.inward_id));
+        const outIds = parseIds(b.outward_ids);
+
+        const payload = {
+          bill_no: b.bill_no,
+          bill_date: String(b.bill_date || today).split("T")[0],
+          ledger_id: Number(b.ledger_id),
+          inward_id: inwIds.length > 0 ? inwIds[0] : (b.inward_id ? Number(b.inward_id) : null),
+          inward_ids: inwIds,
+          outward_ids: outIds,
+          product_id: b.product_id ? Number(b.product_id) : (b.items?.[0]?.product_id ? Number(b.items[0].product_id) : null),
+          process_id: b.process_id ? Number(b.process_id) : (b.items?.[0]?.process_id ? Number(b.items[0].process_id) : null),
+          quantity: Number(b.quantity) || 0,
+          rate: Number(b.rate || b.items?.[0]?.rate || 0),
+          amount: Number(b.amount) || 0,
+          gst_percent: Number(b.gst_percent || 0),
+          gst_amount: Number(b.gst_amount || 0),
+          cgst_percent: Number(b.cgst_percent ?? (Number(b.gst_percent || 0) / 2)),
+          cgst_amount: Number(b.cgst_amount || 0),
+          sgst_percent: Number(b.sgst_percent ?? (Number(b.gst_percent || 0) / 2)),
+          sgst_amount: Number(b.sgst_amount || 0),
+          round_off: Number(b.round_off || 0),
+          net_amount: Number(b.net_amount || 0),
+          total_amount: Number(b.total_amount || 0),
+          narration: b.narration || null,
+          dispatch_through: b.dispatch_through || null,
+          items: b.items || [],
+          freight_items: b.freight_items || []
+        };
+        return api.put(`/job-work-bills/${b.id}?fy=${activeFY}`, payload);
+      })
+    )
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["job-work-bills"] });
+        qc.invalidateQueries({ queryKey: ["receivables"] });
+      })
+      .catch(() => {});
+  }, [normalizedBills, activeFY, qc, today]);
+
   const colDefs: ColDef[] = [
     { field: "bill_no", headerName: "Bill No.", width: 120 },
     { field: "bill_date", headerName: "Date", width: 100 },
@@ -1437,7 +1610,7 @@ export default function JobWorkBillPage() {
       />
 
       <OrbxGrid
-        rowData={bills}
+        rowData={normalizedBills}
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
@@ -2000,9 +2173,9 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
   const sgstPercent = Number((gstPercent / 2).toFixed(2));
 
   const totalQty = lineItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-  const subtotalAmount = lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const freightAmount = Number(freightItem.amount) || 0;
-  const taxableBase = subtotalAmount + freightAmount;
+  const subtotalAmount = Number(lineItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0).toFixed(2));
+  const freightAmount = Number((Number(freightItem.amount) || 0).toFixed(2));
+  const taxableBase = Number((subtotalAmount + freightAmount).toFixed(2));
 
   const cgstAmount = Number(((taxableBase * cgstPercent) / 100).toFixed(2));
   const sgstAmount = Number(((taxableBase * sgstPercent) / 100).toFixed(2));

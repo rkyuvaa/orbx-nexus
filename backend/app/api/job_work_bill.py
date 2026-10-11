@@ -618,7 +618,10 @@ async def update_job_work_bill(
             gst_percent = :gp, gst_amount = :ga, cgst_percent = :cgp, cgst_amount = :cga,
             sgst_percent = :sgp, sgst_amount = :sga, round_off = :ro, net_amount = :namt,
             total_amount = :ta, narration = :narr, dispatch_through = :dt,
-            items = :items, freight_items = :fitems, updated_at = NOW()
+            items = :items, freight_items = :fitems,
+            pending_amount = CASE WHEN is_paid THEN 0 ELSE :ta END,
+            paid_amount = CASE WHEN is_paid THEN :ta ELSE COALESCE(paid_amount, 0) END,
+            updated_at = NOW()
         WHERE id = :id
         """),
         {
