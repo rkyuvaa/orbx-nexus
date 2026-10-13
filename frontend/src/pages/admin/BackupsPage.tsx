@@ -66,7 +66,9 @@ export default function BackupsPage() {
       setRestoring(true);
       setError(null);
       setSuccessMsg(null);
-      return api.post(`/backups/restore/${filename}`);
+      return api.post(`/backups/restore/${filename}`, null, {
+        timeout: 600000,
+      });
     },
     onSuccess: (_, filename) => {
       setRestoring(false);
@@ -89,6 +91,7 @@ export default function BackupsPage() {
       formData.append("file", file);
       return api.post("/backups/upload-restore", formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: 600000,
       });
     },
     onSuccess: () => {

@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 import os
 import datetime
@@ -83,28 +84,17 @@ async def create_backup(current_user: CurrentUser):
     env = os.environ.copy()
     env["PGPASSWORD"] = password
 
-    try:
-        result = subprocess.run(
-            ["pg_dump", "-h", host, "-p", port, "-U", user, "-F", "p", "-f", filepath, dbname],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Backup failed: {result.stderr}")
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        result = subprocess.run(
-            ["docker", "exec", "orbx_nexus_postgres", "pg_dump", "-U", user, "-F", "p", dbname],
-            capture_output=True,
-            text=False,
-            timeout=300,
-        )
-        if result.returncode != 0:
-            err = result.stderr.decode("utf-8", errors="ignore") if result.stderr else "Unknown error"
-            raise HTTPException(status_code=500, detail=f"Backup failed (docker): {err}")
-        with open(filepath, "wb") as f:
-            f.write(result.stdout)
+    cmd = ["pg_dump", "-h", host, "-p", str(port), "-U", user, "-F", "p", "-f", filepath, dbname]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        err = stderr.decode("utf-8", errors="ignore") if stderr else "Unknown error"
+        raise HTTPException(status_code=500, detail=f"Backup failed: {err}")
 
     stat = os.stat(filepath)
     return BackupResult(
@@ -126,68 +116,74 @@ async def restore_backup(filename: str, current_user: CurrentUser):
     env = os.environ.copy()
     env["PGPASSWORD"] = password
 
-    # Close active connections
-    await engine.dispose()
-
-    restore_success = False
-    error_msg = ""
-
-    # Attempt 1: Native psql inside container
+    # Disconnect idle client connections so restore doesn't encounter lock wait timeouts
     try:
-        result = subprocess.run(
-            ["psql", "-h", host, "-p", port, "-U", user, "-d", dbname, "-f", filepath],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        if result.returncode == 0:
-            restore_success = True
-        else:
-            error_msg = f"psql error: {result.stderr}"
-    except (FileNotFoundError, subprocess.TimeoutExpired) as ex:
-        error_msg = f"psql unavailable: {str(ex)}"
-
-    # Attempt 2: Fallback to docker exec if psql failed or missing
-    if not restore_success:
-        try:
-            subprocess.run(
-                ["docker", "cp", filepath, "orbx_nexus_postgres:/tmp/restore.sql"],
-                check=True,
-                timeout=60,
-            )
-            res = subprocess.run(
-                ["docker", "exec", "orbx_nexus_postgres", "psql", "-U", user, "-d", dbname, "-f", "/tmp/restore.sql"],
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
-            subprocess.run(
-                ["docker", "exec", "orbx_nexus_postgres", "rm", "-f", "/tmp/restore.sql"],
-                timeout=10,
-            )
-            if res.returncode == 0:
-                restore_success = True
-            else:
-                error_msg += f" | docker error: {res.stderr}"
-        except Exception as ex:
-            error_msg += f" | docker unavailable: {str(ex)}"
-
-    # Attempt 3: Pure Python async engine execution fallback
-    if not restore_success:
-        try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                sql_script = f.read()
-
-            async with engine.begin() as conn:
-                # Execute in blocks
-                await conn.execute(text(sql_script))
-                await conn.commit()
-            restore_success = True
-        except Exception as ex:
-            raise HTTPException(status_code=500, detail=f"Restore failed: {error_msg} | python fallback error: {str(ex)}")
+        async with engine.begin() as conn:
+            await conn.execute(text(f"""
+                SELECT pg_terminate_backend(pid) 
+                FROM pg_stat_activity 
+                WHERE datname = '{dbname}' 
+                  AND pid <> pg_backend_pid();
+            """))
+    except Exception as e:
+        print(f"[RESTORE] Note on terminating active connections: {e}")
 
     await engine.dispose()
+
+    # Detect if binary pg_dump or plain SQL text
+    is_binary = False
+    try:
+        with open(filepath, "rb") as f:
+            header = f.read(5)
+            if header.startswith(b"PGDMP"):
+                is_binary = True
+    except Exception:
+        pass
+
+    if is_binary:
+        cmd = [
+            "pg_restore",
+            "-h", host,
+            "-p", str(port),
+            "-U", user,
+            "-d", dbname,
+            "--clean",
+            "--if-exists",
+            "--no-owner",
+            filepath,
+        ]
+    else:
+        cmd = [
+            "psql",
+            "-h", host,
+            "-p", str(port),
+            "-U", user,
+            "-d", dbname,
+            "-f", filepath,
+        ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    stderr_text = stderr.decode("utf-8", errors="ignore") if stderr else ""
+
+    if proc.returncode != 0:
+        fatal_keywords = ["could not connect", "password authentication failed", "fatal:", "terminating connection"]
+        if any(kw in stderr_text.lower() for kw in fatal_keywords):
+            raise HTTPException(status_code=500, detail=f"Database restore failed: {stderr_text[:500]}")
+        print(f"[RESTORE] Non-fatal restore notice: {stderr_text[:500]}")
+
+    # Re-verify and ensure master schema after restore
+    try:
+        from app.db.schema_manager import ensure_master_schema
+        await ensure_master_schema(engine)
+    except Exception as ex:
+        print(f"[RESTORE] Post-restore schema sync notice: {ex}")
+
     return {"message": f"Successfully restored {filename}"}
 
 
@@ -202,9 +198,10 @@ async def upload_and_restore(current_user: CurrentUser, file: UploadFile = File(
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     filepath = os.path.join(BACKUP_DIR, f"uploaded_{timestamp}_{file.filename}")
 
-    content = await file.read()
+    # Stream chunks to prevent RAM overflow on large database files
     with open(filepath, "wb") as f:
-        f.write(content)
+        while chunk := await file.read(1024 * 1024):
+            f.write(chunk)
 
     return await restore_backup(filename=os.path.basename(filepath), current_user=current_user)
 

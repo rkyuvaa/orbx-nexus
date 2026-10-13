@@ -49,6 +49,8 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=480
       - PROJECT_NAME=OrbX Nexus ERP
       - API_V1_STR=/api/v1
+    volumes:
+      - ./backend/backups:/app/backups
 
   frontend:
     build: ./frontend
