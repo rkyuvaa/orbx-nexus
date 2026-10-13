@@ -63,7 +63,12 @@ async def lifespan(app: FastAPI):
         ):
             await conn.execute(text(f"ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS {col}"))
         # Migrate processes table if needed
-        for col in ("company_rate NUMERIC(15, 4) DEFAULT 0", "contractor_rate NUMERIC(15, 4) DEFAULT 0"):
+        for col in (
+            "company_rate NUMERIC(15, 4) DEFAULT 0",
+            "contractor_rate NUMERIC(15, 4) DEFAULT 0",
+            "gst_percent NUMERIC(5, 2) DEFAULT 0.0",
+            "process_ids VARCHAR(200)",
+        ):
             await conn.execute(text(f"ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS {col}"))
         # Migrate products table if needed
         await conn.execute(text("ALTER TABLE master.products ADD COLUMN IF NOT EXISTS weight NUMERIC(15, 3) DEFAULT 0"))

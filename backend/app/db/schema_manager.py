@@ -325,9 +325,6 @@ async def ensure_master_schema(engine: AsyncEngine):
     """Create master schema if it doesn't exist."""
     async with engine.begin() as conn:
         await conn.execute(text("CREATE SCHEMA IF NOT EXISTS master"))
-        await conn.execute(text("ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS gst_percent NUMERIC(5,2) DEFAULT 0.0"))
-        await conn.execute(text("ALTER TABLE master.processes ADD COLUMN IF NOT EXISTS process_ids VARCHAR(200)"))
-        await conn.commit()
 
 
 async def ensure_year_schema(year_str: str, engine: AsyncEngine):
@@ -417,7 +414,6 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         );
         """
         await conn.execute(text(alter_ddl))
-        await conn.commit()
 
     return schema
 
