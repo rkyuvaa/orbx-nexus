@@ -63,8 +63,39 @@ export const COMMON_PRINT_CSS = `
 
 export function getPageSizeCSS(paperSize: "A4" | "A5"): string {
   if (paperSize === "A5") return "A5 landscape";
-  return "A4";
+  return "A4 portrait";
 }
+
+export function getCompanyLogoHtml(showLogo: boolean, companyData?: any): string {
+  if (!showLogo) return "";
+  const comp = Array.isArray(companyData) ? companyData[0] : companyData;
+  const stored = localStorage.getItem("company_logo");
+  const logoSrc = stored || comp?.logo_path || "/logo-light.svg";
+  
+  if (comp?.logo_path && !stored) {
+    try { localStorage.setItem("company_logo", comp.logo_path); } catch (e) {}
+  }
+  
+  return logoSrc ? `<img src="${logoSrc}" alt="Logo" />` : "";
+}
+
+export const PRINT_TRIGGER_SCRIPT = `
+  <script>
+    function triggerPrint() {
+      window.print();
+      setTimeout(function() { window.close(); }, 500);
+    }
+    window.addEventListener('load', function() {
+      const img = document.querySelector('.logo-wrapper img');
+      if (img && !img.complete) {
+        img.onload = triggerPrint;
+        img.onerror = triggerPrint;
+      } else {
+        triggerPrint();
+      }
+    });
+  </script>
+`;
 
 export function injectPrintStyles(css: string): void {
   if (document.getElementById("orbx-print-styles")) return;

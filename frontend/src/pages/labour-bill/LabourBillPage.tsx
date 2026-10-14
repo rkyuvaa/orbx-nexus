@@ -28,7 +28,7 @@ import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 
 import { toWords } from "../../utils/numberToWords";
 
-import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
@@ -354,13 +354,7 @@ export default function LabourBillPage() {
 
 
 
-    const logoBase64 = localStorage.getItem("company_logo");
-
-    const logoHtml = (printConfig.showLogo && logoBase64)
-
-      ? `<img src="${logoBase64}" />`
-
-      : "";
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, companyData);
 
 
 
@@ -615,12 +609,7 @@ export default function LabourBillPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -659,13 +648,7 @@ export default function LabourBillPage() {
 
 
 
-    const logoBase64 = localStorage.getItem("company_logo");
-
-    const logoHtml = (printConfig.showLogo && logoBase64)
-
-      ? `<img src="${logoBase64}" />`
-
-      : "";
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, companyData);
 
 
 
@@ -1411,17 +1394,7 @@ export default function LabourBillPage() {
 
           </div>
 
-          <script>
-
-            window.onload = function() {
-
-              window.print();
-
-              setTimeout(function() { window.close(); }, 500);
-
-            };
-
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
 
         </body>
 

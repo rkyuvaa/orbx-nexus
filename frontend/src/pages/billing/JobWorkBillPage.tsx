@@ -23,7 +23,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { toWords } from "../../utils/numberToWords";
-import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
 
@@ -269,8 +269,7 @@ export default function JobWorkBillPage() {
       try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, companyData);
 
     const compData = Array.isArray(companyData) ? companyData[0] : companyData;
     const cName = compData?.name || "Company";
@@ -551,12 +550,7 @@ export default function JobWorkBillPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -999,8 +993,7 @@ export default function JobWorkBillPage() {
       try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, companyData);
 
     const fmtCell = (v: any, fmt: (n: number) => string): string =>
       v === null || v === undefined || v === "" || v === "-" ? "-" : fmt(v);
@@ -1235,12 +1228,7 @@ export default function JobWorkBillPage() {
               <div class="signature-label">Authorized Signatory for ${cName}</div>
             </div>
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);

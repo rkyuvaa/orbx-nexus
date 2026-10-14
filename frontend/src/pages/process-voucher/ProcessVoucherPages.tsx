@@ -20,7 +20,7 @@ const AutocompleteAny = Autocomplete as any;
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
-import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 
 export const resolveProcessName = (procId: any, processesList: any[]): string => {
@@ -97,11 +97,12 @@ export function InwardVoucherPage() {
     if (!printWindow) return;
 
     const savedConfig = localStorage.getItem("orbx_print_config");
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
     let printConfig = {
-      showLogo: true,
-      inwardPaperSize: "A4",
-      inwardTitle: "Inward Challan",
-      inwardTerms: "1. Received goods are subject to count & quality checks.\n2. Report discrepancies within 24 hours.",
+      showLogo: compData?.show_logo ?? true,
+      inwardPaperSize: compData?.inward_paper_size || "A4",
+      inwardTitle: compData?.inward_title || "Inward Challan",
+      inwardTerms: compData?.inward_terms || "1. Received goods are subject to count & quality checks.\n2. Report discrepancies within 24 hours.",
     };
     if (savedConfig) {
       try {
@@ -109,10 +110,7 @@ export function InwardVoucherPage() {
       } catch (e) {}
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64)
-      ? `<img src="${logoBase64}" />` : "";
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, compData);
     const cName = compData?.name || compData?.company_name || "SRI METAL";
     const cAddress = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
@@ -260,12 +258,7 @@ export function InwardVoucherPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -895,11 +888,12 @@ export function OutwardVoucherPage() {
     if (!printWindow) return;
 
     const savedConfig = localStorage.getItem("orbx_print_config");
+    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
     let printConfig = {
-      showLogo: true,
-      outwardPaperSize: "A5",
-      outwardTitle: "Delivery Note",
-      outwardTerms: "1. Goods once sold/delivered cannot be taken back.\n2. Subject to company terms of carriage.",
+      showLogo: compData?.show_logo ?? true,
+      outwardPaperSize: compData?.outward_paper_size || "A4",
+      outwardTitle: compData?.outward_title || "Delivery Note",
+      outwardTerms: compData?.outward_terms || "1. Goods once sold/delivered cannot be taken back.\n2. Subject to company terms of carriage.",
     };
     if (savedConfig) {
       try {
@@ -912,12 +906,7 @@ export function OutwardVoucherPage() {
       } catch (e) {}
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64)
-      ? `<img src="${logoBase64}" />`
-      : "";
-
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, compData);
     const cName = compData?.name || compData?.company_name || "SRI METAL";
     const cAddress = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
@@ -1186,12 +1175,7 @@ export function OutwardVoucherPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
