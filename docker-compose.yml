@@ -59,7 +59,9 @@ services:
     depends_on:
       - backend
     ports:
-      - "8090:80"
+      - "8090:8090"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 
 volumes:
   orbx_nexus_postgres_data:
