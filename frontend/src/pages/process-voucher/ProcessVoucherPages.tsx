@@ -177,7 +177,7 @@ export function InwardVoucherPage() {
         <head>
           <title>Print Inward - ${row.inward_no}</title>
           <style>
-            @page { size: ${getPageSizeCSS(printConfig.inwardPaperSize as any)}; margin: 15mm; }
+            @page { size: ${getPageSizeCSS(printConfig.inwardPaperSize as any)}; margin: 10mm 12mm; }
             ${COMMON_PRINT_CSS}
           </style>
         </head>
@@ -1067,17 +1067,17 @@ export function OutwardVoucherPage() {
         
         rowsHtml += `<tr>
           <td style="text-align: center; white-space: nowrap;">${idx + 1}</td>
-          <td rowspan="${rowspanCount}" style="vertical-align: top; font-weight: 700; padding-top: 8px; white-space: nowrap;">${r.jobNo}</td>
-          <td style="font-weight: 600; white-space: nowrap;">${r.itemName}</td>
-          <td style="white-space: nowrap;">${r.processName}</td>
+          <td rowspan="${rowspanCount}" style="vertical-align: top; font-weight: 700; padding-top: 4px; white-space: nowrap;">${r.jobNo}</td>
+          <td style="font-weight: 600;">${r.itemName}</td>
+          <td>${r.processName}</td>
           <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
           <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.total_weight)} kg</td>
         </tr>`;
       } else {
         rowsHtml += `<tr>
           <td style="text-align: center; white-space: nowrap;">${idx + 1}</td>
-          <td style="font-weight: 600; white-space: nowrap;">${r.itemName}</td>
-          <td style="white-space: nowrap;">${r.processName}</td>
+          <td style="font-weight: 600;">${r.itemName}</td>
+          <td>${r.processName}</td>
           <td style="text-align: right; white-space: nowrap;">${formatQty(r.quantity)}</td>
           <td style="text-align: right; font-weight: 600; white-space: nowrap;">${formatWeight(r.total_weight)} kg</td>
         </tr>`;
@@ -1090,7 +1090,7 @@ export function OutwardVoucherPage() {
         <head>
           <title>Print Outward - ${row.outward_no}</title>
           <style>
-            @page { size: ${getPageSizeCSS(printConfig.outwardPaperSize as any)}; margin: 15mm; }
+            @page { size: ${getPageSizeCSS(printConfig.outwardPaperSize as any)}; margin: 10mm 12mm; }
             ${COMMON_PRINT_CSS}
           </style>
         </head>
@@ -1127,25 +1127,24 @@ export function OutwardVoucherPage() {
             </div>
           </div>
           <table class="items-table">
-            <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-              <tr style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-                <th style="width: 50px; text-align: center; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">S.No</th>
-                <th style="width: 120px; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Job Order No</th>
-                <th style="white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Product Description</th>
-                <th style="white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">NATURE OF PROCESS</th>
-                <th style="text-align: right; width: 70px; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Quantity</th>
-                <th style="text-align: right; width: 120px; white-space: nowrap; background-color: #0f5132 !important; color: #ffffff !important;">Total Wt (kg)</th>
+            <thead>
+              <tr>
+                <th style="width: 45px; text-align: center; white-space: nowrap;">S.No</th>
+                <th style="width: 120px; white-space: nowrap;">Job Order No</th>
+                <th>Product Description</th>
+                <th>NATURE OF PROCESS</th>
+                <th style="text-align: right; width: 75px; white-space: nowrap;">Quantity</th>
+                <th style="text-align: right; width: 110px; white-space: nowrap;">Total Wt (kg)</th>
               </tr>
             </thead>
             <tbody>
               ${rowsHtml}
             </tbody>
             <tfoot>
-              <tr><td colspan="6" style="height: 100px; border: none; background: transparent;"></td></tr>
               <tr style="border-top: 2px solid #0f5132;">
-                <td colspan="4" style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">Total:</td>
-                <td style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">${formatQty(totalOutwardQty)}</td>
-                <td style="text-align: right; font-weight: 700; padding: 6px 8px; white-space: nowrap;">${formatWeight(totalOutwardWeight)} kg</td>
+                <td colspan="4" style="text-align: right; font-weight: 700; padding: 5px 6px; white-space: nowrap;">Total:</td>
+                <td style="text-align: right; font-weight: 700; padding: 5px 6px; white-space: nowrap;">${formatQty(totalOutwardQty)}</td>
+                <td style="text-align: right; font-weight: 700; padding: 5px 6px; white-space: nowrap;">${formatWeight(totalOutwardWeight)} kg</td>
               </tr>
             </tfoot>
           </table>
