@@ -889,6 +889,8 @@ export default function OrbxGrid<T = any>({
                             width: col.width,
                             minWidth: col.minWidth || col.width || 80,
                             maxWidth: col.maxWidth,
+                            overflow: col.maxWidth ? "hidden" : undefined,
+                            textOverflow: col.maxWidth ? "ellipsis" : undefined,
                           }}
                         >
                           {renderCellContent(row, col)}

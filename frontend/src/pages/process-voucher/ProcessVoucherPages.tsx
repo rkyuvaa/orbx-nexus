@@ -1187,10 +1187,26 @@ export function OutwardVoucherPage() {
     { field: "outward_date", headerName: "Date", width: 100, maxWidth: 100 },
     { field: "ledger_id", headerName: "Customer Name", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
     { field: "serial_no", headerName: "Serial No", width: 95, maxWidth: 95 },
-    { field: "inward_id", headerName: "Inward Ref.", width: 160, cellRenderer: (p: any) => {
+    { field: "inward_id", headerName: "Inward Ref.", width: 160, maxWidth: 200, cellRenderer: (p: any) => {
       const ids = p.data?.inward_ids || (p.data?.inward_id ? [p.data.inward_id] : []);
       const names = ids.map((id: number) => inwardMap[id]).filter(Boolean);
-      return names.length > 0 ? names.join(", ") : "-";
+      const text = names.length > 0 ? names.join(", ") : "-";
+      return (
+        <Tooltip title={text} arrow placement="top">
+          <span
+            style={{
+              display: "inline-block",
+              maxWidth: "200px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              verticalAlign: "middle",
+            }}
+          >
+            {text}
+          </span>
+        </Tooltip>
+      );
     } },
     { field: "quantity", headerName: "Total Qty", width: 95, maxWidth: 95, type: "numericColumn" },
     { field: "total_weight", headerName: "Net Weight (kg)", width: 140, type: "numericColumn", valueFormatter: (p) => `${formatWeight(p.value)} kg` },
