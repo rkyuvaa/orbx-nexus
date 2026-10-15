@@ -535,9 +535,9 @@ export function SalaryVoucherPage() {
       width: 125,
       type: "numericColumn",
       cellRenderer: (p) => (
-        <span style={{ fontWeight: 800, color: "#0f5132" }}>
+        <Typography component="span" variant="body2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
           ₹{formatAmount(p.value || 0)}
-        </span>
+        </Typography>
       )
     },
     {
@@ -622,7 +622,7 @@ export function SalaryVoucherPage() {
       {/* CREATE / EDIT SALARY VOUCHER DIALOG */}
       <Dialog open={open} onClose={() => { setOpen(false); setEditing(null); }} maxWidth="md" fullWidth>
         <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))}>
-          <DialogTitle sx={{ fontWeight: 800, color: "#0f5132" }}>
+          <DialogTitle sx={{ fontWeight: 800, color: "text.primary" }}>
             {editing ? `Edit Salary Voucher (${editing.voucher_no})` : "New Staff Salary Voucher"}
           </DialogTitle>
           <DialogContent>
@@ -696,14 +696,14 @@ export function SalaryVoucherPage() {
                     variant="outlined"
                     sx={{
                       p: 2,
-                      bgcolor: "#fcfdfc",
+                      bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "#fcfdfc",
                       borderRadius: "8px",
-                      border: "1px solid #d1fae5"
+                      borderColor: "divider"
                     }}
                   >
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5, flexWrap: "wrap", gap: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", display: "flex", alignItems: "center", gap: 0.8 }}>
-                        <EventAvailable fontSize="small" sx={{ color: "#0f5132" }} />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", display: "flex", alignItems: "center", gap: 0.8 }}>
+                        <EventAvailable fontSize="small" color="primary" />
                         Attendance Record for {MONTH_NAMES[watchMonth - 1]} {watchYear}
                         {attendanceStats && ` (${attendanceStats.days_in_month} Calendar Days)`}
                       </Typography>
@@ -721,36 +721,36 @@ export function SalaryVoucherPage() {
 
                     <Grid container spacing={1}>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: "#f0fdf4", borderRadius: "6px", textAlign: "center", border: "1px solid #bbf7d0" }}>
-                          <Typography variant="caption" sx={{ color: "#166534", fontWeight: 700 }}>PRESENT</Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#15803d" }}>
+                        <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#bbf7d0" }}>
+                          <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534", fontWeight: 700 }}>PRESENT</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>
                             {attendanceStats?.present_days ?? 0}
                           </Typography>
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Full Day (1.0)</Typography>
                         </Box>
                       </Grid>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: "#fffbeb", borderRadius: "6px", textAlign: "center", border: "1px solid #fde68a" }}>
-                          <Typography variant="caption" sx={{ color: "#92400e", fontWeight: 700 }}>HALF DAY</Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#b45309" }}>
+                        <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.1)" : "#fffbeb", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.3)" : "#fde68a" }}>
+                          <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#92400e", fontWeight: 700 }}>HALF DAY</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }}>
                             {attendanceStats?.half_days ?? 0}
                           </Typography>
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Half Day (0.5)</Typography>
                         </Box>
                       </Grid>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: "#fef2f2", borderRadius: "6px", textAlign: "center", border: "1px solid #fecaca" }}>
-                          <Typography variant="caption" sx={{ color: "#991b1b", fontWeight: 700 }}>ABSENT</Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#b91c1c" }}>
+                        <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.1)" : "#fef2f2", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.3)" : "#fecaca" }}>
+                          <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#991b1b", fontWeight: 700 }}>ABSENT</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }}>
                             {attendanceStats?.absent_days ?? 0}
                           </Typography>
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Unpaid</Typography>
                         </Box>
                       </Grid>
                       <Grid size={{ xs: 6, sm: 3 }}>
-                        <Box sx={{ p: 1, bgcolor: "#eff6ff", borderRadius: "6px", textAlign: "center", border: "1px solid #bfdbfe" }}>
-                          <Typography variant="caption" sx={{ color: "#1e40af", fontWeight: 700 }}>WORKING DAYS</Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#1d4ed8" }}>
+                        <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(59, 130, 246, 0.1)" : "#eff6ff", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe" }}>
+                          <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1e40af", fontWeight: 700 }}>WORKING DAYS</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }}>
                             {attendanceStats?.working_days ?? 0}
                           </Typography>
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Present + (0.5×Half)</Typography>
@@ -759,7 +759,7 @@ export function SalaryVoucherPage() {
                     </Grid>
 
                     {attendanceStats && attendanceStats.total_ot_hours > 0 && (
-                      <Typography variant="caption" sx={{ mt: 1, display: "block", color: "#475569" }}>
+                      <Typography variant="caption" sx={{ mt: 1, display: "block", color: "text.secondary" }}>
                         Logged Overtime: <strong>{attendanceStats.total_ot_hours} hrs</strong> | Total Working Hours: <strong>{attendanceStats.total_hours} hrs</strong>
                       </Typography>
                     )}
@@ -772,9 +772,10 @@ export function SalaryVoucherPage() {
                 <Box
                   sx={{
                     p: 1.5,
-                    bgcolor: "#f0fdf4",
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "#f0fdf4",
                     borderRadius: "8px",
-                    border: "1px solid #86efac",
+                    border: "1px solid",
+                    borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#86efac",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -783,8 +784,8 @@ export function SalaryVoucherPage() {
                   }}
                 >
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Calculate sx={{ color: "#15803d" }} />
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: "#15803d" }}>
+                    <Calculate sx={{ color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }} />
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>
                       Formula: Working Days ({watchDaysWorked || 0}) × Per Day Salary (₹{watchPerDaySalary || 0}) = Payable Amount: ₹{formatAmount(payable)}
                     </Typography>
                   </Box>
@@ -884,7 +885,7 @@ export function SalaryVoucherPage() {
                   disabled
                   slotProps={{
                     inputLabel: { shrink: true },
-                    htmlInput: { style: { fontWeight: 900, color: "#0f5132", fontSize: "1.05rem" } }
+                    htmlInput: { style: { fontWeight: 900, fontSize: "1.05rem" } }
                   }}
                   helperText="Payable + Allowances - Deductions"
                 />
@@ -909,7 +910,7 @@ export function SalaryVoucherPage() {
               type="submit"
               variant="contained"
               disabled={saveMutation.isPending}
-              sx={{ bgcolor: "#0f5132", "&:hover": { bgcolor: "#0b3d26" }, fontWeight: 700, px: 3 }}
+              sx={{ fontWeight: 700, px: 3 }}
             >
               {saveMutation.isPending ? "Saving..." : editing ? "Update Voucher" : "Save Salary Voucher"}
             </Button>
@@ -919,14 +920,13 @@ export function SalaryVoucherPage() {
 
       {/* VIEW / PRINT SALARY SLIP DIALOG */}
       <Dialog open={!!viewVoucher} onClose={() => setViewVoucher(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800, color: "#0f5132", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <DialogTitle sx={{ fontWeight: 800, color: "text.primary", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>Staff Salary Voucher Slip</span>
           <Button
             size="small"
             variant="contained"
             startIcon={<Print />}
             onClick={() => window.print()}
-            sx={{ bgcolor: "#0f5132", "&:hover": { bgcolor: "#0b3d26" } }}
           >
             Print
           </Button>
@@ -935,7 +935,7 @@ export function SalaryVoucherPage() {
           {viewVoucher && (
             <Box sx={{ p: 1 }}>
               <Box sx={{ textAlign: "center", mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 800, color: "#1e293b" }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: "text.primary" }}>
                   SALARY VOUCHER
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
@@ -943,7 +943,7 @@ export function SalaryVoucherPage() {
                 </Typography>
               </Box>
 
-              <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: "#f8fafc" }}>
+              <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8fafc" }}>
                 <Grid container spacing={1}>
                   <Grid size={6}>
                     <Typography variant="caption" color="text.secondary">Voucher No:</Typography>
@@ -955,7 +955,7 @@ export function SalaryVoucherPage() {
                   </Grid>
                   <Grid size={12}>
                     <Typography variant="caption" color="text.secondary">Staff Name:</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                    <Typography variant="body1" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                       {viewVoucher.staff_name || staffMap[viewVoucher.ledger_id]?.name || `Staff #${viewVoucher.ledger_id}`}
                       {viewVoucher.staff_code && ` (${viewVoucher.staff_code})`}
                     </Typography>
@@ -963,37 +963,37 @@ export function SalaryVoucherPage() {
                 </Grid>
               </Paper>
 
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "#1e293b" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "text.primary" }}>
                 Attendance & Salary Calculation:
               </Typography>
-              <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: "#ffffff" }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed #e2e8f0" }}>
+              <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
                   <Typography variant="body2">Working Days (from Attendance):</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>{viewVoucher.days_worked} Days</Typography>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed #e2e8f0" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
                   <Typography variant="body2">Per Day Salary Rate:</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>₹{formatAmount(viewVoucher.per_day_salary || 0)}</Typography>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.75, bgcolor: "#f0fdf4", px: 1, borderRadius: "4px", mt: 0.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: "#166534" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.75, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", px: 1, borderRadius: "4px", mt: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
                     Payable Amount (Working Days × Rate):
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 800, color: "#166534" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
                     ₹{formatAmount(viewVoucher.payable_amount || (Number(viewVoucher.days_worked || 0) * Number(viewVoucher.per_day_salary || 0)))}
                   </Typography>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed #e2e8f0", mt: 1 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider", mt: 1 }}>
                   <Typography variant="body2">Allowances / Incentives (+):</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>₹{formatAmount(viewVoucher.allowances || 0)}</Typography>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed #e2e8f0" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
                   <Typography variant="body2">Deductions / Advances (-):</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#b91c1c" }}>₹{formatAmount(viewVoucher.deductions || 0)}</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "error.main" }}>₹{formatAmount(viewVoucher.deductions || 0)}</Typography>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 1, mt: 1, borderTop: "2px solid #0f5132" }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0f5132" }}>Net Payable Salary:</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 900, color: "#0f5132" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", py: 1, mt: 1, borderTop: "2px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>Net Payable Salary:</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 900, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                     ₹{formatAmount(viewVoucher.net_salary || 0)}
                   </Typography>
                 </Box>

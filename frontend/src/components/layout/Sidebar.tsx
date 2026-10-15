@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box, List, ListItemButton, ListItemIcon, ListItemText,
   Collapse, Typography, Drawer, Divider, Tooltip, useMediaQuery,
-  Autocomplete, TextField, InputAdornment, IconButton,
+  Autocomplete, TextField, InputAdornment, IconButton, useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import Dashboard from "@mui/icons-material/Dashboard";
 import Business from "@mui/icons-material/Business";
 import AccountBalance from "@mui/icons-material/AccountBalance";
@@ -229,25 +230,28 @@ const NavNode = memo(function NavNode({
     }
   };
 
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+
   const getSelectedBg = () => {
     if (depth > 0) {
-      return "rgba(4, 205, 135, 0.15) !important"; // #04CD87, 15% faded
+      return isDark ? "rgba(22, 196, 127, 0.16) !important" : "rgba(22, 196, 127, 0.12) !important";
     }
-    return "rgba(255, 255, 255, 0.12) !important"; // parent selected bg
+    return isDark ? "rgba(255, 255, 255, 0.12) !important" : "rgba(0, 0, 0, 0.06) !important";
   };
 
   const getSelectedHoverBg = () => {
     if (depth > 0) {
-      return "rgba(4, 205, 135, 0.22) !important";
+      return isDark ? "rgba(22, 196, 127, 0.25) !important" : "rgba(22, 196, 127, 0.18) !important";
     }
-    return "rgba(255, 255, 255, 0.18) !important";
+    return isDark ? "rgba(255, 255, 255, 0.18) !important" : "rgba(0, 0, 0, 0.10) !important";
   };
 
   const getSelectedTextColor = () => {
     if (depth > 0) {
-      return "#04CD87 !important"; // sub-menu active text
+      return isDark ? "#16C47F !important" : "#0f5132 !important";
     }
-    return "#FFFFFF !important";
+    return isDark ? "#FFFFFF !important" : "#0E1F18 !important";
   };
 
   // Base list item button styles matching exact pad/gap grid specification
@@ -256,7 +260,7 @@ const NavNode = memo(function NavNode({
     transition: "none",
     mb: "2px",
     mx: "8px",
-    color: "rgba(255, 255, 255, 0.7)",
+    color: isDark ? "rgba(230, 240, 236, 0.72)" : "#475569",
     "&.Mui-selected": {
       backgroundColor: getSelectedBg(),
       color: getSelectedTextColor(),
@@ -264,24 +268,24 @@ const NavNode = memo(function NavNode({
         backgroundColor: getSelectedHoverBg(),
       },
     },
-    // Hover styles for inactive menu items (white transparent hover on dark green)
+    // Hover styles for inactive menu items
     "&:hover": {
-      backgroundColor: "rgba(255, 255, 255, 0.08) !important",
-      color: "#FFFFFF",
+      backgroundColor: isDark ? "rgba(255, 255, 255, 0.06) !important" : "rgba(0, 0, 0, 0.04) !important",
+      color: isDark ? "#FFFFFF" : "#0E1F18",
       "& .MuiListItemIcon-root": {
-        color: "#FFFFFF",
+        color: isDark ? "#FFFFFF" : "#0E1F18",
       },
       "& .MuiTypography-root": {
-        color: "#FFFFFF",
+        color: isDark ? "#FFFFFF" : "#0E1F18",
       },
     },
   };
 
   // Specific styles for active Parent Menu item (depth === 0)
   const activeParentStyle = depth === 0 && isSelected ? {
-    backgroundColor: "rgba(255, 255, 255, 0.12) !important",
-    color: "#FFFFFF !important",
-    borderLeft: "3px solid #00C853",
+    backgroundColor: isDark ? "rgba(255, 255, 255, 0.10) !important" : "rgba(0, 0, 0, 0.05) !important",
+    color: isDark ? "#FFFFFF !important" : "#0E1F18 !important",
+    borderLeft: "3px solid #16C47F",
     borderRadius: "8px",
   } : {
     borderLeft: "3px solid transparent",
@@ -313,7 +317,7 @@ const NavNode = memo(function NavNode({
           <ListItemIcon
             sx={{
               minWidth: 0,
-              color: (isActive || isChildActive) ? getSelectedTextColor() : "rgba(255, 255, 255, 0.7)",
+              color: (isActive || isChildActive) ? getSelectedTextColor() : (isDark ? "rgba(230, 240, 236, 0.7)" : "#64748B"),
               display: "flex",
               justifyContent: "center",
             }}
@@ -344,7 +348,7 @@ const NavNode = memo(function NavNode({
           sx={{
             minWidth: "20px",
             mr: "12px",
-            color: isSelected ? (depth === 0 ? "#FFFFFF" : getSelectedTextColor()) : "rgba(255, 255, 255, 0.7)",
+            color: isSelected ? (depth === 0 ? (isDark ? "#FFFFFF" : "#0E1F18") : getSelectedTextColor()) : (isDark ? "rgba(230, 240, 236, 0.7)" : "#64748B"),
             display: "flex",
             alignItems: "center",
             transition: "none",
@@ -358,7 +362,7 @@ const NavNode = memo(function NavNode({
               sx={{
                 fontSize: depth === 0 ? "14px" : "13px",
                 fontWeight: isSelected ? 600 : 500,
-                color: isSelected ? (depth === 0 ? "#FFFFFF" : getSelectedTextColor()) : "rgba(255, 255, 255, 0.7)",
+                color: isSelected ? (depth === 0 ? (isDark ? "#FFFFFF" : "#0E1F18") : getSelectedTextColor()) : (isDark ? "rgba(230, 240, 236, 0.7)" : "#64748B"),
                 lineHeight: "20px",
                 letterSpacing: "0.1px",
                 transition: "none",
@@ -370,9 +374,9 @@ const NavNode = memo(function NavNode({
         />
         {hasChildren && (
           isMenuOpen ? (
-            <ExpandLess sx={{ color: isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.7)", fontSize: 16 }} />
+            <ExpandLess sx={{ color: isSelected ? (isDark ? "#FFFFFF" : "#0E1F18") : (isDark ? "rgba(230, 240, 236, 0.7)" : "#64748B"), fontSize: 16 }} />
           ) : (
-            <ExpandMore sx={{ color: isSelected ? "#FFFFFF" : "rgba(255, 255, 255, 0.7)", fontSize: 16 }} />
+            <ExpandMore sx={{ color: isSelected ? (isDark ? "#FFFFFF" : "#0E1F18") : (isDark ? "rgba(230, 240, 236, 0.7)" : "#64748B"), fontSize: 16 }} />
           )
         )}
       </ListItemButton>
@@ -447,7 +451,9 @@ export default function Sidebar() {
     }));
   };
 
-  const logoSrc = "/logo-dark.svg";
+  const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const logoSrc = themeMode === "dark" ? "/logo-dark.svg" : "/logo-light.svg";
 
   return (
     <Drawer
@@ -466,8 +472,8 @@ export default function Sidebar() {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.shorter,
           }),
-          backgroundColor: "#023020 !important",
-          borderRight: "1px solid rgba(255, 255, 255, 0.1)",
+          backgroundColor: isDark ? "#0A1712 !important" : "#FFFFFF !important",
+          borderRight: isDark ? "1px solid rgba(255, 255, 255, 0.09)" : "1px solid rgba(0, 0, 0, 0.08)",
           height: "100vh",
           display: "flex",
           flexDirection: "column",
@@ -517,12 +523,13 @@ export default function Sidebar() {
             slotProps={{
               paper: {
                 sx: {
-                  bgcolor: "#023020",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  color: "#FFFFFF",
+                  bgcolor: "background.paper",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  color: "text.primary",
                   "& .MuiAutocomplete-groupLabel": {
-                    bgcolor: "rgba(255, 255, 255, 0.05)",
-                    color: "rgba(255, 255, 255, 0.5)",
+                    bgcolor: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)",
+                    color: "text.secondary",
                     fontWeight: 700,
                     fontSize: "0.7rem",
                     py: "4px",
@@ -532,14 +539,13 @@ export default function Sidebar() {
                     fontSize: "0.8rem",
                     py: "6px",
                     px: "12px",
-                    color: "rgba(255, 255, 255, 0.8)",
+                    color: "text.primary",
                     '&[aria-selected="true"]': {
-                      bgcolor: "rgba(4, 205, 135, 0.2) !important",
-                      color: "#04CD87",
+                      bgcolor: "rgba(22, 196, 127, 0.16) !important",
+                      color: isDark ? "#16C47F" : "#0f5132",
                     },
                     "&.Mui-focused": {
-                      bgcolor: "rgba(255, 255, 255, 0.08) !important",
-                      color: "#FFFFFF",
+                      bgcolor: isDark ? "rgba(255, 255, 255, 0.08) !important" : "rgba(0, 0, 0, 0.05) !important",
                     },
                   },
                 },
@@ -559,7 +565,7 @@ export default function Sidebar() {
                       startAdornment: (
                         <>
                           <InputAdornment position="start">
-                            <SearchIcon sx={{ color: "rgba(255, 255, 255, 0.5)", fontSize: 18 }} />
+                            <SearchIcon sx={{ color: "text.secondary", fontSize: 18 }} />
                           </InputAdornment>
                           {slotProps?.input?.startAdornment}
                         </>
@@ -568,25 +574,25 @@ export default function Sidebar() {
                   }}
                 sx={{
                   "& .MuiOutlinedInput-root": {
-                    color: "#FFFFFF",
+                    color: "text.primary",
                     fontSize: "0.8rem",
-                    bgcolor: "rgba(255, 255, 255, 0.05)",
+                    bgcolor: isDark ? "rgba(0, 0, 0, 0.25)" : "rgba(0, 0, 0, 0.03)",
                     borderRadius: "8px",
                     padding: "4px 8px",
                     "& fieldset": {
-                      borderColor: "rgba(255, 255, 255, 0.1)",
+                      borderColor: "divider",
                     },
                     "&:hover fieldset": {
-                      borderColor: "rgba(255, 255, 255, 0.3)",
+                      borderColor: alpha("#16C47F", 0.35),
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: "#04CD87",
+                      borderColor: "#16C47F",
                       borderWidth: "1px",
                     },
                   },
                   "& .MuiInputBase-input::placeholder": {
-                    color: "rgba(255, 255, 255, 0.4)",
-                    opacity: 1,
+                    color: "text.secondary",
+                    opacity: 0.7,
                   },
                 }}
               />
@@ -604,17 +610,17 @@ export default function Sidebar() {
                 mx: 0.5,
                 borderRadius: "8px",
                 transition: "none",
-                bgcolor: "rgba(255, 255, 255, 0.03)",
+                bgcolor: isDark ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)",
                 "&:hover": {
-                  bgcolor: "rgba(255, 255, 255, 0.08) !important",
-                  color: "#FFFFFF",
+                  bgcolor: isDark ? "rgba(255, 255, 255, 0.08) !important" : "rgba(0, 0, 0, 0.05) !important",
+                  color: "text.primary",
                 },
               }}
             >
               <ListItemIcon
                 sx={{
                   minWidth: 0,
-                  color: "rgba(255, 255, 255, 0.7)",
+                  color: "text.secondary",
                   display: "flex",
                   justifyContent: "center",
                 }}
@@ -626,7 +632,7 @@ export default function Sidebar() {
         )}
       </Box>
 
-      <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.1)", mx: 2, mb: 1 }} />
+      <Divider sx={{ borderColor: "divider", mx: 2, mb: 1 }} />
 
       {/* 3. Nav Items List (scrolls independently) */}
       <Box sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", py: 0.25 }}>

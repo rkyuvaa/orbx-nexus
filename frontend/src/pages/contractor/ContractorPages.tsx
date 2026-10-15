@@ -833,7 +833,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               {type === "job-work" ? (
                 <Grid size={{ xs: 12 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
                       Registered Process Items
                     </Typography>
                     <Button size="small" variant="outlined" onClick={handleAddLine} sx={{ textTransform: "none" }}>
@@ -847,7 +847,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                   )}
                   <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                     <Table size="small">
-                      <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                      <TableHead>
                         <TableRow>
                           <TableCell sx={{ width: 45, fontWeight: 700, py: 1, px: 1 }} align="center">S. No</TableCell>
                           <TableCell sx={{ minWidth: 160, fontWeight: 700, py: 1, px: 1 }}>Product *</TableCell>
@@ -971,7 +971,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               ) : type === "payment" ? (
                 <Grid size={{ xs: 12 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
                       Pending Job Work Registers
                     </Typography>
                     <Typography variant="caption" sx={{ color: "text.secondary" }}>
@@ -999,7 +999,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                     <>
                       <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                         <Table size="small">
-                          <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                          <TableHead>
                             <TableRow>
                               <TableCell sx={{ width: 40 }} align="center">
                                 <Checkbox
@@ -1044,7 +1044,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                           </TableBody>
                         </Table>
                       </Paper>
-                      <Paper variant="outlined" sx={{ borderRadius: "8px", mt: 1.5, px: 2, py: 1.5, bgcolor: "#f4f9f6" }}>
+                      <Paper variant="outlined" sx={{ borderRadius: "8px", mt: 1.5, px: 2, py: 1.5, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
                         <Grid container spacing={2}>
                           <Grid size={{ xs: 3 }}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Total Qty</Typography>

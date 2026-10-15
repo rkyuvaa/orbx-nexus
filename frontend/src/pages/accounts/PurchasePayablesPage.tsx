@@ -328,7 +328,7 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ pb: 1, color: "#0f5132", fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <DialogTitle sx={{ pb: 1, color: "text.primary", fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>Supplier Ledger Statement & Payment — {supplierName}</span>
         <Button
           startIcon={<PrintIcon />}
@@ -343,12 +343,12 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         {/* Supplier Chronological Date-Wise Detailed Ledger Statement */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", mb: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132", mb: 1 }}>
           Supplier Date-Wise Detailed Ledger (Debit / Credit Statement from NIL)
         </Typography>
         <Paper variant="outlined" sx={{ mb: 3, borderRadius: "8px", overflow: "hidden" }}>
           <Table size="small">
-            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+            <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
                 <TableCell sx={{ fontWeight: 700, width: 120 }}>Voucher No.</TableCell>
@@ -386,7 +386,7 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
                 </TableRow>
               ))}
             </TableBody>
-            <TableFooter sx={{ bgcolor: "#f4f9f6" }}>
+            <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
                 <TableCell colSpan={4} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
                 <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
@@ -398,7 +398,7 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
         </Paper>
 
         {/* Record Payment Form */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0f5132", mb: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132", mb: 1 }}>
           Record New Payment Details
         </Typography>
         <Grid container spacing={2}>
@@ -638,7 +638,7 @@ export default function PurchasePayablesPage() {
               {supplierList.map((row, idx) => (
                 <TableRow key={row.supplier} hover>
                   <TableCell align="center" sx={{ fontWeight: 600 }}>{idx + 1}</TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#0f5132", fontSize: 13.5 }}>{row.supplier}</TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132", fontSize: 13.5 }}>{row.supplier}</TableCell>
                   <TableCell align="center" sx={{ fontSize: 13 }}>
                     <Chip label={`${row.pendingItems.length} bill${row.pendingItems.length === 1 ? '' : 's'}`} size="small" variant="outlined" />
                   </TableCell>
@@ -693,7 +693,7 @@ export default function PurchasePayablesPage() {
                 </TableRow>
               )}
             </TableBody>
-            <TableFooter sx={{ position: "sticky", bottom: 0, bgcolor: (t) => t.palette.mode === "dark" ? "#1e293b" : "#e2e8f0" }}>
+            <TableFooter sx={{ position: "sticky", bottom: 0, bgcolor: (t) => t.palette.mode === "dark" ? "background.paper" : "#e2e8f0" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700, py: 1.2 } }}>
                 <TableCell colSpan={6} sx={{ fontWeight: 700, fontSize: 13, textAlign: "right" }}>
                   Total Pending Supplier Payable:

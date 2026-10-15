@@ -490,7 +490,7 @@ export default function ContractorBalancePage() {
             <>
               <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden", mb: 3 }}>
                 <Table size="small">
-                  <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                  <TableHead>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Doc / Entry No.</TableCell>
@@ -502,9 +502,10 @@ export default function ContractorBalancePage() {
                       <TableCell
                         sx={{
                           fontWeight: 700,
-                          bgcolor: "rgba(2,48,32,0.06)",
-                          borderLeft: "2px solid #023020",
-                          color: "#023020",
+                          bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22,196,127,0.12)" : "rgba(2,48,32,0.06)",
+                          borderLeft: "2px solid",
+                          borderColor: "primary.main",
+                          color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020",
                         }}
                         align="right"
                       >
@@ -686,12 +687,9 @@ export default function ContractorBalancePage() {
                     startIcon={<PrintIcon />}
                     onClick={() => handlePrintContractorStatement(selectedContractor, transactions, companyData, activeFY)}
                     sx={{
-                      borderColor: "#023020",
-                      color: "#023020",
                       fontWeight: 700,
                       px: 3,
                       height: 40,
-                      "&:hover": { bgcolor: "rgba(2,48,32,0.06)", borderColor: "#023020" },
                     }}
                   >
                     Print A4 Statement

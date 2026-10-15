@@ -137,13 +137,37 @@ async def _ensure_tables(db: DBSession, schema: str):
         "payment_date DATE",
         "created_by INTEGER",
         "created_at TIMESTAMP DEFAULT NOW()",
-        "updated_at TIMESTAMP DEFAULT NOW()"
+        "updated_at TIMESTAMP DEFAULT NOW()",
+        "customer_name VARCHAR(200)",
+        "customer_address TEXT",
+        "customer_city VARCHAR(100)",
+        "customer_state VARCHAR(100)",
+        "customer_pincode VARCHAR(20)",
+        "customer_phone VARCHAR(50)",
+        "customer_gstin VARCHAR(50)"
     ]
     for col in alter_cols:
         try:
             await db.execute(text(f"ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS {col}"))
         except Exception:
             pass
+
+    # Backfill historical customer snapshot for existing bills where not yet populated
+    try:
+        await db.execute(text(f"""
+            UPDATE {schema}.job_work_bills jwb
+            SET customer_name = l.name,
+                customer_address = l.address,
+                customer_city = l.city,
+                customer_state = l.state,
+                customer_pincode = l.pincode,
+                customer_phone = COALESCE(l.phone, l.mobile),
+                customer_gstin = l.gstin
+            FROM master.ledgers l
+            WHERE l.id = jwb.ledger_id AND jwb.customer_name IS NULL;
+        """))
+    except Exception:
+        pass
 
     # Ensure job_work_bill_lines constraints are non-blocking
     try:
@@ -189,7 +213,7 @@ async def list_job_work_bills(
     result = await db.execute(
         text(f"""
         SELECT jwb.*,
-               l.name AS customer_name
+               COALESCE(jwb.customer_name, l.name) AS customer_name
         FROM {schema}.job_work_bills jwb
         LEFT JOIN master.ledgers l ON l.id = jwb.ledger_id
         WHERE {' AND '.join(conds)}
@@ -514,6 +538,20 @@ async def create_job_work_bill(
     primary_prod_id = body.product_id or (body.items[0].get("product_id") if body.items else None)
     primary_proc_id = body.process_id or (body.items[0].get("process_id") if body.items else None)
 
+    # Fetch customer master snapshot at time of billing
+    c_res = await db.execute(
+        text("SELECT name, address, city, state, pincode, phone, mobile, gstin FROM master.ledgers WHERE id = :lid"),
+        {"lid": body.ledger_id}
+    )
+    c_row = c_res.mappings().first()
+    c_name = c_row["name"] if c_row else None
+    c_addr = c_row["address"] if c_row else None
+    c_city = c_row["city"] if c_row else None
+    c_state = c_row["state"] if c_row else None
+    c_pin = c_row["pincode"] if c_row else None
+    c_phone = (c_row["phone"] or c_row["mobile"]) if c_row else None
+    c_gstin = c_row["gstin"] if c_row else None
+
     try:
         res = await db.execute(
             text(f"""
@@ -522,12 +560,14 @@ async def create_job_work_bill(
              product_id, process_id, quantity, rate, amount,
              gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
              round_off, net_amount, total_amount, narration, dispatch_through,
-             items, freight_items, pending_amount, created_by)
+             items, freight_items, pending_amount, created_by,
+             customer_name, customer_address, customer_city, customer_state, customer_pincode, customer_phone, customer_gstin)
             VALUES (:bno, CAST(:bdate AS DATE), :lid, :iid, :iids, :oids,
                     :pid, :prid, :qty, :rate, :amt,
                     :gp, :ga, :cgp, :cga, :sgp, :sga,
                     :ro, :namt, :ta, :narr, :dt,
-                    :items, :fitems, :ta, :cby)
+                    :items, :fitems, :ta, :cby,
+                    :cname, :caddr, :ccity, :cstate, :cpin, :cphone, :cgstin)
             RETURNING id
             """),
             {
@@ -541,7 +581,8 @@ async def create_job_work_bill(
                 "sgp": body.sgst_percent, "sga": body.sgst_amount,
                 "ro": body.round_off, "namt": body.net_amount or body.total_amount, "ta": body.total_amount,
                 "narr": body.narration, "dt": body.dispatch_through,
-                "items": items_json, "fitems": freight_json, "cby": current_user.id if current_user else None
+                "items": items_json, "fitems": freight_json, "cby": current_user.id if current_user else None,
+                "cname": c_name, "caddr": c_addr, "ccity": c_city, "cstate": c_state, "cpin": c_pin, "cphone": c_phone, "cgstin": c_gstin
             }
         )
         bill_id = res.scalar_one()
@@ -689,12 +730,13 @@ async def get_job_work_bill(
     result = await db.execute(
         text(f"""
         SELECT jwb.*,
-               l.name AS customer_name,
-               l.address AS customer_address,
-               l.city AS customer_city,
-               l.state AS customer_state,
-               l.pincode AS customer_pincode,
-               l.gstin AS customer_gstin
+               COALESCE(jwb.customer_name, l.name) AS customer_name,
+               COALESCE(jwb.customer_address, l.address) AS customer_address,
+               COALESCE(jwb.customer_city, l.city) AS customer_city,
+               COALESCE(jwb.customer_state, l.state) AS customer_state,
+               COALESCE(jwb.customer_pincode, l.pincode) AS customer_pincode,
+               COALESCE(jwb.customer_phone, l.phone, l.mobile) AS customer_phone,
+               COALESCE(jwb.customer_gstin, l.gstin) AS customer_gstin
         FROM {schema}.job_work_bills jwb
         LEFT JOIN master.ledgers l ON l.id = jwb.ledger_id
         WHERE jwb.id = :id

@@ -514,12 +514,12 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
             {isToolMode ? (
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 1 }}>
-                  <Typography sx={{ fontWeight: 600, color: "#023020" }} variant="subtitle2">Tools List Master</Typography>
-                  <Button size="small" startIcon={<Add />} onClick={addItemLine} sx={{ color: "#023020", fontWeight: 700 }}>Add Line</Button>
+                  <Typography sx={{ fontWeight: 600, color: "text.primary" }} variant="subtitle2">Tools List Master</Typography>
+                  <Button size="small" startIcon={<Add />} onClick={addItemLine} sx={{ color: "primary.main", fontWeight: 700 }}>Add Line</Button>
                 </Box>
                 <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: "8px" }}>
                   <Table size="small">
-                    <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                    <TableHead>
                       <TableRow>
                         <TableCell sx={{ minWidth: 260, fontWeight: 700 }}>Tool / Item Name *</TableCell>
                         <TableCell sx={{ width: 120, minWidth: 120, fontWeight: 700 }} align="right">Qty *</TableCell>
@@ -580,7 +580,7 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
                   </Table>
                 </TableContainer>
                 <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1.5, pr: 1 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#023020" }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.light" : "#023020" }}>
                     Total Amount: ₹{formatAmount(totalItemAmount)}
                   </Typography>
                 </Box>
@@ -588,8 +588,8 @@ function AccountsVoucherDialog({ open, onClose, voucherType }: AccountsVoucherDi
             ) : (
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, mt: 1 }}>
-                  <Typography sx={{ fontWeight: 600, color: "#023020" }} variant="subtitle2">Ledger Lines</Typography>
-                  <Button size="small" startIcon={<Add />} onClick={addLine} sx={{ color: "#023020", fontWeight: 700 }}>Add Line</Button>
+                  <Typography sx={{ fontWeight: 600, color: "text.primary" }} variant="subtitle2">Ledger Lines</Typography>
+                  <Button size="small" startIcon={<Add />} onClick={addLine} sx={{ color: "primary.main", fontWeight: 700 }}>Add Line</Button>
                 </Box>
                 {lines.map((line, i) => (
                   <Paper key={i} sx={{ p: 1.5, mb: 1, display: "flex", gap: 1.5, alignItems: "center" }} variant="outlined">

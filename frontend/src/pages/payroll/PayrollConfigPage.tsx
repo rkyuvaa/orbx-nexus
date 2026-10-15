@@ -221,7 +221,7 @@ export default function PayrollConfigPage() {
       ) : (
         <Paper variant="outlined" sx={{ borderRadius: "12px", width: "100%" }}>
           {/* ── Tab Bar ── */}
-          <Box sx={{ borderBottom: "1px solid #e2e8f0", bgcolor: "#f8fafc", borderTopLeftRadius: "12px", borderTopRightRadius: "12px" }}>
+          <Box sx={{ borderBottom: "1px solid", borderColor: "divider", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "#f8fafc", borderTopLeftRadius: "12px", borderTopRightRadius: "12px" }}>
             <Tabs
               value={activeTab}
               onChange={(_, v) => setActiveTab(v)}
@@ -229,8 +229,8 @@ export default function PayrollConfigPage() {
               scrollButtons="auto"
               sx={{
                 "& .MuiTab-root": { fontWeight: 600, textTransform: "none", minHeight: 52, fontSize: "0.875rem" },
-                "& .Mui-selected": { color: "#0f5132 !important" },
-                "& .MuiTabs-indicator": { bgcolor: "#0f5132", height: 3 },
+                "& .Mui-selected": { color: "primary.main !important" },
+                "& .MuiTabs-indicator": { bgcolor: "primary.main", height: 3 },
               }}
             >
               <Tab
@@ -446,11 +446,14 @@ export default function PayrollConfigPage() {
                           px: 2, py: 1.2,
                           cursor: "pointer",
                           borderRadius: "8px",
-                          border: weekOffSet.has(day.value) ? "2px solid #d97706" : "1px solid #e2e8f0",
-                          bgcolor: weekOffSet.has(day.value) ? "#fef3c7" : "background.paper",
+                          border: "1px solid",
+                          borderColor: weekOffSet.has(day.value) ? "#d97706" : "divider",
+                          bgcolor: (theme) => weekOffSet.has(day.value)
+                            ? (theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.15)" : "#fef3c7")
+                            : "background.paper",
                           display: "flex", alignItems: "center", gap: 1,
                           transition: "all 0.15s",
-                          "&:hover": { borderColor: "#d97706", bgcolor: "#fffbeb" },
+                          "&:hover": { borderColor: "#d97706" },
                           userSelect: "none",
                         }}
                       >

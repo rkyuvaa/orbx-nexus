@@ -164,22 +164,35 @@ async def list_labour_bills(
     ledger_id: Optional[int] = None, is_paid: Optional[bool] = None
 ):
     schema = s(fy)
+    await _ensure_payment_schema(db, schema)
     conds = ["1=1"]
     params: dict = {}
     if from_date:
-        conds.append("bill_date >= :fd")
+        conds.append("lb.bill_date >= :fd")
         params["fd"] = from_date
     if to_date:
-        conds.append("bill_date <= :td")
+        conds.append("lb.bill_date <= :td")
         params["td"] = to_date
     if ledger_id:
-        conds.append("ledger_id = :lid")
+        conds.append("lb.ledger_id = :lid")
         params["lid"] = ledger_id
     if is_paid is not None:
-        conds.append("is_paid = :ip")
+        conds.append("lb.is_paid = :ip")
         params["ip"] = is_paid
     result = await db.execute(
-        text(f"SELECT * FROM {schema}.labour_bills WHERE {' AND '.join(conds)} ORDER BY bill_date DESC"),
+        text(f"""
+        SELECT lb.*,
+               COALESCE(lb.customer_name, l.name) AS customer_name,
+               COALESCE(lb.customer_address, l.address) AS customer_address,
+               COALESCE(lb.customer_city, l.city) AS customer_city,
+               COALESCE(lb.customer_state, l.state) AS customer_state,
+               COALESCE(lb.customer_pincode, l.pincode) AS customer_pincode,
+               COALESCE(lb.customer_phone, l.phone, l.mobile) AS customer_phone,
+               COALESCE(lb.customer_gstin, l.gstin) AS customer_gstin
+        FROM {schema}.labour_bills lb
+        LEFT JOIN master.ledgers l ON l.id = lb.ledger_id
+        WHERE {' AND '.join(conds)} ORDER BY lb.bill_date DESC
+        """),
         params
     )
     return [dict(r) for r in result.mappings().all()]
@@ -221,6 +234,7 @@ async def create_labour_bill(
     body: LabourBillIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
+    await _ensure_payment_schema(db, schema)
     await _validate_inwards_completed(db, schema, body.inward_id, body.outward_ids, body.inward_ids)
     
     if body.bill_no and body.bill_no.strip():
@@ -256,6 +270,20 @@ async def create_labour_bill(
                 detail=f"Labour Bill number '{bill_no}' already exists in database. Please verify or update Document Numbering settings."
             )
 
+    # Fetch customer master snapshot at time of billing
+    c_res = await db.execute(
+        text("SELECT name, address, city, state, pincode, phone, mobile, gstin FROM master.ledgers WHERE id = :lid"),
+        {"lid": body.ledger_id}
+    )
+    c_row = c_res.mappings().first()
+    c_name = c_row["name"] if c_row else None
+    c_addr = c_row["address"] if c_row else None
+    c_city = c_row["city"] if c_row else None
+    c_state = c_row["state"] if c_row else None
+    c_pin = c_row["pincode"] if c_row else None
+    c_phone = (c_row["phone"] or c_row["mobile"]) if c_row else None
+    c_gstin = c_row["gstin"] if c_row else None
+
     items_json = json.dumps(body.items) if body.items else "[]"
     oids_json = json.dumps(body.outward_ids) if body.outward_ids else "[]"
     iids_json = json.dumps(body.inward_ids) if body.inward_ids else "[]"
@@ -265,8 +293,10 @@ async def create_labour_bill(
         text(
             f"INSERT INTO {schema}.labour_bills "
             f"(bill_no, bill_date, ledger_id, inward_id, inward_ids, product_id, process_id, quantity, rate, "
-            f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, net_amount, total_amount, narration, items, outward_ids, dispatch_through, freight_items, created_by) "
-            f"VALUES (:bno, :bdate, :lid, :iid, :iids, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :fright, :cby) "
+            f"amount, gst_percent, gst_amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, round_off, net_amount, total_amount, narration, items, outward_ids, dispatch_through, freight_items, created_by, "
+            f"customer_name, customer_address, customer_city, customer_state, customer_pincode, customer_phone, customer_gstin) "
+            f"VALUES (:bno, :bdate, :lid, :iid, :iids, :pid, :prid, :qty, :rate, :amt, :gp, :ga, :cgp, :cga, :sgp, :sga, :ro, :namt, :ta, :narr, :items, :oids, :dt, :fright, :cby, "
+            f":cname, :caddr, :ccity, :cstate, :cpin, :cphone, :cgstin) "
             f"RETURNING id"
         ),
         {
@@ -278,7 +308,8 @@ async def create_labour_bill(
             "sgp": body.sgst_percent, "sga": body.sgst_amount,
             "ro": body.round_off, "namt": body.net_amount or body.total_amount,
             "ta": body.total_amount,
-            "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "fright": freight_json, "cby": current_user.id
+            "narr": body.narration, "items": items_json, "oids": oids_json, "dt": body.dispatch_through, "fright": freight_json, "cby": current_user.id,
+            "cname": c_name, "caddr": c_addr, "ccity": c_city, "cstate": c_state, "cpin": c_pin, "cphone": c_phone, "cgstin": c_gstin
         }
     )
     return {"id": result.scalar_one(), "message": "Labour bill created"}
@@ -339,8 +370,32 @@ async def _ensure_payment_schema(db: DBSession, schema: str):
             ADD COLUMN IF NOT EXISTS pending_amount NUMERIC,
             ADD COLUMN IF NOT EXISTS taxable_paid BOOLEAN DEFAULT FALSE,
             ADD COLUMN IF NOT EXISTS gst_paid BOOLEAN DEFAULT FALSE,
-            ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'UNPAID';
+            ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'UNPAID',
+            ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200),
+            ADD COLUMN IF NOT EXISTS customer_address TEXT,
+            ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS customer_state VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS customer_pincode VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS customer_gstin VARCHAR(50);
         """))
+
+        # Backfill historical customer snapshot for existing labour bills
+        try:
+            await db.execute(text(f"""
+                UPDATE {schema}.labour_bills lb
+                SET customer_name = l.name,
+                    customer_address = l.address,
+                    customer_city = l.city,
+                    customer_state = l.state,
+                    customer_pincode = l.pincode,
+                    customer_phone = COALESCE(l.phone, l.mobile),
+                    customer_gstin = l.gstin
+                FROM master.ledgers l
+                WHERE l.id = lb.ledger_id AND lb.customer_name IS NULL;
+            """))
+        except Exception:
+            pass
 
         await db.execute(text(f"""
             CREATE TABLE IF NOT EXISTS {schema}.labour_bill_payments (

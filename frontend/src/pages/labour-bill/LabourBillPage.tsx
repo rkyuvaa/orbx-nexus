@@ -72,10 +72,10 @@ function WorkDetailsActionMenu({
         slotProps={{ paper: { sx: { borderRadius: "8px", minWidth: 170, boxShadow: 3 } } }}
       >
         <MenuItem onClick={(e) => { handleClose(e); onPrint(row); }}>
-          <Print fontSize="small" sx={{ mr: 1, color: "#023020" }} /> Print
+          <Print fontSize="small" sx={{ mr: 1, color: "primary.main" }} /> Print
         </MenuItem>
         <MenuItem onClick={(e) => { handleClose(e); onExportExcel(row); }}>
-          <Description fontSize="small" sx={{ mr: 1, color: "#1d6f42" }} /> Download Excel
+          <Description fontSize="small" sx={{ mr: 1, color: "success.main" }} /> Download Excel
         </MenuItem>
       </Menu>
     </>
@@ -391,12 +391,11 @@ export default function LabourBillPage() {
 
 
     const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
-
-    const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
-    const supplierAddr1 = supplierLedger?.address || [supplierLedger?.address_line1, supplierLedger?.address_line2].filter(Boolean).join(", ") || "";
-    const supplierCityStatePin = [supplierLedger?.city, supplierLedger?.state, supplierLedger?.pincode].filter(Boolean).join(" - ");
-    const supplierPhone = supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "";
-    const supplierGstin = supplierLedger?.gstin || "";
+    const supplierName = row.customer_name || supplierLedger?.name || `Supplier #${row.ledger_id}`;
+    const supplierAddr1 = row.customer_address || supplierLedger?.address || [supplierLedger?.address_line1, supplierLedger?.address_line2].filter(Boolean).join(", ") || "";
+    const supplierCityStatePin = [row.customer_city || supplierLedger?.city, row.customer_state || supplierLedger?.state, row.customer_pincode || supplierLedger?.pincode].filter(Boolean).join(" - ");
+    const supplierPhone = row.customer_phone || (supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "");
+    const supplierGstin = row.customer_gstin || supplierLedger?.gstin || "";
 
     const outwardIds = Array.isArray(row.outward_ids)
       ? row.outward_ids
@@ -685,16 +684,11 @@ export default function LabourBillPage() {
 
 
     const supplierLedger = ledgers.find((l: any) => l.id === row.ledger_id);
-
-    const supplierName = supplierLedger?.name || `Supplier #${row.ledger_id}`;
-
-    const supplierAddr1 = supplierLedger?.address || [supplierLedger?.address_line1, supplierLedger?.address_line2].filter(Boolean).join(", ") || "";
-
-    const supplierCityStatePin = [supplierLedger?.city, supplierLedger?.state, supplierLedger?.pincode].filter(Boolean).join(" - ");
-
-    const supplierPhone = supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "";
-
-    const supplierGstin = supplierLedger?.gstin || "";
+    const supplierName = row.customer_name || supplierLedger?.name || `Supplier #${row.ledger_id}`;
+    const supplierAddr1 = row.customer_address || supplierLedger?.address || [supplierLedger?.address_line1, supplierLedger?.address_line2].filter(Boolean).join(", ") || "";
+    const supplierCityStatePin = [row.customer_city || supplierLedger?.city, row.customer_state || supplierLedger?.state, row.customer_pincode || supplierLedger?.pincode].filter(Boolean).join(" - ");
+    const supplierPhone = row.customer_phone || (supplierLedger?.phone || supplierLedger?.mobile ? `Tel: ${[supplierLedger?.phone, supplierLedger?.mobile].filter(Boolean).join(" / ")}` : "");
+    const supplierGstin = row.customer_gstin || supplierLedger?.gstin || "";
 
 
 
@@ -2658,7 +2652,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
     <>
       <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
         <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} onKeyDown={handleKeyDown}>
-          <DialogTitle sx={{ fontWeight: 700, color: "#023020" }}>
+          <DialogTitle sx={{ fontWeight: 700, color: "text.primary" }}>
             {editing ? "Edit Labour Bill" : "New Labour Bill"}
           </DialogTitle>
           <DialogContent dividers>
@@ -2747,10 +2741,10 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                             <Checkbox
                               size="small"
                               checked={selected}
-                              sx={{ p: 0.5, color: "#023020", "&.Mui-checked": { color: "#023020" } }}
+                              sx={{ p: 0.5 }}
                             />
                             <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
                                 {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
                               </Typography>
                               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
@@ -2761,7 +2755,13 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                           <Chip
                             size="small"
                             label={`${formatWeight(option.unbilledWeight)} kg`}
-                            sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem", ml: 2 }}
+                            sx={{
+                              bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#e8f5e9",
+                              color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020",
+                              fontWeight: 700,
+                              fontSize: "0.7rem",
+                              ml: 2
+                            }}
                           />
                         </Box>
                       );
@@ -2778,10 +2778,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                             size="small"
                             {...tagProps}
                             sx={{
-                              bgcolor: "#e8f5e9",
-                              color: "#023020",
+                              bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#e8f5e9",
+                              color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020",
                               fontWeight: 700,
-                              border: "1px solid #023020",
+                              border: "1px solid",
+                              borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.4)" : "#023020",
                               borderRadius: "16px",
                               m: "2px !important"
                             }}
@@ -2804,12 +2805,12 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
               {/* Line Items Table */}
               <Grid size={{ xs: 12 }}>
-                <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+                <Typography sx={{ fontWeight: 600, color: "text.primary", mb: 1 }} variant="subtitle2">
                   Bill Line Items
                 </Typography>
                 <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                   <Table size="small">
-                    <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                    <TableHead>
                       <TableRow>
                         <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
                         <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
@@ -2829,8 +2830,8 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                               value={processMapObj[item.process_id] || null}
                               onChange={(_, val) => handleLineItemChange(idx, "process_id", val ? val.id : "")}
                               options={processes.filter((p: any) => 
-                                (p.is_active || p.id === Number(item.process_id)) && 
-                                (p.process_ids || (p.process_code && p.process_code.includes(" / ")))
+                              (p.is_active || p.id === Number(item.process_id)) && 
+                              (p.process_ids || (p.process_code && p.process_code.includes(" / ")))
                               )}
                               getOptionLabel={(option: any) => option.name || ""}
                               noOptionsText="No matching processes"
@@ -2878,11 +2879,11 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                     </TableBody>
                   </Table>
                 </Paper>
-                <Button size="small" variant="text" startIcon={<Add />} sx={{ mt: 1, textTransform: "none", color: "#023020", fontWeight: 600 }} onClick={handleAddLineItem}>
+                <Button size="small" variant="text" startIcon={<Add />} sx={{ mt: 1, textTransform: "none", fontWeight: 600 }} onClick={handleAddLineItem}>
                   Add Item Row
                 </Button>
                 {!freightOpen && (
-                  <Button size="small" variant="outlined" startIcon={<Add />} sx={{ ml: 1, mt: 1, textTransform: "none", color: "#023020", borderColor: "#023020", fontWeight: 600 }} onClick={handleToggleFreight}>
+                  <Button size="small" variant="outlined" startIcon={<Add />} sx={{ ml: 1, mt: 1, textTransform: "none", fontWeight: 600 }} onClick={handleToggleFreight}>
                     Add Freight Section
                   </Button>
                 )}
@@ -2890,12 +2891,12 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
               {freightOpen && (
                 <Grid size={{ xs: 12 }}>
-                  <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+                  <Typography sx={{ fontWeight: 600, color: "text.primary", mb: 1 }} variant="subtitle2">
                     Freight / Other Charges
                   </Typography>
                   <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                     <Table size="small">
-                      <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                      <TableHead>
                         <TableRow>
                           <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
                           <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Weight (kg) *</TableCell>
@@ -2965,7 +2966,7 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
 
               {/* Subtotals & Taxes & Round Off */}
               <Grid size={{ xs: 12 }}>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f8fafc", borderRadius: "8px" }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8fafc", borderRadius: "8px" }}>
                   <Grid container spacing={2} sx={{ alignItems: "center" }}>
                     <Grid size={{ xs: 12, sm: 2 }}>
                       <TextField label="Taxable Subtotal" type="number" fullWidth size="small" value={subtotalAmount} slotProps={{ input: { readOnly: true } }} />
@@ -2993,20 +2994,20 @@ function LabourBillDialog({ open, onClose, editing }: LabourBillDialogProps) {
                       </Box>
                     </Grid>
                     <Grid size={{ xs: 12 }}>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, pt: 1, borderTop: "1px solid #cbd5e1" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
                         <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                          <Typography variant="body2" sx={{ color: "#475569", fontWeight: 500 }}>
-                            Total Wt (W/O Freight): <Box component="span" sx={{ fontWeight: 700, color: "#1e293b" }}>{totalQty.toFixed(3)} kg</Box>
+                          <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 500 }}>
+                            Total Wt (W/O Freight): <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{totalQty.toFixed(3)} kg</Box>
                           </Typography>
-                          <Typography variant="body2" sx={{ color: "#475569", fontWeight: 500 }}>
-                            Total Wt (With Freight): <Box component="span" sx={{ fontWeight: 700, color: "#1e293b" }}>{(totalQty + (Number(freightItem.quantity) || 0)).toFixed(3)} kg</Box>
+                          <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 500 }}>
+                            Total Wt (With Freight): <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{(totalQty + (Number(freightItem.quantity) || 0)).toFixed(3)} kg</Box>
                           </Typography>
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                             Net Payable Amount:
                           </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                             ₹{formatAmount(netAmount)}
                           </Typography>
                         </Box>

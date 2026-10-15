@@ -548,10 +548,10 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
           </Grid>
  
           <Grid size={{ xs: 12 }}>
-            <Typography variant="subtitle2" sx={{ color: "#0f5132", fontWeight: 700, mb: 1 }}>Items List</Typography>
+            <Typography variant="subtitle2" sx={{ color: "text.primary", fontWeight: 700, mb: 1 }}>Items List</Typography>
             <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
               <Table size="small">
-                <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                <TableHead>
                   <TableRow>
                     <TableCell sx={{ width: 195, minWidth: 185, fontWeight: 700 }}>Stock Item *</TableCell>
                     <TableCell sx={{ width: 115, minWidth: 110, fontWeight: 700 }} align="right">Qty *</TableCell>
@@ -649,12 +649,12 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                           </TextField>
                         </TableCell>
                         <TableCell sx={{ width: 110, minWidth: 105, verticalAlign: "top", pt: 2.2 }} align="right">
-                          <Typography variant="body2" sx={{ color: gstAmt > 0 ? "#0f5132" : "text.secondary", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <Typography variant="body2" sx={{ color: gstAmt > 0 ? (theme) => theme.palette.mode === "dark" ? "primary.light" : "#0f5132" : "text.secondary", fontWeight: 600, whiteSpace: "nowrap" }}>
                             {gstAmt > 0 ? `₹${formatAmount(gstAmt)}` : "₹0.00"}
                           </Typography>
                         </TableCell>
                         <TableCell sx={{ width: 125, minWidth: 120, verticalAlign: "top", pt: 2.2 }} align="right">
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132", whiteSpace: "nowrap" }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.light" : "#0f5132", whiteSpace: "nowrap" }}>
                             {totalAmt > 0 ? `₹${formatAmount(totalAmt)}` : "—"}
                           </Typography>
                         </TableCell>
@@ -668,23 +668,23 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
                   })}
                   
                   {/* Totals & Add Row */}
-                  <TableRow sx={{ bgcolor: "#f4f9f6" }}>
+                  <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
                     <TableCell colSpan={8}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, py: 0.5 }}>
-                        <Button size="small" startIcon={<Add />} onClick={handleAddLineItem} sx={{ textTransform: "none", color: "#0f5132", fontWeight: 700 }}>
+                        <Button size="small" startIcon={<Add />} onClick={handleAddLineItem} sx={{ textTransform: "none", color: "primary.main", fontWeight: 700 }}>
                           Add Item Row
                         </Button>
                         <Box sx={{ display: "flex", gap: 3, pr: 1, alignItems: "center" }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
                             Total Qty: {formatQty(totalQty)}
                           </Typography>
                           <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
                             Taxable Value: ₹{formatAmount(totalTaxableAmount)}
                           </Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.light" : "#0f5132" }}>
                             Total GST: ₹{formatAmount(totalGstAmount)}
                           </Typography>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0f5132", fontSize: "0.95rem" }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.light" : "#0f5132", fontSize: "0.95rem" }}>
                             Grand Total: ₹{formatAmount(grandTotalAmount)}
                           </Typography>
                         </Box>

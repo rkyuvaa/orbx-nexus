@@ -591,7 +591,7 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} onKeyDown={handleKeyDown}>
-        <DialogTitle sx={{ fontWeight: 700, color: "#023020" }}>
+        <DialogTitle sx={{ fontWeight: 700, color: "text.primary" }}>
           {editing ? "Edit Inward Voucher" : "New Inward Voucher"}
         </DialogTitle>
         <DialogContent dividers>
@@ -637,12 +637,12 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
  
             {/* Line Items Table */}
             <Grid size={{ xs: 12 }}>
-              <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+              <Typography sx={{ fontWeight: 600, color: "text.primary", mb: 1 }} variant="subtitle2">
                 Product Line Items
               </Typography>
               <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                 <Table size="small">
-                  <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                  <TableHead>
                     <TableRow>
                       <TableCell sx={{ width: 50, fontWeight: 700 }} align="center">S. No</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Product Name *</TableCell>
@@ -734,15 +734,23 @@ function InwardVoucherDialog({ open, onClose, editing }: InwardVoucherDialogProp
 
             {/* Totals Summary Footer */}
             <Grid size={{ xs: 12 }}>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f4f9f6", borderColor: "#023020", borderRadius: "8px", display: "flex", justifyContent: "space-around", alignItems: "center" }}>
+              <Paper variant="outlined" sx={{
+                p: 2,
+                bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "#f4f9f6",
+                borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "divider",
+                borderRadius: "8px",
+                display: "flex",
+                justifyContent: "space-around",
+                alignItems: "center"
+              }}>
                 <Box sx={{ textAlign: "center" }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>TOTAL QUANTITY</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: "#023020" }}>{totalQty}</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020" }}>{totalQty}</Typography>
                 </Box>
                 <Divider orientation="vertical" flexItem />
                 <Box sx={{ textAlign: "center" }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>NET WEIGHT (KG)</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: "#023020" }}>{formatWeight(netWeight)} kg</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020" }}>{formatWeight(netWeight)} kg</Typography>
                 </Box>
               </Paper>
             </Grid>
@@ -1319,7 +1327,7 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
 }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#023020", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <DialogTitle sx={{ fontWeight: 700, color: "text.primary", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box>
           Select Pending Inward Voucher
           <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.25 }}>
@@ -1327,7 +1335,7 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
           </Typography>
         </Box>
         <Button size="small" variant="contained"
-          sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none" }}
+          sx={{ textTransform: "none" }}
           onClick={onClose}>Done</Button>
       </DialogTitle>
       <DialogContent dividers sx={{ p: 0 }}>
@@ -1338,7 +1346,7 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
           </Box>
         ) : (
           <Table size="small">
-            <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+            <TableHead>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Inward No</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
@@ -1366,10 +1374,13 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
                 const alreadySelected = selectedInwards.some((s) => s.id === inv.id);
                 return (
                   <TableRow key={inv.id} hover
-                    sx={{ cursor: alreadySelected ? "default" : "pointer", bgcolor: alreadySelected ? "#e8f5e9" : "inherit" }}
+                    sx={{
+                      cursor: alreadySelected ? "default" : "pointer",
+                      bgcolor: alreadySelected ? (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#e8f5e9" : "inherit"
+                    }}
                     onClick={() => !alreadySelected && onSelect(inv)}>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>{inv.inward_no}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>{inv.inward_no}</Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
@@ -1385,7 +1396,7 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
                       <Typography variant="body2" color="text.secondary">{resolveProcessName(inv.process_id, processes) || "-"}</Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: balanceQty > 0 ? "#023020" : "text.secondary" }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: balanceQty > 0 ? (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020" : "text.secondary" }}>
                         {balanceQty > 0 ? balanceQty.toLocaleString() : "-"}
                       </Typography>
                     </TableCell>
@@ -1397,10 +1408,10 @@ const InwardPickerDialog = memo(function InwardPickerDialog({
                     </TableCell>
                     <TableCell align="center">
                       {alreadySelected ? (
-                        <Typography variant="caption" sx={{ color: "#023020", fontWeight: 700 }}>✓ Added</Typography>
+                        <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#023020", fontWeight: 700 }}>✓ Added</Typography>
                       ) : (
                         <Button size="small" variant="contained"
-                          sx={{ textTransform: "none", fontWeight: 600, bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" } }}
+                          sx={{ textTransform: "none", fontWeight: 600 }}
                           onClick={(e) => { e.stopPropagation(); onSelect(inv); }}>
                           Add
                         </Button>
@@ -1989,7 +2000,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} onKeyDown={handleKeyDown}>
-        <DialogTitle sx={{ fontWeight: 700, color: "#023020" }}>
+        <DialogTitle sx={{ fontWeight: 700, color: "text.primary" }}>
           {editing ? "Edit Outward Voucher" : "New Outward Voucher"}
         </DialogTitle>
         <DialogContent dividers>
@@ -2050,7 +2061,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                           <li key={key} {...otherProps}>
                             <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", py: 0.25 }}>
                               <Box>
-                                <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
                                   {option.inward_no} {dateStr && `(${dateStr})`}
                                 </Typography>
                                 {refStr && (
@@ -2077,11 +2088,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                     return (
                       <Box key={inv.id} sx={{
                         display: "inline-flex", alignItems: "center", gap: 0.5,
-                        bgcolor: "#e8f5e9", border: "1.5px solid #023020",
+                        bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#e8f5e9",
+                        border: (theme) => `1.5px solid ${theme.palette.mode === "dark" ? theme.palette.primary.main : "#023020"}`,
                         borderRadius: "999px", px: 1.5, py: 0.4,
-                        boxShadow: "0 1px 3px rgba(2,48,32,0.10)",
+                        boxShadow: (theme) => theme.palette.mode === "dark" ? "none" : "0 1px 3px rgba(2,48,32,0.10)",
                       }}>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", lineHeight: 1.4 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? theme.palette.primary.light : "#023020", lineHeight: 1.4 }}>
                           {inv.inward_no || `#${inv.id}`}
                         </Typography>
                         {(inv.serial_no || inv.ref_no) && (
@@ -2089,7 +2101,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                             · {[inv.serial_no && `S: ${inv.serial_no}`, inv.ref_no && `Ref: ${inv.ref_no}`].filter(Boolean).join(" · ")}
                           </Typography>
                         )}
-                        <IconButton size="small" sx={{ p: 0, ml: 0.25, color: "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
+                        <IconButton size="small" sx={{ p: 0, ml: 0.25, color: (theme) => theme.palette.mode === "dark" ? theme.palette.primary.light : "#023020" }} onClick={() => handleRemoveSelectedInward(inv.id)}>
                           <Typography sx={{ fontSize: 11, lineHeight: 1 }}>✕</Typography>
                         </IconButton>
                       </Box>
@@ -2102,8 +2114,8 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
             {/* Product Entry Section */}
             {watch("ledger_id") && activeInward && (
               <Grid size={{ xs: 12 }}>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f9fcfb", borderColor: "#023020", borderRadius: "8px" }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#023020", mb: 1.5 }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "#f9fcfb", borderColor: "divider", borderRadius: "8px" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", mb: 1.5 }}>
                     Quick Product Entry
                   </Typography>
                   <Grid container spacing={2} sx={{ alignItems: "flex-start" }}>
@@ -2143,7 +2155,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         label="Stock Bal"
                         value={entryProduct ? formatWeight(entryLiveStockBal) : "—"}
                         disabled
-                        slotProps={{ htmlInput: { style: { textAlign: "right", fontWeight: 700, color: entryLiveStockBal > 0 ? "#0f5132" : "#dc3545" } } }}
+                        slotProps={{ htmlInput: { style: { textAlign: "right", fontWeight: 700, color: entryLiveStockBal > 0 ? "#16a34a" : "#dc3545" } } }}
                         fullWidth
                       />
                     </Grid>
@@ -2188,7 +2200,7 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                         variant="contained"
                         onClick={handleAddProductEntry}
                         disabled={!activeInward || !entryProduct || !entryProcess || !entryQty || !!entryQtyError}
-                        sx={{ bgcolor: "#023020", "&:hover": { bgcolor: "#034d30" }, textTransform: "none", fontWeight: 700, height: 38, px: 4 }}
+                        sx={{ textTransform: "none", fontWeight: 700, height: 38, px: 4 }}
                       >
                         Add Product
                       </Button>
@@ -2200,12 +2212,12 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
             {/* Line Items Table */}
             <Grid size={{ xs: 12 }}>
-              <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+              <Typography sx={{ fontWeight: 600, color: "text.primary", mb: 1 }} variant="subtitle2">
                 Product Line Items
               </Typography>
               <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                 <Table size="small">
-                  <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                  <TableHead>
                     <TableRow>
                       <TableCell sx={{ width: 100, fontWeight: 700 }} align="center">Inward No</TableCell>
                       <TableCell sx={{ width: "30%", fontWeight: 700 }}>Product Name *</TableCell>
@@ -2242,10 +2254,11 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
                          <TableCell align="center">
                            <Box sx={{
                              display: "inline-flex", alignItems: "center",
-                             bgcolor: "#e8f5e9", border: "1.5px solid #023020",
+                             bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#e8f5e9",
+                             border: (theme) => `1.5px solid ${theme.palette.mode === "dark" ? theme.palette.primary.main : "#023020"}`,
                              borderRadius: "999px", px: 1, py: 0.2,
                            }}>
-                             <Typography variant="caption" sx={{ fontWeight: 700, color: "#023020", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                             <Typography variant="caption" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? theme.palette.primary.light : "#023020", whiteSpace: "nowrap", lineHeight: 1.4 }}>
                                {lineInwardNo}
                              </Typography>
                            </Box>
@@ -2445,15 +2458,23 @@ export function OutwardVoucherDialog({ open, onClose, editing, inwardMap, inward
 
             {/* Totals Summary Footer */}
             <Grid size={{ xs: 12 }}>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f4f9f6", borderColor: "#023020", borderRadius: "8px", display: "flex", justifyContent: "space-around", alignItems: "center" }}>
+              <Paper variant="outlined" sx={{
+                p: 2,
+                bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "#f4f9f6",
+                borderColor: "divider",
+                borderRadius: "8px",
+                display: "flex",
+                justifyContent: "space-around",
+                alignItems: "center"
+              }}>
                 <Box sx={{ textAlign: "center" }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>TOTAL QUANTITY</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: "#023020" }}>{totalQty}</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? theme.palette.primary.light : "#023020" }}>{totalQty}</Typography>
                 </Box>
                 <Divider orientation="vertical" flexItem />
                 <Box sx={{ textAlign: "center" }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>NET WEIGHT (KG)</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: "#023020" }}>{formatWeight(netWeight)} kg</Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? theme.palette.primary.light : "#023020" }}>{formatWeight(netWeight)} kg</Typography>
                 </Box>
               </Paper>
             </Grid>

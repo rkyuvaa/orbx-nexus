@@ -16,7 +16,7 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom Scrollbars */
+/* Theme-Aware Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -25,20 +25,19 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--color-border, rgba(128, 128, 128, 0.25));
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(22, 196, 127, 0.4);
+  background: var(--color-accent, rgba(22, 196, 127, 0.5));
 }
 
-/* Force all disabled inputs, labels, and text elements to render with full opacity */
+/* Refined disabled state: maintain readability with proper disabled contrast */
 .Mui-disabled,
 .MuiInputBase-input.Mui-disabled,
 .MuiInputLabel-root.Mui-disabled,
 .MuiFormLabel-root.Mui-disabled,
 .MuiTypography-root.Mui-disabled,
 .MuiButtonBase-root.Mui-disabled {
-  opacity: 1 !important;
-  -webkit-text-fill-color: currentColor !important;
+  opacity: 0.75;
 }

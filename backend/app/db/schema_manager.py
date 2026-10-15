@@ -157,6 +157,13 @@ CREATE TABLE IF NOT EXISTS {schema}.labour_bills (
     is_paid BOOLEAN DEFAULT FALSE,
     payment_date DATE,
     freight_items JSONB DEFAULT '[]'::jsonb,
+    customer_name VARCHAR(200),
+    customer_address TEXT,
+    customer_city VARCHAR(100),
+    customer_state VARCHAR(100),
+    customer_pincode VARCHAR(20),
+    customer_phone VARCHAR(50),
+    customer_gstin VARCHAR(50),
     created_by INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -193,6 +200,13 @@ CREATE TABLE IF NOT EXISTS {schema}.job_work_bills (
     paid_amount NUMERIC(15,2) DEFAULT 0,
     pending_amount NUMERIC(15,2) DEFAULT 0,
     payment_date DATE,
+    customer_name VARCHAR(200),
+    customer_address TEXT,
+    customer_city VARCHAR(100),
+    customer_state VARCHAR(100),
+    customer_pincode VARCHAR(20),
+    customer_phone VARCHAR(50),
+    customer_gstin VARCHAR(50),
     created_by INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -375,6 +389,20 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS freight_items JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS inward_ids JSONB DEFAULT '[]'::jsonb;
         ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS outward_ids JSONB DEFAULT '[]'::jsonb;
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200);
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_address TEXT;
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100);
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_state VARCHAR(100);
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_pincode VARCHAR(20);
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+        ALTER TABLE {schema}.labour_bills ADD COLUMN IF NOT EXISTS customer_gstin VARCHAR(50);
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200);
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_address TEXT;
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100);
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_state VARCHAR(100);
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_pincode VARCHAR(20);
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+        ALTER TABLE {schema}.job_work_bills ADD COLUMN IF NOT EXISTS customer_gstin VARCHAR(50);
         ALTER TABLE {schema}.stock_item_movements ALTER COLUMN movement_type TYPE VARCHAR(15);
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS location_id INTEGER;
         ALTER TABLE {schema}.stock_item_movements ADD COLUMN IF NOT EXISTS to_location_id INTEGER;

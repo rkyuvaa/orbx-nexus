@@ -117,9 +117,20 @@ export function PrintHeader({ title }: { title: string }) {
 
 function StatPill({ label, value, color }: { label: string; value: string | number; color: string }) {
   return (
-    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, px: 1.5, height: 32, borderRadius: 2, bgcolor: color, color: "#fff", whiteSpace: "nowrap" }}>
-      <Typography variant="body2" sx={{ lineHeight: 1, color: "#fff" }}>{label}</Typography>
-      <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1, color: "#fff" }}>{value}</Typography>
+    <Box sx={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 0.5,
+      px: 1.5,
+      height: 32,
+      borderRadius: 2,
+      bgcolor: (theme) => theme.palette.mode === "dark" ? `${color}22` : color,
+      color: (theme) => theme.palette.mode === "dark" ? (color === "#0f5132" ? "primary.main" : color) : "#fff",
+      border: (theme) => theme.palette.mode === "dark" ? `1px solid ${color}55` : "none",
+      whiteSpace: "nowrap"
+    }}>
+      <Typography variant="body2" sx={{ lineHeight: 1, color: "inherit", opacity: 0.9 }}>{label}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1, color: "inherit" }}>{value}</Typography>
     </Box>
   );
 }
@@ -157,11 +168,10 @@ function PrintTable({ columns, rows, totals, title }: { columns: string[]; rows:
         <TableHead>
           <TableRow>
             {columns.map((c, idx) => (
-              <TableCell key={c} sx={{ fontWeight: 700, fontSize: "0.75rem", bgcolor: "#122a1f",
-                color: "#ffffff", textTransform: "uppercase", borderColor: BORDER, p: "5px 8px",
+              <TableCell key={c} sx={{ fontWeight: 700, fontSize: "0.75rem",
+                textTransform: "uppercase", borderColor: BORDER, p: "5px 8px",
                 cursor: "pointer", userSelect: "none" }} onClick={() => handleSort(idx)}>
-                <TableSortLabel active={orderBy === idx} direction={orderBy === idx ? order : "asc"}
-                  sx={{ "&.MuiTableSortLabel-active": { color: "#ffffff" }, "& .MuiTableSortLabel-icon": { color: "#ffffff !important" } }}>
+                <TableSortLabel active={orderBy === idx} direction={orderBy === idx ? order : "asc"}>
                   {c}
                 </TableSortLabel>
               </TableCell>
@@ -187,16 +197,16 @@ function PrintTable({ columns, rows, totals, title }: { columns: string[]; rows:
           {totals && (
             Array.isArray(totals[0]) ? (
               (totals as any[]).map((totalsRow, idx) => (
-                <TableRow key={idx} sx={{ bgcolor: "#0f5132 !important", "&:hover": { bgcolor: "#0f5132 !important" } }}>
+                <TableRow key={idx} sx={{ bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.12) !important" : "#e8f5e9 !important", "&:hover": { bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.18) !important" : "#e8f5e9 !important" } }}>
                   {totalsRow.map((t, i) => (
-                    <TableCell key={i} sx={{ fontWeight: 700, fontSize: "0.8rem", borderColor: BORDER, color: "#ffffff !important", p: "5px 8px" }}>{t ?? ""}</TableCell>
+                    <TableCell key={i} sx={{ fontWeight: 700, fontSize: "0.8rem", borderColor: BORDER, color: (theme) => theme.palette.mode === "dark" ? "primary.main !important" : "#0f5132 !important", p: "5px 8px" }}>{t ?? ""}</TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
-              <TableRow sx={{ bgcolor: "#0f5132 !important", "&:hover": { bgcolor: "#0f5132 !important" } }}>
+              <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.12) !important" : "#e8f5e9 !important", "&:hover": { bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.18) !important" : "#e8f5e9 !important" } }}>
                 {(totals as any[]).map((t, i) => (
-                  <TableCell key={i} sx={{ fontWeight: 700, fontSize: "0.8rem", borderColor: BORDER, color: "#ffffff !important", p: "5px 8px" }}>{t ?? ""}</TableCell>
+                  <TableCell key={i} sx={{ fontWeight: 700, fontSize: "0.8rem", borderColor: BORDER, color: (theme) => theme.palette.mode === "dark" ? "primary.main !important" : "#0f5132 !important", p: "5px 8px" }}>{t ?? ""}</TableCell>
                 ))}
               </TableRow>
             )
@@ -1400,7 +1410,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <DialogTitle sx={{ fontWeight: 700, color: "text.primary", pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>{editingPaymentId ? `Edit Payment Entry — Bill #${bill.bill_no}` : `Record Payment — Bill #${bill.bill_no}`}</span>
         <Chip
           label={bill.payment_status === "PAID" ? "FULLY PAID" : bill.payment_status === "PARTIAL" ? "PARTIALLY RECEIVED" : "UNPAID"}
@@ -1416,8 +1426,19 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
         </Typography>
 
         {/* Preset Stage Buttons */}
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2.5, bgcolor: "#f0fdf4", borderColor: "#a5d6a7" }}>
-          <Typography variant="caption" sx={{ fontWeight: 700, color: "#0f5132", textTransform: "uppercase", display: "block", mb: 1 }}>
+        <Paper variant="outlined" sx={{
+          p: 1.5,
+          mb: 2.5,
+          bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "#f0fdf4",
+          borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#a5d6a7"
+        }}>
+          <Typography variant="caption" sx={{
+            fontWeight: 700,
+            color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132",
+            textTransform: "uppercase",
+            display: "block",
+            mb: 1
+          }}>
             Select Payment Stage / Preset Shortcut:
           </Typography>
           <Grid container spacing={1}>
@@ -1473,8 +1494,20 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
         </Paper>
 
         {/* Editable Bill Breakdown Section */}
-        <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: "#f8fafc", borderRadius: 2 }}>
-          <Typography variant="caption" sx={{ fontWeight: 700, color: "#0f5132", textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 1.5 }}>
+        <Paper variant="outlined" sx={{
+          p: 2,
+          mb: 3,
+          bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8fafc",
+          borderRadius: 2
+        }}>
+          <Typography variant="caption" sx={{
+            fontWeight: 700,
+            color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+            display: "block",
+            mb: 1.5
+          }}>
             Editable Received Payment Amounts
           </Typography>
           <Grid container spacing={1.5}>
@@ -1532,10 +1565,10 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
             <Grid size={{ xs: 12 }}>
               <Divider sx={{ my: 0.5 }} />
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 0.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                   NET PAYMENT RECEIVED IN THIS ENTRY:
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                   ₹{formatAmount(parseFloat(netPaidAmt) || 0)}
                 </Typography>
               </Box>
@@ -1581,7 +1614,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
               value={netPaidAmt}
               onChange={(e) => setNetPaidAmt(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ "& input": { fontWeight: 800, color: "#0f5132" } }}
+              sx={{ "& input": { fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" } }}
             />
           </Grid>
           <Grid size={{ xs: 12 }}>
@@ -1622,7 +1655,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
                     <TableCell sx={{ fontSize: 11 }}>{ph.payment_date}</TableCell>
                     <TableCell sx={{ fontSize: 11, fontWeight: 700, color: "primary.main" }}>{ph.component}</TableCell>
                     <TableCell sx={{ fontSize: 11 }}>{ph.payment_mode}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: 11, fontWeight: 700, color: "#0f5132" }}>₹{formatAmount(ph.net_paid_amount)}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 11, fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>₹{formatAmount(ph.net_paid_amount)}</TableCell>
                     <TableCell sx={{ fontSize: 11, color: "text.secondary" }}>{ph.notes || "-"}</TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1715,7 +1748,7 @@ function EditBillDetailsDialog({ open, onClose, bill, activeFY, onSuccess }: Edi
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, color: "#0f5132", pb: 1 }}>
+      <DialogTitle sx={{ fontWeight: 700, color: "text.primary", pb: 1 }}>
         Edit Labour Bill — #{bill.bill_no}
       </DialogTitle>
       <Divider />
@@ -1773,7 +1806,7 @@ function EditBillDetailsDialog({ open, onClose, bill, activeFY, onSuccess }: Edi
               value={totalAmt}
               onChange={(e) => setTotalAmt(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ "& input": { fontWeight: 800, color: "#0f5132" } }}
+              sx={{ "& input": { fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" } }}
             />
           </Grid>
           <Grid size={{ xs: 12 }}>
@@ -2061,16 +2094,19 @@ export function ReceivablesReport() {
           {/* Supplier header row */}
           <Box sx={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            px: 2, py: 1, bgcolor: "#e8f5e9", borderBottom: "1px solid #a5d6a7",
+            px: 2, py: 1,
+            bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#e8f5e9",
+            borderBottom: "1px solid",
+            borderColor: "divider",
           }}>
-            <Typography sx={{ fontWeight: 700, color: "#0f5132", fontSize: "0.9rem" }}>
+            <Typography sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132", fontSize: "0.9rem" }}>
               {grp.ledger_name}
             </Typography>
             <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-              <Typography sx={{ fontSize: "0.78rem", color: "#555" }}>
+              <Typography sx={{ fontSize: "0.78rem", color: "text.secondary" }}>
                 {grp.bills.length} bill{grp.bills.length !== 1 ? "s" : ""}
               </Typography>
-              <Typography sx={{ fontWeight: 700, color: "#c62828", fontSize: "0.9rem" }}>
+              <Typography sx={{ fontWeight: 700, color: "error.main", fontSize: "0.9rem" }}>
                 ₹{formatAmount(grp.total)}
               </Typography>
             </Box>
@@ -2079,15 +2115,15 @@ export function ReceivablesReport() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill No.</TableCell>
-                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill Date</TableCell>
-                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Days O/S</TableCell>
-                <TableCell sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Aging</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Taxable Amt ({RUPEE})</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>GST ({RUPEE})</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>TDS (1%) ({RUPEE})</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Net Total ({RUPEE})</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700, bgcolor: "#122a1f", color: "#fff", fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px", width: 140 }}>Action / Status</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill No.</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Bill Date</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Days O/S</TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Aging</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Taxable Amt ({RUPEE})</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>GST ({RUPEE})</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>TDS (1%) ({RUPEE})</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px" }}>Net Total ({RUPEE})</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, fontSize: "0.72rem", textTransform: "uppercase", p: "5px 10px", width: 140 }}>Action / Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -2101,7 +2137,7 @@ export function ReceivablesReport() {
 
                 return (
                   <TableRow key={bill.id} hover>
-                    <TableCell sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#023020", p: "5px 10px" }}>{bill.bill_no}</TableCell>
+                    <TableCell sx={{ fontSize: "0.8rem", fontWeight: 600, color: "text.primary", p: "5px 10px" }}>{bill.bill_no}</TableCell>
                     <TableCell sx={{ fontSize: "0.8rem", p: "5px 10px", whiteSpace: "nowrap" }}>
                       {bill.bill_date ? new Date(bill.bill_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                     </TableCell>
@@ -2124,7 +2160,7 @@ export function ReceivablesReport() {
                     <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 600, p: "5px 10px", color: "error.main" }}>
                       ₹{formatAmount(tds)}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 800, p: "5px 10px", color: "#0f5132" }}>
+                    <TableCell align="right" sx={{ fontSize: "0.8rem", fontWeight: 800, p: "5px 10px", color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                       ₹{formatAmount(tot)}
                     </TableCell>
                     <TableCell align="center" sx={{ p: "5px 10px" }}>
@@ -2181,20 +2217,20 @@ export function ReceivablesReport() {
                 );
               })}
               {/* Subtotal row */}
-              <TableRow sx={{ bgcolor: "#f0fdf4" }}>
-                <TableCell colSpan={4} sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#0f5132", textAlign: "right" }}>
+              <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "#f0fdf4" }}>
+                <TableCell colSpan={4} sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid", borderColor: "divider", color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132", textAlign: "right" }}>
                   Subtotal — {grp.ledger_name}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "text.primary" }}>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid", borderColor: "divider", color: "text.primary" }}>
                   ₹{formatAmount(grp.totalTaxable)}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "primary.main" }}>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid", borderColor: "divider", color: "primary.main" }}>
                   ₹{formatAmount(grp.totalGst)}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "error.main" }}>
+                <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem", p: "5px 10px", borderTop: "1.5px solid", borderColor: "divider", color: "error.main" }}>
                   ₹{formatAmount(grp.totalTds)}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800, fontSize: "0.85rem", p: "5px 10px", borderTop: "1.5px solid #a5d6a7", color: "#c62828" }}>
+                <TableCell align="right" sx={{ fontWeight: 800, fontSize: "0.85rem", p: "5px 10px", borderTop: "1.5px solid", borderColor: "divider", color: "error.main" }}>
                   ₹{formatAmount(grp.total)}
                 </TableCell>
                 <TableCell />
@@ -2206,10 +2242,14 @@ export function ReceivablesReport() {
 
       {/* Grand total footer */}
       {!isLoading && rawData.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 2, bgcolor: "#fef3c7", borderColor: "#f59e0b" }}>
+        <Paper variant="outlined" sx={{
+          p: 2,
+          bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.12)" : "#fef3c7",
+          borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.4)" : "#f59e0b"
+        }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography sx={{ fontWeight: 700, color: "#92400e" }}>Grand Total Outstanding</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: "#92400e" }}>₹{formatAmount(grandTotal)}</Typography>
+            <Typography sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#92400e" }}>Grand Total Outstanding</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#92400e" }}>₹{formatAmount(grandTotal)}</Typography>
           </Box>
         </Paper>
       )}
@@ -2610,11 +2650,19 @@ export function StockInHandReport() {
 
               return (
                 <Paper key={sName} variant="outlined" sx={{ overflow: "hidden" }}>
-                  <Box sx={{ p: 1.5, backgroundColor: "#0f5132", color: "#ffffff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#ffffff !important" }}>
+                  <Box sx={{
+                    p: 1.5,
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.12)" : "#e8f5e9",
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                       🏢 Supplier: {sName}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: "#ffffff !important", fontWeight: 700 }}>
+                    <Typography variant="body2" sx={{ color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132", fontWeight: 700 }}>
                       Supplier Total Qty: {formatQty(sTotalQty)} | Weight: {formatWeight(sTotalWeight)} kgs
                     </Typography>
                   </Box>
@@ -2648,11 +2696,18 @@ export function StockInHandReport() {
           )}
 
           {/* Grand Total Summary Banner */}
-          <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#f0fdf4", borderColor: "#198754", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+          <Paper variant="outlined" sx={{
+            p: 2,
+            backgroundColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4",
+            borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#198754",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
               OVERALL GRAND TOTAL (ALL SUPPLIERS):
             </Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
               Total Qty: {formatQty(totalQty)} Pcs | Total Weight: {formatWeight(totalWeight)} kgs
             </Typography>
           </Paper>

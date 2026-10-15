@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, Typography, Card, CardContent } from "@mui/material";
+import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, IconButton, Tooltip, Typography, Alert } from "@mui/material";
 import Edit from "@mui/icons-material/Edit";
 import { useForm } from "react-hook-form";
 import api from "../../api/client";
@@ -120,13 +120,9 @@ export default function DocumentNumberingPage() {
         breadcrumbs={[{ label: "Settings" }, { label: "Document Numbering" }]}
       />
       {!isAdmin && (
-        <Card sx={{ mb: 2, bgcolor: "#fffbe6", border: "1px solid #ffe58f" }}>
-          <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-            <Typography variant="body2" color="warning.main">
-              <strong>Notice:</strong> Only administrators can edit document numbering sequences.
-            </Typography>
-          </CardContent>
-        </Card>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <strong>Notice:</strong> Only administrators can edit document numbering sequences.
+        </Alert>
       )}
       <OrbxGrid
         rowData={data}

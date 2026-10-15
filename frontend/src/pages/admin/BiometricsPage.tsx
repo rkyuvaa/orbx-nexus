@@ -227,8 +227,8 @@ export default function BiometricsPage() {
           sx={{
             px: 2,
             "& .MuiTab-root": { fontWeight: 700, minHeight: 48, fontSize: "0.9rem" },
-            "& .Mui-selected": { color: "#0f5132 !important" },
-            "& .MuiTabs-indicator": { backgroundColor: "#0f5132", height: 3 }
+            "& .Mui-selected": { color: "primary.main !important" },
+            "& .MuiTabs-indicator": { backgroundColor: "primary.main", height: 3 }
           }}
         >
           <Tab icon={<EventAvailableIcon fontSize="small" />} iconPosition="start" label="Daily Staff Attendance" />
@@ -241,7 +241,7 @@ export default function BiometricsPage() {
       {activeTab === 0 && (
         <Box>
           {/* Controls Bar */}
-          <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: "8px", bgcolor: "#fcfdfc" }}>
+          <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: "8px" }}>
             <Grid container spacing={2} sx={{ alignItems: "center" }}>
               <Grid size={{ xs: 12, md: 3 }}>
                 <TextField
@@ -258,7 +258,7 @@ export default function BiometricsPage() {
                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                   <Button
                     variant="contained"
-                    color="success"
+                    color="primary"
                     size="small"
                     startIcon={saveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
                     disabled={saveMutation.isPending || rows.length === 0}
@@ -266,8 +266,6 @@ export default function BiometricsPage() {
                     sx={{
                       fontWeight: 700,
                       borderRadius: "6px",
-                      bgcolor: "#0f5132",
-                      "&:hover": { bgcolor: "#0b3d26" },
                       px: 2,
                     }}
                   >
@@ -320,7 +318,7 @@ export default function BiometricsPage() {
                       label={`Saved at ${lastSavedTime}`}
                       color="success"
                       variant="outlined"
-                      sx={{ fontWeight: 700, borderRadius: "6px", px: 1, bgcolor: "#f0fdf4" }}
+                      sx={{ fontWeight: 700, borderRadius: "6px", px: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#f0fdf4" }}
                     />
                   ) : (
                     <Chip
@@ -339,33 +337,33 @@ export default function BiometricsPage() {
           {/* KPI Summary Cards */}
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid size={{ xs: 6, sm: 2.4 }}>
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: "#f8fafc" }}>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8fafc" }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>TOTAL STAFF</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#1e293b" }}>{kpiStats.total}</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: "text.primary" }}>{kpiStats.total}</Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 6, sm: 2.4 }}>
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: "#f0fdf4", borderColor: "#bbf7d0" }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#166534" }}>PRESENT</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#15803d" }}>{kpiStats.present}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#bbf7d0" }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>PRESENT</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>{kpiStats.present}</Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 6, sm: 2.4 }}>
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: "#fffbeb", borderColor: "#fde68a" }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#92400e" }}>HALF DAY</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#b45309" }}>{kpiStats.halfDay}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.1)" : "#fffbeb", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.3)" : "#fde68a" }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#92400e" }}>HALF DAY</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }}>{kpiStats.halfDay}</Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 6, sm: 2.4 }}>
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: "#fef2f2", borderColor: "#fecaca" }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#991b1b" }}>ABSENT</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#b91c1c" }}>{kpiStats.absent}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.1)" : "#fef2f2", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.3)" : "#fecaca" }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#991b1b" }}>ABSENT</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }}>{kpiStats.absent}</Typography>
               </Paper>
             </Grid>
             <Grid size={{ xs: 6, sm: 2.4 }}>
-              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: "#eff6ff", borderColor: "#bfdbfe" }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#1e40af" }}>ON LEAVE</Typography>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#1d4ed8" }}>{kpiStats.leave}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", borderRadius: "8px", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(59, 130, 246, 0.1)" : "#eff6ff", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe" }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1e40af" }}>ON LEAVE</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }}>{kpiStats.leave}</Typography>
               </Paper>
             </Grid>
           </Grid>
@@ -374,7 +372,7 @@ export default function BiometricsPage() {
           <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
             {isDailyLoading ? (
               <Box sx={{ p: 4, textAlign: "center" }}>
-                <CircularProgress size={32} sx={{ color: "#0f5132" }} />
+                <CircularProgress size={32} color="primary" />
                 <Typography variant="body2" sx={{ mt: 1, color: "text.secondary" }}>Loading staff list...</Typography>
               </Box>
             ) : rows.length === 0 ? (
@@ -388,7 +386,7 @@ export default function BiometricsPage() {
               </Box>
             ) : (
               <Table size="small">
-                <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                <TableHead>
                   <TableRow>
                     <TableCell sx={{ width: 50, fontWeight: 700, textAlign: "center" }}>#</TableCell>
                     <TableCell sx={{ fontWeight: 700, minWidth: 200 }}>Staff Name</TableCell>
@@ -408,10 +406,10 @@ export default function BiometricsPage() {
                       row.status === "Absent" ? "#dc2626" : "#2563eb";
 
                     return (
-                      <TableRow key={row.ledger_id} hover sx={{ bgcolor: idx % 2 === 0 ? "#ffffff" : "#fafdfb" }}>
+                      <TableRow key={row.ledger_id} hover sx={{ bgcolor: (theme) => idx % 2 === 0 ? "transparent" : (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.015)") }}>
                         <TableCell align="center" sx={{ fontWeight: 600, color: "text.secondary" }}>{idx + 1}</TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: "#1e293b" }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
                             {row.staff_name}
                           </Typography>
                           {row.staff_code && (
@@ -504,7 +502,6 @@ export default function BiometricsPage() {
                 p: 2,
                 mt: 2,
                 borderRadius: "8px",
-                bgcolor: "#fcfdfc",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
@@ -518,7 +515,7 @@ export default function BiometricsPage() {
               </Typography>
               <Button
                 variant="contained"
-                color="success"
+                color="primary"
                 size="medium"
                 startIcon={saveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
                 disabled={saveMutation.isPending}
@@ -527,10 +524,7 @@ export default function BiometricsPage() {
                   fontWeight: 700,
                   borderRadius: "6px",
                   px: 3,
-                  py: 1,
-                  bgcolor: "#0f5132",
-                  "&:hover": { bgcolor: "#0b3d26" },
-                  boxShadow: "0 2px 4px rgba(15,81,50,0.2)"
+                  py: 1
                 }}
               >
                 {saveMutation.isPending ? "Saving Attendance..." : "Save Attendance"}
@@ -575,7 +569,7 @@ export default function BiometricsPage() {
           <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
             {isMonthlyLoading ? (
               <Box sx={{ p: 4, textAlign: "center" }}>
-                <CircularProgress size={32} sx={{ color: "#0f5132" }} />
+                <CircularProgress size={32} color="primary" />
               </Box>
             ) : monthlyData.length === 0 ? (
               <Box sx={{ p: 3, textAlign: "center" }}>
@@ -583,14 +577,14 @@ export default function BiometricsPage() {
               </Box>
             ) : (
               <Table size="small">
-                <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                <TableHead>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 700 }}>#</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Staff Name</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: "#15803d" }} align="right">Present Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: "#b45309" }} align="right">Half Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: "#b91c1c" }} align="right">Absent Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: "#1d4ed8" }} align="right">Leave Days</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }} align="right">Present Days</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }} align="right">Half Days</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }} align="right">Absent Days</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }} align="right">Leave Days</TableCell>
                     <TableCell sx={{ fontWeight: 700 }} align="right">Total Work Hours</TableCell>
                   </TableRow>
                 </TableHead>
@@ -599,10 +593,10 @@ export default function BiometricsPage() {
                     <TableRow key={row.id} hover>
                       <TableCell>{idx + 1}</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>{row.ledger}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: "#15803d" }}>{row.present_days}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: "#b45309" }}>{row.half_days}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: "#b91c1c" }}>{row.absent_days}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: "#1d4ed8" }}>{row.leave_days || 0}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>{row.present_days}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }}>{row.half_days}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }}>{row.absent_days}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }}>{row.leave_days || 0}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700 }}>{row.total_hours} hrs</TableCell>
                     </TableRow>
                   ))}

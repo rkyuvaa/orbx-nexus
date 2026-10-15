@@ -19,6 +19,7 @@ import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { formatAmount } from "../../utils/format";
+import { broadcastSync } from "../../utils/syncChannel";
 
 const optionalNumber = z.preprocess((val) => {
   if (val === "" || val === null || val === undefined) return null;
@@ -129,19 +130,15 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       };
       const res = editing ? await api.put(`/ledgers/${editing.id}`, payload) : await api.post("/ledgers/", payload);
       const savedLedger = res.data;
-      if (photo) {
-        localStorage.setItem(`ledger_photo_${savedLedger.id}`, photo);
-      } else {
-        localStorage.removeItem(`ledger_photo_${savedLedger.id}`);
-      }
+      // Cleanup any legacy browser storage entry
+      try { localStorage.removeItem(`ledger_photo_${savedLedger.id}`); } catch (e) {}
       return savedLedger;
     },
     onSuccess: () => {
       handleClose();
-      setTimeout(() => {
-        qc.invalidateQueries({ queryKey: ["ledgers"] });
-        qc.invalidateQueries({ queryKey: ["ledgers-all"] });
-      }, 100);
+      qc.invalidateQueries({ queryKey: ["ledgers"] });
+      qc.invalidateQueries({ queryKey: ["ledgers-all"] });
+      broadcastSync([["ledgers"], ["ledgers-all"]]);
     },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail;
@@ -157,12 +154,13 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       await api.delete(`/ledgers/${id}`);
-      localStorage.removeItem(`ledger_photo_${id}`);
+      try { localStorage.removeItem(`ledger_photo_${id}`); } catch (e) {}
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ledgers"] });
       qc.invalidateQueries({ queryKey: ["ledgers-all"] });
       setDeleteId(null);
+      broadcastSync([["ledgers"], ["ledgers-all"]]);
     },
     onError: (err: any) => {
       alert(err?.response?.data?.detail || "Failed to process delete request");
@@ -174,12 +172,14 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       await Promise.all(
         rows.map(async (r) => {
           await api.delete(`/ledgers/${r.id}`);
-          localStorage.removeItem(`ledger_photo_${r.id}`);
+          try { localStorage.removeItem(`ledger_photo_${r.id}`); } catch (e) {}
         })
       );
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+      qc.invalidateQueries({ queryKey: ["ledgers"] });
+      qc.invalidateQueries({ queryKey: ["ledgers-all"] });
+      broadcastSync([["ledgers"], ["ledgers-all"]]);
     },
     onError: (err: any) => {
       alert(err?.response?.data?.detail || "Failed to process bulk delete");
@@ -191,7 +191,9 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       await Promise.all(rows.map((r) => api.patch(`/ledgers/${r.id}/status`, { is_active })));
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["ledgers", ledgerType], refetchType: "all" });
+      qc.invalidateQueries({ queryKey: ["ledgers"] });
+      qc.invalidateQueries({ queryKey: ["ledgers-all"] });
+      broadcastSync([["ledgers"], ["ledgers-all"]]);
     },
     onError: (err: any) => {
       alert(err?.response?.data?.detail || "Failed to update status of selected records");
@@ -201,7 +203,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
   const handleOpen = (row?: any) => {
     setEditing(row || null);
     if (row?.id) {
-      setPhoto(row.photo || localStorage.getItem(`ledger_photo_${row.id}`) || null);
+      setPhoto(row.photo || null);
     } else {
       setPhoto(null);
     }
@@ -223,8 +225,7 @@ export default function LedgerPage({ ledgerType, title, breadcrumbs }: LedgerPag
       flex: 2,
       minWidth: 180,
       cellRenderer: (p: any) => {
-        const photoKey = `ledger_photo_${p.data?.id}`;
-        const storedPhoto = p.data?.photo || localStorage.getItem(photoKey);
+        const storedPhoto = p.data?.photo;
         return (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, height: "100%" }}>
             {storedPhoto ? (

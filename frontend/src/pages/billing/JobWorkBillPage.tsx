@@ -66,10 +66,10 @@ function WorkDetailsActionMenu({
         slotProps={{ paper: { sx: { borderRadius: "8px", minWidth: 170, boxShadow: 3 } } }}
       >
         <MenuItem onClick={(e) => { handleClose(e); onPrint(row); }}>
-          <Print fontSize="small" sx={{ mr: 1, color: "#023020" }} /> Print
+          <Print fontSize="small" sx={{ mr: 1, color: "primary.main" }} /> Print
         </MenuItem>
         <MenuItem onClick={(e) => { handleClose(e); onExportExcel(row); }}>
-          <Description fontSize="small" sx={{ mr: 1, color: "#1d6f42" }} /> Download Excel
+          <Description fontSize="small" sx={{ mr: 1, color: "success.main" }} /> Download Excel
         </MenuItem>
       </Menu>
     </>
@@ -285,11 +285,11 @@ export default function JobWorkBillPage() {
     }).replace(/\//g, "-");
 
     const customerLedger = ledgers.find((l: any) => l.id === row.ledger_id);
-    const customerName = customerLedger?.name || `Customer #${row.ledger_id}`;
-    const customerAddr1 = customerLedger?.address || [customerLedger?.address_line1, customerLedger?.address_line2].filter(Boolean).join(", ") || "";
-    const customerCityStatePin = [customerLedger?.city, customerLedger?.state, customerLedger?.pincode].filter(Boolean).join(" - ");
-    const customerPhone = customerLedger?.phone || customerLedger?.mobile ? `Tel: ${[customerLedger?.phone, customerLedger?.mobile].filter(Boolean).join(" / ")}` : "";
-    const customerGstin = customerLedger?.gstin || "";
+    const customerName = row.customer_name || customerLedger?.name || `Customer #${row.ledger_id}`;
+    const customerAddr1 = row.customer_address || customerLedger?.address || [customerLedger?.address_line1, customerLedger?.address_line2].filter(Boolean).join(", ") || "";
+    const customerCityStatePin = [row.customer_city || customerLedger?.city, row.customer_state || customerLedger?.state, row.customer_pincode || customerLedger?.pincode].filter(Boolean).join(" - ");
+    const customerPhone = row.customer_phone || (customerLedger?.phone || customerLedger?.mobile ? `Tel: ${[customerLedger?.phone, customerLedger?.mobile].filter(Boolean).join(" / ")}` : "");
+    const customerGstin = row.customer_gstin || customerLedger?.gstin || "";
 
     const outwardIds = Array.isArray(row.outward_ids)
       ? row.outward_ids
@@ -327,7 +327,35 @@ export default function JobWorkBillPage() {
       });
     }
 
-    const inwardRefs = Array.from(resolvedInwardRefs).join(", ") || "-";
+    const sortInwardRefs = (refs: string[]): string[] => {
+      const extractNum = (ref: string): number | null => {
+        if (!ref) return null;
+        const matches = ref.match(/\d+/g);
+        if (!matches || matches.length === 0) return null;
+        const lastNum = matches[matches.length - 1];
+        const parsed = parseInt(lastNum, 10);
+        return isNaN(parsed) ? null : parsed;
+      };
+
+      return [...refs].sort((a, b) => {
+        const numA = extractNum(a);
+        const numB = extractNum(b);
+
+        if (numA !== null && numB !== null) {
+          if (numA !== numB) {
+            return numA - numB;
+          }
+        } else if (numA !== null) {
+          return -1;
+        } else if (numB !== null) {
+          return 1;
+        }
+
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+      });
+    };
+
+    const inwardRefs = sortInwardRefs(Array.from(resolvedInwardRefs)).join(", ") || "-";
     const formattedTerms = printConfig.billTerms ? printConfig.billTerms.replace(/\n/g, "<br/>") : "";
 
     let itemsArray: any[] = [];
@@ -571,11 +599,11 @@ export default function JobWorkBillPage() {
     }).replace(/\//g, "-") : "-";
 
     const customerLedger = ledgers.find((l: any) => l.id === row.ledger_id);
-    const customerName = customerLedger?.name || `Customer #${row.ledger_id}`;
-    const customerAddr1 = customerLedger?.address || [customerLedger?.address_line1, customerLedger?.address_line2].filter(Boolean).join(", ") || "";
-    const customerCityStatePin = [customerLedger?.city, customerLedger?.state, customerLedger?.pincode].filter(Boolean).join(" - ");
-    const customerPhone = customerLedger?.phone || customerLedger?.mobile ? `Tel: ${[customerLedger?.phone, customerLedger?.mobile].filter(Boolean).join(" / ")}` : "";
-    const customerGstin = customerLedger?.gstin || "";
+    const customerName = row.customer_name || customerLedger?.name || `Customer #${row.ledger_id}`;
+    const customerAddr1 = row.customer_address || customerLedger?.address || [customerLedger?.address_line1, customerLedger?.address_line2].filter(Boolean).join(", ") || "";
+    const customerCityStatePin = [row.customer_city || customerLedger?.city, row.customer_state || customerLedger?.state, row.customer_pincode || customerLedger?.pincode].filter(Boolean).join(" - ");
+    const customerPhone = row.customer_phone || (customerLedger?.phone || customerLedger?.mobile ? `Tel: ${[customerLedger?.phone, customerLedger?.mobile].filter(Boolean).join(" / ")}` : "");
+    const customerGstin = row.customer_gstin || customerLedger?.gstin || "";
 
     const parseJsonArray = (x: any): any[] => {
       if (typeof x === "string") {
@@ -2397,7 +2425,7 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
     <>
       <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
         <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} onKeyDown={handleKeyDown}>
-          <DialogTitle sx={{ fontWeight: 700, color: "#023020" }}>
+          <DialogTitle sx={{ fontWeight: 700, color: "text.primary" }}>
             {editing ? "Edit Job Work Bill" : "New Job Work Bill"}
           </DialogTitle>
           <DialogContent dividers>
@@ -2486,10 +2514,10 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
                             <Checkbox
                               size="small"
                               checked={selected}
-                              sx={{ p: 0.5, color: "#023020", "&.Mui-checked": { color: "#023020" } }}
+                              sx={{ p: 0.5, color: "primary.main", "&.Mui-checked": { color: "primary.main" } }}
                             />
                             <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: "#023020" }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
                                 {option.inward_no} {sNo ? <Typography component="span" variant="caption" color="text.secondary">({sNo})</Typography> : null}
                               </Typography>
                               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
@@ -2500,7 +2528,9 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
                           <Chip
                             size="small"
                             label={`${formatWeight(option.unbilledWeight)} kg`}
-                            sx={{ bgcolor: "#e8f5e9", color: "#023020", fontWeight: 700, fontSize: "0.7rem", ml: 2 }}
+                            color="success"
+                            variant="outlined"
+                            sx={{ fontWeight: 700, fontSize: "0.7rem", ml: 2 }}
                           />
                         </Box>
                       );
@@ -2517,10 +2547,11 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
                             size="small"
                             {...tagProps}
                             sx={{
-                              bgcolor: "#e8f5e9",
-                              color: "#023020",
+                              bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.18)" : "#e8f5e9",
+                              color: (theme) => theme.palette.mode === "dark" ? "primary.light" : "#023020",
                               fontWeight: 700,
-                              border: "1px solid #023020",
+                              border: "1px solid",
+                              borderColor: "divider",
                               borderRadius: "16px",
                               m: "2px !important"
                             }}
@@ -2559,21 +2590,21 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
               {/* Line Items Table - Strictly auto-derived from completed outward processes */}
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                  <Typography sx={{ fontWeight: 600, color: "#023020" }} variant="subtitle2">
+                  <Typography sx={{ fontWeight: 600, color: "text.primary" }} variant="subtitle2">
                     Bill Line Items (Derived from Completed Outward Processes)
                   </Typography>
                   <Button
                     size="small"
                     variant="outlined"
                     onClick={() => handleInwardSelectionChange(selectedInwards)}
-                    sx={{ textTransform: "none", fontSize: "0.75rem", py: 0.25, px: 1, borderColor: "#023020", color: "#023020" }}
+                    sx={{ textTransform: "none", fontSize: "0.75rem", py: 0.25, px: 1, borderColor: "divider", color: "text.primary" }}
                   >
                     Recalculate from Inwards
                   </Button>
                 </Box>
                 <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                   <Table size="small">
-                    <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                    <TableHead>
                       <TableRow>
                         <TableCell sx={{ width: 40, fontWeight: 700 }} align="center">S. No</TableCell>
                         <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
@@ -2610,7 +2641,7 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
                   </Table>
                 </Paper>
                 {!freightOpen && (
-                  <Button size="small" variant="outlined" startIcon={<Add />} sx={{ mt: 1, textTransform: "none", color: "#023020", borderColor: "#023020", fontWeight: 600 }} onClick={handleToggleFreight}>
+                  <Button size="small" variant="outlined" startIcon={<Add />} sx={{ mt: 1, textTransform: "none", color: "text.primary", borderColor: "divider", fontWeight: 600 }} onClick={handleToggleFreight}>
                     Add Freight Section
                   </Button>
                 )}
@@ -2618,12 +2649,12 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
               {freightOpen && (
                 <Grid size={{ xs: 12 }}>
-                  <Typography sx={{ fontWeight: 600, color: "#023020", mb: 1 }} variant="subtitle2">
+                  <Typography sx={{ fontWeight: 600, color: "text.primary", mb: 1 }} variant="subtitle2">
                     Freight / Other Charges
                   </Typography>
                   <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
                     <Table size="small">
-                      <TableHead sx={{ bgcolor: "#f4f9f6" }}>
+                      <TableHead>
                         <TableRow>
                           <TableCell sx={{ width: "50%", fontWeight: 700 }}>Process *</TableCell>
                           <TableCell sx={{ width: 100, fontWeight: 700 }} align="right">Weight (kg) *</TableCell>
@@ -2693,7 +2724,15 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
 
               {/* Subtotals & Taxes & Round Off */}
               <Grid size={{ xs: 12 }}>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f8fafc", borderRadius: "8px" }}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8fafc",
+                    borderColor: "divider",
+                    borderRadius: "8px"
+                  }}
+                >
                   <Grid container spacing={2} sx={{ alignItems: "center" }}>
                     <Grid size={{ xs: 12, sm: 2 }}>
                       <TextField label="Taxable Subtotal" type="number" fullWidth size="small" value={subtotalAmount} slotProps={{ input: { readOnly: true } }} />
@@ -2721,20 +2760,20 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
                       </Box>
                     </Grid>
                     <Grid size={{ xs: 12 }}>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, pt: 1, borderTop: "1px solid #cbd5e1" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
                         <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                          <Typography variant="body2" sx={{ color: "#475569", fontWeight: 500 }}>
-                            Total Wt (W/O Freight): <Box component="span" sx={{ fontWeight: 700, color: "#1e293b" }}>{totalQty.toFixed(3)} kg</Box>
+                          <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 500 }}>
+                            Total Wt (W/O Freight): <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{totalQty.toFixed(3)} kg</Box>
                           </Typography>
-                          <Typography variant="body2" sx={{ color: "#475569", fontWeight: 500 }}>
-                            Total Wt (With Freight): <Box component="span" sx={{ fontWeight: 700, color: "#1e293b" }}>{(totalQty + (Number(freightItem.quantity) || 0)).toFixed(3)} kg</Box>
+                          <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 500 }}>
+                            Total Wt (With Freight): <Box component="span" sx={{ fontWeight: 700, color: "text.primary" }}>{(totalQty + (Number(freightItem.quantity) || 0)).toFixed(3)} kg</Box>
                           </Typography>
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f5132" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                             Net Payable Amount:
                           </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 800, color: "#0f5132" }}>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
                             ₹{formatAmount(netAmount)}
                           </Typography>
                         </Box>
@@ -2755,7 +2794,6 @@ function JobWorkBillDialog({ open, onClose, editing }: JobWorkBillDialogProps) {
               type="submit"
               variant="contained"
               disabled={saveMutation.isPending || hasMissingRates || !lineItems[0]?.process_id}
-              sx={{ bgcolor: "#023020" }}
             >
               {saveMutation.isPending ? "Saving..." : "Save Bill"}
             </Button>
