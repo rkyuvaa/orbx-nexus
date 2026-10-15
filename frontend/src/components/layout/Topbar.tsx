@@ -65,9 +65,10 @@ export default function Topbar() {
       >
         <Box
           sx={{
+            width: sidebarOpen ? { xs: "auto", md: 216 } : "auto",
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
             flexShrink: 0,
             transition: (theme) =>
               theme.transitions.create("width", {
@@ -92,8 +93,8 @@ export default function Topbar() {
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 1.25,
-              height: 34,
+              gap: 1,
+              height: 42,
               cursor: "pointer",
               userSelect: "none",
             }}
@@ -104,7 +105,7 @@ export default function Topbar() {
               alt="OrbX Logo"
               style={{
                 height: "100%",
-                maxHeight: 28,
+                maxHeight: 42,
                 width: "auto",
                 objectFit: "contain",
                 display: "block",
@@ -114,7 +115,7 @@ export default function Topbar() {
               component="span"
               sx={{
                 fontWeight: 700,
-                fontSize: { xs: "0.95rem", sm: "1.05rem" },
+                fontSize: { xs: "1rem", sm: "1.15rem" },
                 letterSpacing: "0.04em",
                 color: (theme) =>
                   theme.palette.mode === "dark"
@@ -131,7 +132,7 @@ export default function Topbar() {
           </Box>
         </Box>
 
-        <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1, borderColor: "divider" }} />
+        <Divider orientation="vertical" flexItem sx={{ my: 1, borderColor: "divider" }} />
 
         {/* Navigation Breadcrumb */}
         <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
@@ -147,7 +148,7 @@ export default function Topbar() {
               color="text.secondary"
               sx={{
                 cursor: "pointer",
-                fontSize: "0.8rem",
+                fontSize: "0.825rem",
                 fontWeight: 500,
                 display: "flex",
                 alignItems: "center",
@@ -165,7 +166,7 @@ export default function Topbar() {
                 color="text.secondary"
                 sx={{
                   cursor: "pointer",
-                  fontSize: "0.8rem",
+                  fontSize: "0.825rem",
                   fontWeight: 500,
                   display: "flex",
                   alignItems: "center",
@@ -181,7 +182,7 @@ export default function Topbar() {
               <Typography
                 color="text.primary"
                 sx={{
-                  fontSize: "0.85rem",
+                  fontSize: "0.875rem",
                   fontWeight: 700,
                   whiteSpace: "nowrap",
                   display: "flex",
