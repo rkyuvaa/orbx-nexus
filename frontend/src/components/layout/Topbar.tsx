@@ -88,8 +88,46 @@ export default function Topbar() {
             <MenuIcon sx={{ fontSize: 20 }} />
           </IconButton>
           {/* Left Section: Logo & Product Branding */}
-          <Box sx={{ display: "flex", alignItems: "center", height: 38 }}>
-            <img src={logoSrc} alt="Logo" style={{ height: "100%", maxHeight: 38, cursor: "pointer" }} onClick={() => navigate("/")} />
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              height: 34,
+              cursor: "pointer",
+              userSelect: "none",
+            }}
+            onClick={() => navigate("/")}
+          >
+            <img
+              src={logoSrc}
+              alt="OrbX Logo"
+              style={{
+                height: "100%",
+                maxHeight: 28,
+                width: "auto",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+            <Typography
+              component="span"
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: "0.95rem", sm: "1.05rem" },
+                letterSpacing: "0.04em",
+                color: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? theme.palette.primary.light
+                    : theme.palette.primary.dark,
+                lineHeight: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Nexus
+            </Typography>
           </Box>
         </Box>
 
@@ -99,12 +137,23 @@ export default function Topbar() {
         <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
           <Breadcrumbs
             separator={<NavigateNext sx={{ fontSize: 14, color: "text.disabled" }} />}
-            sx={{ "& .MuiBreadcrumbs-separator": { mx: 0.5 } }}
+            sx={{
+              "& .MuiBreadcrumbs-separator": { mx: 0.75 },
+              "& .MuiBreadcrumbs-ol": { alignItems: "center" },
+            }}
           >
             <Link
               underline="hover"
               color="text.secondary"
-              sx={{ cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}
+              sx={{
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                lineHeight: 1,
+                "&:hover": { color: "text.primary" },
+              }}
               onClick={() => navigate("/")}
             >
               Home
@@ -114,7 +163,15 @@ export default function Topbar() {
                 key={bc.label}
                 underline="hover"
                 color="text.secondary"
-                sx={{ cursor: "pointer", fontSize: "0.75rem", fontWeight: 500 }}
+                sx={{
+                  cursor: "pointer",
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  display: "flex",
+                  alignItems: "center",
+                  lineHeight: 1,
+                  "&:hover": { color: "text.primary" },
+                }}
                 onClick={() => bc.path && navigate(bc.path)}
               >
                 {bc.label}
@@ -123,7 +180,14 @@ export default function Topbar() {
             {headerState.title && (
               <Typography
                 color="text.primary"
-                sx={{ fontSize: "0.85rem", fontWeight: 700, whiteSpace: "nowrap" }}
+                sx={{
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "center",
+                  lineHeight: 1,
+                }}
               >
                 {headerState.title}
               </Typography>
