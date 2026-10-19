@@ -19,7 +19,7 @@ import Block from "@mui/icons-material/Block";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Delete from "@mui/icons-material/Delete";
 import { useUIStore, useCompanyStore } from "../../store";
-import { getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, COMMON_PRINT_CSS, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { formatDate } from "../../utils/format";
 
 export interface ColDef<T = any> {
@@ -373,7 +373,7 @@ export default function OrbxGrid<T = any>({
         <head>
           <title>${title} - ${companyTitle}</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+            ${COMMON_PRINT_CSS}
             @page { size: ${getPageSizeCSS(gridPaperSize)}; margin: 15mm; }
             body { font-family: 'Inter', sans-serif; color: #1a1a1a; margin: 0; padding: 0; line-height: 1.5; font-size: 11px; }
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 12px; margin-bottom: 20px; }
@@ -385,7 +385,6 @@ export default function OrbxGrid<T = any>({
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th { border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; color: #1a1a1a; font-weight: 600; text-align: left; padding: 8px 4px; font-size: 10px; text-transform: uppercase; }
             td { padding: 8px 4px; border-bottom: 1px solid #e2e8f0; color: #2d3748; font-size: 10px; }
-            .footer { position: fixed; bottom: 0; width: 100%; display: flex; justify-content: space-between; font-size: 9px; color: #a0aec0; border-top: 1px solid #e0e0e0; padding-top: 8px; }
           </style>
         </head>
         <body>
@@ -408,10 +407,7 @@ export default function OrbxGrid<T = any>({
               ${rowsHtml}
             </tbody>
           </table>
-          <div class="footer">
-            <span>${companyTitle} - Professional Enterprise Report</span>
-            <span>Page 1 of 1</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${previewOnly ? "" : PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

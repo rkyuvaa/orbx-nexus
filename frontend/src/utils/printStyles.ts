@@ -1,3 +1,46 @@
+export const GLOBAL_PRINT_FOOTER_CSS = `
+  @page {
+    @bottom-left {
+      content: "Powered by OrbX | orbx.in";
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+    @bottom-right {
+      content: "Pages " counter(page) "/" counter(pages);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+  }
+
+  /* Prevent duplicate or legacy footers during print */
+  @media print {
+    .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
+      display: none !important;
+    }
+  }
+
+  /* On-screen preview fallback if viewed in browser tab prior to print */
+  .orbx-screen-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    font-size: 8pt;
+    font-family: 'Inter', sans-serif;
+    color: #555555;
+    border-top: 0.5px solid #e0e0e0;
+    margin-top: 20px;
+  }
+`;
+
 export const COMMON_PRINT_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   
@@ -5,6 +48,50 @@ export const COMMON_PRINT_CSS = `
   
   html, body { margin: 0; padding: 0; }
   body { font-family: 'Inter', sans-serif; color: #1a1a1a; background-color: #fff; line-height: 1.35; font-size: 10.5px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* =========================================================================
+     GLOBAL ORBX BRANDED PRINT FOOTER & DYNAMIC PAGE NUMBERING
+     ========================================================================= */
+  @page {
+    @bottom-left {
+      content: "Powered by OrbX | orbx.in";
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+    @bottom-right {
+      content: "Pages " counter(page) "/" counter(pages);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+  }
+
+  /* Prevent duplicate or legacy footers during print */
+  @media print {
+    .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
+      display: none !important;
+    }
+  }
+
+  /* On-screen preview fallback if viewed in browser tab prior to print */
+  .orbx-screen-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    font-size: 8pt;
+    font-family: 'Inter', sans-serif;
+    color: #555555;
+    border-top: 0.5px solid #e0e0e0;
+    margin-top: 20px;
+  }
   
   /* Header & Branding */
   .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 0.5px solid #198754; padding-bottom: 8px; margin-bottom: 10px; }
@@ -211,3 +298,17 @@ export function injectPrintStyles(css: string): void {
   style.textContent = css;
   document.head.appendChild(style);
 }
+
+/**
+ * Renders the on-screen fallback footer for browser previews when viewed before printing.
+ * Hidden automatically during physical print and PDF generation via @media print { display: none !important; }.
+ */
+export function getGlobalPrintFooterHtml(): string {
+  return `
+    <div class="orbx-screen-footer">
+      <span>Powered by OrbX | orbx.in</span>
+      <span>Pages 1/1</span>
+    </div>
+  `;
+}
+

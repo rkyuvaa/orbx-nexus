@@ -31,9 +31,30 @@ const firstOfMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padSta
   }
   const css = `
 @media print {
-  @page { size: ${reportPaperSize === "A5" ? "A5 landscape" : "A4"}; margin: 15mm; }
+  @page {
+    size: ${reportPaperSize === "A5" ? "A5 landscape" : "A4"};
+    margin: 15mm;
+    @bottom-left {
+      content: "Powered by OrbX | orbx.in";
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+    @bottom-right {
+      content: "Pages " counter(page) "/" counter(pages);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+  }
   body { background: #fff !important; }
-  .MuiDrawer-root, .MuiAppBar-root, .MuiToolbar-root { display: none !important; }
+  .MuiDrawer-root, .MuiAppBar-root, .MuiToolbar-root, .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }
   main.MuiBox-root, main { margin-left: 0 !important; width: 100% !important; max-width: 100% !important; }
   .no-print { display: none !important; }
   .print-only { display: block !important; }
@@ -3245,12 +3266,6 @@ export function ItemMovementLedgerReport() {
             @page {
               size: A4 landscape;
               margin: 8mm 8mm 10mm 8mm;
-              @bottom-right {
-                content: "Page " counter(page) " of " counter(pages);
-                font-size: 8pt;
-                font-family: 'Inter', sans-serif;
-                color: #666;
-              }
             }
             body {
               font-family: 'Inter', Arial, sans-serif;

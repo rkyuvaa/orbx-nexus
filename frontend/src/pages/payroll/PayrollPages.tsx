@@ -18,7 +18,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, ensurePrintReady, resolveCompanyDetails } from "../../utils/printStyles";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -574,6 +574,116 @@ export function SalaryVoucherPage() {
     },
   ];
 
+  const handlePrintSalarySlip = async (row: any) => {
+    if (!row) return;
+    await ensurePrintReady();
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const compData = useCompanyStore.getState().company;
+    const { name: cName, address: cAddress, cityStatePin: cCityStatePin, phone: cPhone, email: cEmail, gstin: cTax } = resolveCompanyDetails(compData);
+    const logoHtml = getCompanyLogoHtml(true, compData);
+
+    const periodStr = `${MONTH_NAMES[(row.month || 1) - 1]} ${row.year}`;
+    const staffName = row.staff_name || staffMap[row.ledger_id]?.name || `Staff #${row.ledger_id}`;
+    const staffCode = row.staff_code ? ` (${row.staff_code})` : "";
+    const workingDays = row.days_worked || 0;
+    const perDaySalary = row.per_day_salary || 0;
+    const payableAmount = row.payable_amount || (Number(workingDays) * Number(perDaySalary));
+    const allowances = row.allowances || 0;
+    const deductions = row.deductions || 0;
+    const netSalary = row.net_salary || 0;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Salary Slip - ${row.voucher_no || staffName}</title>
+          <style>
+            @page { size: A5 landscape; margin: 10mm; }
+            ${COMMON_PRINT_CSS}
+          </style>
+        </head>
+        <body>
+          <div class="header-container">
+            <div class="logo-wrapper">${logoHtml}</div>
+            <div class="company-details">
+              <h1>${cName}</h1>
+              ${cAddress ? `<p>${cAddress}</p>` : ""}
+              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
+              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
+              ${cTax ? `<p class="gstin">${cTax}</p>` : ""}
+            </div>
+          </div>
+
+          <div class="title-section" style="align-items: center; border-bottom: 1.5px solid #0f5132; margin-bottom: 10px;">
+            <h2 style="font-size: 15px; margin-bottom: 3px;">STAFF SALARY VOUCHER SLIP</h2>
+            <div style="font-size: 11px; font-weight: 600; color: #2d3748;">Period: ${periodStr}</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; border: 0.5px solid #198754; padding: 8px 10px; background-color: #f8fafc;">
+            <div>
+              <div style="font-size: 9.5px; color: #555;">Voucher No: <strong style="font-size: 11px; color: #000;">${row.voucher_no || "-"}</strong></div>
+              <div style="font-size: 9.5px; color: #555; margin-top: 3px;">Date: <strong style="font-size: 11px; color: #000;">${row.voucher_date || "-"}</strong></div>
+            </div>
+            <div>
+              <div style="font-size: 9.5px; color: #555;">Staff Name: <strong style="font-size: 11.5px; color: #0f5132;">${staffName}${staffCode}</strong></div>
+            </div>
+          </div>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th style="text-align: right; width: 140px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Working Days (${workingDays} Days × ₹${formatAmount(perDaySalary)})</td>
+                <td style="text-align: right;">₹${formatAmount(payableAmount)}</td>
+              </tr>
+              <tr>
+                <td>Allowances / Incentives (+)</td>
+                <td style="text-align: right;">₹${formatAmount(allowances)}</td>
+              </tr>
+              <tr>
+                <td>Deductions / Advances (-)</td>
+                <td style="text-align: right; color: #c53030;">₹${formatAmount(deductions)}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="total-row">
+                <td style="font-weight: 700; text-transform: uppercase;">Net Payable Salary</td>
+                <td style="text-align: right; font-weight: 800; font-size: 12px; color: #0f5132;">₹${formatAmount(netSalary)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          ${row.narration ? `
+            <div class="narration-box" style="margin-top: 8px;">
+              <strong>Narration:</strong> ${row.narration}
+            </div>
+          ` : ""}
+
+          <div class="signatures-container" style="margin-top: 25px;">
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">Staff Signature</div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">Authorized Signatory for ${cName}</div>
+            </div>
+          </div>
+
+          ${PRINT_TRIGGER_SCRIPT}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   return (
     <Box>
       <PageHeader
@@ -925,7 +1035,7 @@ export function SalaryVoucherPage() {
             size="small"
             variant="contained"
             startIcon={<Print />}
-            onClick={() => window.print()}
+            onClick={() => handlePrintSalarySlip(viewVoucher)}
           >
             Print
           </Button>
