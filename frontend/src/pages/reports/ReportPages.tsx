@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, TextField, Paper, Typography, Grid,
   Table, TableHead, TableBody, TableRow, TableCell, TableSortLabel, MenuItem, Autocomplete,
-  Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, IconButton, Tooltip
+  Dialog, DialogTitle, DialogContent, DialogActions, Divider, Chip, IconButton, Tooltip,
+  TableFooter, ToggleButton, ToggleButtonGroup
 } from "@mui/material";
 import Print from "@mui/icons-material/Print";
 import Search from "@mui/icons-material/Search";
@@ -3048,20 +3049,29 @@ export function ItemMovementLedgerReport() {
 
   const movements = reportRes.movements || [];
   const summary = reportRes.summary || {};
+  const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
 
-  const formatLedgerQty = (val: number | string | null | undefined): string => {
+  const { groupedDetails, grandTotals } = useMemo(
+    () => buildInwardOutwardGroupedData(reportRes),
+    [reportRes]
+  );
+
+  const formatLedgerQty = (val: number | string | null | undefined, showZero = false): string => {
     if (val === null || val === undefined || val === "") return "";
     const n = Number(val);
-    if (isNaN(n) || n === 0) return "";
+    if (isNaN(n)) return "";
+    if (n === 0 && !showZero) return "";
     return n % 1 === 0 ? String(Math.round(n)) : String(n);
   };
 
-  const formatLedgerWeight = (val: number | string | null | undefined): string => {
+  const formatLedgerWeight = (val: number | string | null | undefined, showZero = false): string => {
     if (val === null || val === undefined || val === "") return "";
     const n = Number(val);
-    if (isNaN(n) || n === 0) return "";
+    if (isNaN(n)) return "";
+    if (n === 0 && !showZero) return "";
     return n.toFixed(3);
   };
+
 
   const handlePrint = async () => {
     const printWindow = window.open("", "_blank");
@@ -3385,13 +3395,210 @@ export function ItemMovementLedgerReport() {
               <StatPill label="Total In" value={formatQty(summary.total_inward_qty)} color="#0f5132" />
               <StatPill label="Total Out" value={formatQty(summary.total_outward_qty)} color="#c53030" />
               <StatPill label="Stock Bal" value={formatQty(summary.closing_qty)} color="#1976d2" />
+              <ToggleButtonGroup
+                size="small"
+                value={viewMode}
+                exclusive
+                onChange={(_, val) => val && setViewMode(val)}
+                sx={{ height: 36, bgcolor: "background.paper" }}
+              >
+                <ToggleButton value="grouped" sx={{ px: 1.5, py: 0.5, fontSize: "0.75rem", textTransform: "none", fontWeight: 600 }}>
+                  Inward & Outward
+                </ToggleButton>
+                <ToggleButton value="flat" sx={{ px: 1.5, py: 0.5, fontSize: "0.75rem", textTransform: "none" }}>
+                  Flat List
+                </ToggleButton>
+              </ToggleButtonGroup>
               <Button variant="outlined" size="small" startIcon={<Print />} onClick={handlePrint}>Print</Button>
             </>
           )}
         </FilterRow>
       </Box>
 
-      {movements.length > 0 && (
+      {movements.length > 0 && viewMode === "grouped" && (
+        <Paper variant="outlined" sx={{ overflow: "auto", borderRadius: 2 }}>
+          <Table size="small" sx={{ minWidth: 1000, borderCollapse: "collapse", "& td, & th": { border: 1, borderColor: "divider", py: 0.6, px: 1, fontSize: "0.82rem" } }}>
+            <TableHead>
+              {/* Level 1 Header: Inward Details & Outward Details */}
+              <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "grey.100" }}>
+                <TableCell colSpan={6} align="center" sx={{ fontWeight: 700, fontSize: "0.85rem", borderRight: "2px solid !important", borderColor: "divider" }}>
+                  Inward Details
+                </TableCell>
+                <TableCell colSpan={4} align="center" sx={{ fontWeight: 700, fontSize: "0.85rem" }}>
+                  Outward Details
+                </TableCell>
+              </TableRow>
+
+              {/* Level 2 Header: 10 Columns */}
+              <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "grey.50" }}>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "9%" }}>Ref. No.</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "6%" }}>Vou. No.</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "8%" }}>Date</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "25%" }}>Product Name</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "6.5%" }}>Quantity</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "8.5%", borderRight: "2px solid !important", borderColor: "divider" }}>Weight</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "8%" }}>Vou. No.</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "8%" }}>Date</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "6.5%" }}>Quantity</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 600, width: "8.5%" }}>Weight</TableCell>
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {groupedDetails.map((grp: any, gIdx: number) => {
+                let isFirstRowOfGroup = true;
+                const grpProducts = grp.products || [];
+
+                return (
+                  <React.Fragment key={`grp-${gIdx}-${grp.ref_no}-${grp.voucher_no}`}>
+                    {grpProducts.map((prod: any, pIdx: number) => {
+                      const outs = prod.outward_transactions || [];
+                      const prodInQty = Number(prod.inward_qty || 0);
+                      const prodInWt = Number(prod.inward_weight || 0);
+                      let prodOutQtyTotal = 0;
+                      let prodOutWtTotal = 0;
+
+                      if (outs.length === 0) {
+                        const showGroupInfo = isFirstRowOfGroup;
+                        isFirstRowOfGroup = false;
+
+                        return (
+                          <React.Fragment key={`prod-${pIdx}-${prod.product_id}`}>
+                            <TableRow hover>
+                              <TableCell align="left">{showGroupInfo ? (grp.ref_no || "") : ""}</TableCell>
+                              <TableCell align="center">{showGroupInfo ? (grp.voucher_no || "") : ""}</TableCell>
+                              <TableCell align="center">{showGroupInfo ? formatDate(grp.date, "2digit") : ""}</TableCell>
+                              <TableCell align="left" sx={{ fontWeight: 500 }}>{prod.product_name || ""}</TableCell>
+                              <TableCell align="right">{formatLedgerQty(prodInQty)}</TableCell>
+                              <TableCell align="right" sx={{ borderRight: "2px solid !important", borderColor: "divider" }}>{formatLedgerWeight(prodInWt)}</TableCell>
+                              <TableCell align="center"></TableCell>
+                              <TableCell align="center"></TableCell>
+                              <TableCell align="right"></TableCell>
+                              <TableCell align="right"></TableCell>
+                            </TableRow>
+
+                            {/* Product Total Row */}
+                            <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)" }}>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 500 }}>{formatLedgerQty(prodInQty)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 500, borderRight: "2px solid !important", borderColor: "divider" }}>{formatLedgerWeight(prodInWt)}</TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell align="right"></TableCell>
+                              <TableCell align="right"></TableCell>
+                            </TableRow>
+                          </React.Fragment>
+                        );
+                      }
+
+                      return (
+                        <React.Fragment key={`prod-${pIdx}-${prod.product_id}`}>
+                          {outs.map((otx: any, outIdx: number) => {
+                            const oQty = Number(otx.quantity || 0);
+                            const oWt = Number(otx.weight || 0);
+                            prodOutQtyTotal += oQty;
+                            prodOutWtTotal += oWt;
+
+                            if (outIdx === 0) {
+                              const showGroupInfo = isFirstRowOfGroup;
+                              isFirstRowOfGroup = false;
+
+                              return (
+                                <TableRow key={`out-${outIdx}`} hover>
+                                  <TableCell align="left">{showGroupInfo ? (grp.ref_no || "") : ""}</TableCell>
+                                  <TableCell align="center">{showGroupInfo ? (grp.voucher_no || "") : ""}</TableCell>
+                                  <TableCell align="center">{showGroupInfo ? formatDate(grp.date, "2digit") : ""}</TableCell>
+                                  <TableCell align="left" sx={{ fontWeight: 500 }}>{prod.product_name || ""}</TableCell>
+                                  <TableCell align="right">{formatLedgerQty(prodInQty)}</TableCell>
+                                  <TableCell align="right" sx={{ borderRight: "2px solid !important", borderColor: "divider" }}>{formatLedgerWeight(prodInWt)}</TableCell>
+                                  <TableCell align="center">{otx.voucher_no || ""}</TableCell>
+                                  <TableCell align="center">{formatDate(otx.date, "2digit")}</TableCell>
+                                  <TableCell align="right">{formatLedgerQty(oQty)}</TableCell>
+                                  <TableCell align="right">{formatLedgerWeight(oWt)}</TableCell>
+                                </TableRow>
+                              );
+                            }
+
+                            // Continuation row
+                            return (
+                              <TableRow key={`out-${outIdx}`} hover>
+                                <TableCell></TableCell>
+                                <TableCell></TableCell>
+                                <TableCell></TableCell>
+                                <TableCell></TableCell>
+                                <TableCell></TableCell>
+                                <TableCell sx={{ borderRight: "2px solid !important", borderColor: "divider" }}></TableCell>
+                                <TableCell align="center">{otx.voucher_no || ""}</TableCell>
+                                <TableCell align="center">{formatDate(otx.date, "2digit")}</TableCell>
+                                <TableCell align="right">{formatLedgerQty(oQty)}</TableCell>
+                                <TableCell align="right">{formatLedgerWeight(oWt)}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+
+                          {/* Product Total Row */}
+                          <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)" }}>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 500 }}>{formatLedgerQty(prodInQty)}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 500, borderRight: "2px solid !important", borderColor: "divider" }}>{formatLedgerWeight(prodInWt)}</TableCell>
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 500 }}>{formatLedgerQty(prodOutQtyTotal)}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 500 }}>{formatLedgerWeight(prodOutWtTotal)}</TableCell>
+                          </TableRow>
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {/* Group Total Row */}
+                    <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.06)" : "grey.100" }}>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>{formatLedgerQty(grp.subtotal?.inward_qty)}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, borderRight: "2px solid !important", borderColor: "divider" }}>{formatLedgerWeight(grp.subtotal?.inward_weight)}</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>{formatLedgerQty(grp.subtotal?.outward_qty)}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>{formatLedgerWeight(grp.subtotal?.outward_weight)}</TableCell>
+                    </TableRow>
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+
+            <TableFooter>
+              {/* Grand Total Row */}
+              <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.1)" : "grey.200", "& td": { borderTop: "2px solid !important", borderColor: "divider" } }}>
+                <TableCell colSpan={4} align="right" sx={{ fontWeight: 700, textTransform: "uppercase" }}>Grand Total</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>{formatLedgerQty(grandTotals.total_inward_qty, true)}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, borderRight: "2px solid !important", borderColor: "divider" }}>{formatLedgerWeight(grandTotals.total_inward_weight, true)}</TableCell>
+                <TableCell colSpan={2}></TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>{formatLedgerQty(grandTotals.total_outward_qty, true)}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>{formatLedgerWeight(grandTotals.total_outward_weight, true)}</TableCell>
+              </TableRow>
+
+              {/* Closing Balance Row */}
+              <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.05)" : "grey.50" }}>
+                <TableCell colSpan={4} align="right" sx={{ fontWeight: 700, textTransform: "uppercase" }}>Closing Balance (Inward - Outward)</TableCell>
+                <TableCell colSpan={2} align="right" sx={{ fontWeight: 700, borderRight: "2px solid !important", borderColor: "divider", color: "primary.main" }}>
+                  Qty: {formatLedgerQty(grandTotals.balance_qty, true)} &nbsp;|&nbsp; Wt: {formatLedgerWeight(grandTotals.balance_weight, true)}
+                </TableCell>
+                <TableCell colSpan={4}></TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </Paper>
+      )}
+
+      {movements.length > 0 && viewMode === "flat" && (
         <Paper variant="outlined" sx={{ overflow: "auto" }}>
           <PrintTable
             title={`Item Movement Ledger ${selectedProduct ? `- ${selectedProduct.name}` : ""}`}
