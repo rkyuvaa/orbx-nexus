@@ -12,8 +12,8 @@ import Delete from "@mui/icons-material/Delete";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore, useCompanyStore } from "../../store";
-import { COMMON_PRINT_CSS, getCompanyLogoHtml, ensurePrintReady, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
-import { formatQty, formatWeight, formatAmount } from "../../utils/format";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, ensurePrintReady, PRINT_TRIGGER_SCRIPT, resolveCompanyDetails } from "../../utils/printStyles";
+import { formatQty, formatWeight, formatAmount, formatDate } from "../../utils/format";
 
 const ACCENT = "#0f5132";
 const BORDER = "#0f5132";
@@ -2882,6 +2882,133 @@ export function StockSummaryReport() {
 }
 
 
+/**
+ * Helper to construct or validate side-by-side inward and outward groups.
+ * Reuses backend `grouped_details` and `grand_totals` when present, or provides
+ * a clean client fallback grouping.
+ */
+function buildInwardOutwardGroupedData(reportRes: any) {
+  if (reportRes?.grouped_details && Array.isArray(reportRes.grouped_details) && reportRes.grouped_details.length > 0) {
+    return {
+      groupedDetails: reportRes.grouped_details,
+      grandTotals: reportRes.grand_totals || {
+        total_inward_qty: reportRes.summary?.total_inward_qty || 0,
+        total_inward_weight: reportRes.summary?.total_inward_weight || 0,
+        total_outward_qty: reportRes.summary?.total_outward_qty || 0,
+        total_outward_weight: reportRes.summary?.total_outward_weight || 0,
+        balance_qty: reportRes.summary?.closing_qty || 0,
+        balance_weight: reportRes.summary?.closing_weight || 0,
+      }
+    };
+  }
+
+  // Graceful client fallback in case older cache or response is loaded:
+  const movements = reportRes?.movements || [];
+  const groupsMap: Record<string, any> = {};
+
+  const inwardMovements = movements.filter((m: any) => m.type === "Inward");
+  const outwardMovements = movements.filter((m: any) => m.type === "Outward");
+
+  inwardMovements.forEach((inv: any) => {
+    const key = `${inv.ref_no || "-"}||${inv.voucher_no || "-"}||${inv.date}||${inv.party_name || "-"}`;
+    if (!groupsMap[key]) {
+      groupsMap[key] = {
+        ref_no: inv.ref_no || "-",
+        voucher_no: inv.voucher_no || "-",
+        date: inv.date,
+        party_name: inv.party_name || "-",
+        products: [],
+        subtotal: { inward_qty: 0, inward_weight: 0, outward_qty: 0, outward_weight: 0 }
+      };
+    }
+    const grp = groupsMap[key];
+    const qty = Number(inv.inward_qty || 0);
+    const wt = Number(inv.inward_weight || 0);
+    grp.products.push({
+      product_id: inv.product_id,
+      product_name: inv.product_name,
+      inward_qty: qty,
+      inward_weight: wt,
+      outward_transactions: []
+    });
+    grp.subtotal.inward_qty += qty;
+    grp.subtotal.inward_weight += wt;
+  });
+
+  outwardMovements.forEach((out: any) => {
+    let matched = false;
+    for (const key of Object.keys(groupsMap)) {
+      const grp = groupsMap[key];
+      const matchRef = out.ref_no && out.ref_no !== "-" && grp.ref_no && grp.ref_no !== "-" && grp.ref_no.trim().toLowerCase() === out.ref_no.trim().toLowerCase();
+      if (matchRef || out.voucher_no === grp.voucher_no) {
+        const prod = grp.products.find((p: any) => p.product_name === out.product_name);
+        if (prod) {
+          const oQty = Number(out.outward_qty || 0);
+          const oWt = Number(out.outward_weight || 0);
+          prod.outward_transactions.push({
+            voucher_no: out.voucher_no,
+            date: out.date,
+            quantity: oQty,
+            weight: oWt
+          });
+          grp.subtotal.outward_qty += oQty;
+          grp.subtotal.outward_weight += oWt;
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (!matched) {
+      const fallbackKey = "__direct_outward__";
+      if (!groupsMap[fallbackKey]) {
+        groupsMap[fallbackKey] = {
+          ref_no: "Direct Outward",
+          voucher_no: "-",
+          date: out.date,
+          party_name: out.party_name || "-",
+          products: [],
+          subtotal: { inward_qty: 0, inward_weight: 0, outward_qty: 0, outward_weight: 0 }
+        };
+      }
+      const grp = groupsMap[fallbackKey];
+      const oQty = Number(out.outward_qty || 0);
+      const oWt = Number(out.outward_weight || 0);
+      grp.products.push({
+        product_id: out.product_id,
+        product_name: out.product_name,
+        inward_qty: 0,
+        inward_weight: 0,
+        outward_transactions: [{
+          voucher_no: out.voucher_no,
+          date: out.date,
+          quantity: oQty,
+          weight: oWt
+        }]
+      });
+      grp.subtotal.outward_qty += oQty;
+      grp.subtotal.outward_weight += oWt;
+    }
+  });
+
+  const groupedDetails = Object.values(groupsMap);
+  const grand_in_qty = groupedDetails.reduce((sum, g) => sum + g.subtotal.inward_qty, 0);
+  const grand_in_wt = groupedDetails.reduce((sum, g) => sum + g.subtotal.inward_weight, 0);
+  const grand_out_qty = groupedDetails.reduce((sum, g) => sum + g.subtotal.outward_qty, 0);
+  const grand_out_wt = groupedDetails.reduce((sum, g) => sum + g.subtotal.outward_weight, 0);
+
+  return {
+    groupedDetails,
+    grandTotals: {
+      total_inward_qty: grand_in_qty,
+      total_inward_weight: grand_in_wt,
+      total_outward_qty: grand_out_qty,
+      total_outward_weight: grand_out_wt,
+      balance_qty: grand_in_qty - grand_out_qty,
+      balance_weight: grand_in_wt - grand_out_wt
+    }
+  };
+}
+
 export function ItemMovementLedgerReport() {
   const { activeFY } = useAuthStore();
   const [fromDate, setFromDate] = useState(firstOfMonth);
@@ -2928,28 +3055,82 @@ export function ItemMovementLedgerReport() {
     if (!printWindow) return;
 
     const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
-    const cName = compData?.name || compData?.company_name || "SRI METAL";
-    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
-    const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
-    const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
-    const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
+    const cDetails = resolveCompanyDetails(compData);
+    const cName = cDetails.name;
+    const cAddress1 = cDetails.address;
+    const cCityStatePin = cDetails.cityStatePin;
+    const cTax = cDetails.gstin;
 
-    const productName = selectedProduct ? selectedProduct.name : "All Items";
+    const selectedLedger = ledgers.find((l: any) => String(l.id) === String(selectedLedgerId));
+    const selectedSupplierName = selectedLedger ? selectedLedger.name : "";
+    const productName = selectedProduct ? selectedProduct.name : "All Products";
+
+    const { groupedDetails, grandTotals } = buildInwardOutwardGroupedData(reportRes);
 
     let rowsHtml = "";
-    movements.forEach((m: any, idx: number) => {
-      rowsHtml += `<tr>
-        <td style="text-align: center;">${idx + 1}</td>
-        <td style="text-align: center; white-space: nowrap;">${m.date}</td>
-        <td style="text-align: center; font-weight: 600; color: ${m.type === "Inward" ? "#0f5132" : "#c53030"};">${m.type}</td>
-        <td style="text-align: center; font-weight: 700; white-space: nowrap;">${m.voucher_no}</td>
-        <td style="text-align: center; white-space: nowrap;">${m.ref_no}</td>
-        <td>${m.party_name}</td>
-        <td style="font-weight: 600;">${m.product_name}</td>
-        <td style="text-align: right; color: #0f5132; font-weight: 600;">${Number(m.inward_qty) > 0 ? formatQty(m.inward_qty) : "-"}</td>
-        <td style="text-align: right; color: #c53030; font-weight: 600;">${Number(m.outward_qty) > 0 ? formatQty(m.outward_qty) : "-"}</td>
-        <td style="text-align: right; font-weight: 700; background-color: #f8fafc;">${formatQty(m.running_balance_qty)}</td>
+    groupedDetails.forEach((grp: any) => {
+      let isFirstRowOfGroup = true;
+      const grpProducts = grp.products || [];
+      grpProducts.forEach((prod: any) => {
+        const outs = prod.outward_transactions || [];
+        if (outs.length === 0) {
+          rowsHtml += `<tr>
+            <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.ref_no || "-") : ""}</td>
+            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.voucher_no || "-") : ""}</td>
+            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? formatDate(grp.date, "2digit") : ""}</td>
+            <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000;">${prod.product_name || "-"}</td>
+            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(prod.inward_qty) > 0 ? formatQty(prod.inward_qty) : "-"}</td>
+            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${Number(prod.inward_weight) > 0 ? formatWeight(prod.inward_weight) : "-"}</td>
+            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+          </tr>`;
+          isFirstRowOfGroup = false;
+        } else {
+          outs.forEach((otx: any, outIdx: number) => {
+            if (outIdx === 0) {
+              rowsHtml += `<tr>
+                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.ref_no || "-") : ""}</td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.voucher_no || "-") : ""}</td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? formatDate(grp.date, "2digit") : ""}</td>
+                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000;">${prod.product_name || "-"}</td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(prod.inward_qty) > 0 ? formatQty(prod.inward_qty) : "-"}</td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${Number(prod.inward_weight) > 0 ? formatWeight(prod.inward_weight) : "-"}</td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${otx.voucher_no || "-"}</td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${formatDate(otx.date, "2digit")}</td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.quantity) > 0 ? formatQty(otx.quantity) : "-"}</td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.weight) > 0 ? formatWeight(otx.weight) : "-"}</td>
+              </tr>`;
+              isFirstRowOfGroup = false;
+            } else {
+              // Continuation row: Inward cells blank to prevent duplicating inward quantities/weights
+              rowsHtml += `<tr>
+                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000;"></td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;"></td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${otx.voucher_no || "-"}</td>
+                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${formatDate(otx.date, "2digit")}</td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.quantity) > 0 ? formatQty(otx.quantity) : "-"}</td>
+                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.weight) > 0 ? formatWeight(otx.weight) : "-"}</td>
+              </tr>`;
+            }
+          });
+        }
+      });
+
+      // Group Subtotal Row
+      const sub = grp.subtotal || {};
+      rowsHtml += `<tr style="background-color: #f8fafc; font-weight: bold; border-top: 1px solid #000; border-bottom: 1.5px solid #000;">
+        <td colspan="4" style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; text-transform: uppercase;">Total</td>
+        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(sub.inward_qty) > 0 ? formatQty(sub.inward_qty) : "-"}</td>
+        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${Number(sub.inward_weight) > 0 ? formatWeight(sub.inward_weight) : "-"}</td>
+        <td colspan="2" style="border: 1px solid #000; background-color: #fafafa;"></td>
+        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(sub.outward_qty) > 0 ? formatQty(sub.outward_qty) : "-"}</td>
+        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(sub.outward_weight) > 0 ? formatWeight(sub.outward_weight) : "-"}</td>
       </tr>`;
     });
 
@@ -2959,68 +3140,141 @@ export function ItemMovementLedgerReport() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Item In/Out Movement Report - ${productName}</title>
+          <title>Inward and Outward Details - ${cName}</title>
           <style>
-            ${COMMON_PRINT_CSS}
-            @page { size: A4 portrait; margin: 15mm; }
-            table.items-table th, table.items-table td {
-              border: 1px solid #cbd5e1;
-              padding: 5px 7px;
-              white-space: nowrap;
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+              box-sizing: border-box;
             }
-            table.items-table th {
-              background-color: #f8fafc;
-              border-bottom: 2px solid #94a3b8;
+            @page {
+              size: A4 landscape;
+              margin: 8mm 8mm 10mm 8mm;
+              @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8pt;
+                font-family: Arial, Helvetica, sans-serif;
+                color: #000;
+              }
             }
-            .totals-row td {
-              font-weight: 700;
-              background-color: #e2e8f0;
-              border-top: 2px solid #0f5132;
-              border-bottom: 2px solid #0f5132;
+            html, body {
+              margin: 0;
+              padding: 0;
+              background-color: #fff;
+              color: #000;
+              font-family: Arial, Helvetica, sans-serif;
+              font-size: 8.5pt;
+              line-height: 1.25;
+            }
+            table.ledger-table {
+              width: 100%;
+              border-collapse: collapse;
+              page-break-inside: auto;
+              border: 1px solid #000;
+            }
+            table.ledger-table thead {
+              display: table-header-group;
+            }
+            table.ledger-table tfoot {
+              display: table-row-group;
+              page-break-inside: avoid;
+            }
+            table.ledger-table tr {
+              page-break-inside: avoid;
+              page-break-after: auto;
+            }
+            table.ledger-table th,
+            table.ledger-table td {
+              border: 1px solid #000;
+              padding: 3.5px 5px;
+              font-size: 8pt;
+              color: #000;
+            }
+            .company-logo-img {
+              max-height: 44px;
+              max-width: 125px;
+              object-fit: contain;
+            }
+            @media print {
+              body { margin: 0; }
             }
           </style>
         </head>
         <body>
-          <div class="header-container">
-            <div class="logo-wrapper">${logoHtml}</div>
-            <div class="company-details">
-              <h1>${cName}</h1>
-              ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
-              ${cCityStatePin ? `<p>${cCityStatePin}</p>` : ""}
-              <p>${[cPhone, cEmail].filter(Boolean).join(" | ")}</p>
-              ${cTax ? `<p class="gstin">GSTIN: ${cTax}</p>` : ""}
-            </div>
-          </div>
-          
-          <div class="title-section" style="margin-bottom: 15px;">
-            <h2>Item In & Out Movement Ledger</h2>
-            <div>Item: <strong>${productName}</strong> | Period: <strong>${fromDate} to ${toDate}</strong></div>
-          </div>
-
-          <table class="items-table" style="width: 100%;">
+          <table class="ledger-table">
             <thead>
+              <!-- Top repeating company banner & metadata on every printed page -->
               <tr>
-                <th style="width: 40px; text-align: center;">#</th>
-                <th style="width: 85px; text-align: center;">Date</th>
-                <th style="width: 75px; text-align: center;">Type</th>
-                <th style="width: 95px; text-align: center;">Voucher No</th>
-                <th style="width: 95px; text-align: center;">Ref No</th>
-                <th style="text-align: left;">Party / Supplier Name</th>
-                <th style="text-align: left;">Product Name</th>
-                <th style="width: 80px; text-align: right;">In Qty</th>
-                <th style="width: 80px; text-align: right;">Out Qty</th>
-                <th style="width: 95px; text-align: right;">Stock Bal</th>
+                <th colspan="10" style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 6px 8px; background: #fff; color: #000; font-weight: normal;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <div style="flex: 0 0 130px; text-align: left;">
+                      ${logoHtml ? `<div class="logo-wrapper">${logoHtml}</div>` : ""}
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                      <div style="font-size: 13pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #000;">${cName}</div>
+                      ${cAddress1 || cCityStatePin ? `<div style="font-size: 7.5pt; color: #333; margin-top: 1px;">${[cAddress1, cCityStatePin].filter(Boolean).join(", ")}</div>` : ""}
+                      ${cTax ? `<div style="font-size: 7.5pt; font-weight: 600; color: #333;">${cTax}</div>` : ""}
+                    </div>
+                    <div style="flex: 0 0 130px; text-align: right; font-size: 8pt; color: #444;">
+                      <div><strong>Print Date:</strong> ${formatDate(today, "2digit")}</div>
+                    </div>
+                  </div>
+                  
+                  <div style="text-align: center; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 3px 0; margin: 3px 0;">
+                    <span style="font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #000;">Inward and Outward Details</span>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: #000; padding: 2px 2px 0 2px;">
+                    <div><strong>Supplier:</strong> ${selectedSupplierName || "All Suppliers"}</div>
+                    <div><strong>Product:</strong> ${productName}</div>
+                    <div><strong>Period:</strong> ${formatDate(fromDate, "2digit")} to ${formatDate(toDate, "2digit")}</div>
+                  </div>
+                </th>
+              </tr>
+
+              <!-- Level 1 Header: Inward & Outward Groups -->
+              <tr style="background-color: #f1f5f9; font-weight: 700; font-size: 8.5pt;">
+                <th colspan="6" style="border: 1px solid #000; border-right: 2px solid #000; text-align: center; padding: 4px; text-transform: uppercase;">Inward Details</th>
+                <th colspan="4" style="border: 1px solid #000; text-align: center; padding: 4px; text-transform: uppercase;">Outward Details</th>
+              </tr>
+
+              <!-- Level 2 Header: 10 Side-by-side columns -->
+              <tr style="background-color: #f8fafc; font-weight: 700; font-size: 8pt;">
+                <th style="border: 1px solid #000; text-align: left; width: 11%; padding: 4px;">Ref. No.</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 4px;">Vou. No.</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 4px;">Date</th>
+                <th style="border: 1px solid #000; text-align: left; width: 26%; padding: 4px;">Product Name</th>
+                <th style="border: 1px solid #000; text-align: right; width: 7%; padding: 4px;">Quantity</th>
+                <th style="border: 1px solid #000; border-right: 2px solid #000; text-align: right; width: 8%; padding: 4px;">Weight</th>
+                <th style="border: 1px solid #000; text-align: center; width: 11%; padding: 4px;">Vou. No.</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 4px;">Date</th>
+                <th style="border: 1px solid #000; text-align: right; width: 8%; padding: 4px;">Quantity</th>
+                <th style="border: 1px solid #000; text-align: right; width: 8%; padding: 4px;">Weight</th>
               </tr>
             </thead>
+
             <tbody>
               ${rowsHtml}
-              <tr class="totals-row">
-                <td colspan="7" style="text-align: right; text-transform: uppercase;">Totals</td>
-                <td style="text-align: right; color: #0f5132;">${formatQty(summary.total_inward_qty)}</td>
-                <td style="text-align: right; color: #c53030;">${formatQty(summary.total_outward_qty)}</td>
-                <td style="text-align: right; font-size: 13px;">${formatQty(summary.closing_qty)}</td>
-              </tr>
             </tbody>
+
+            <tfoot style="display: table-row-group; page-break-inside: avoid;">
+              <tr style="background-color: #e2e8f0; font-weight: 700; border-top: 2px solid #000; border-bottom: 1px solid #000;">
+                <td colspan="4" style="text-align: right; padding: 4px 6px; border: 1px solid #000; text-transform: uppercase;">Grand Total</td>
+                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; white-space: nowrap;">${formatQty(grandTotals.total_inward_qty)}</td>
+                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${formatWeight(grandTotals.total_inward_weight)}</td>
+                <td colspan="2" style="border: 1px solid #000; background-color: #edf2f7;"></td>
+                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; white-space: nowrap;">${formatQty(grandTotals.total_outward_qty)}</td>
+                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; white-space: nowrap;">${formatWeight(grandTotals.total_outward_weight)}</td>
+              </tr>
+              <tr style="background-color: #f8fafc; font-weight: 700; border-bottom: 2px solid #000;">
+                <td colspan="4" style="text-align: right; padding: 4px 6px; border: 1px solid #000; text-transform: uppercase;">Net Closing Balance (Inward - Outward)</td>
+                <td colspan="2" style="text-align: right; padding: 4px 6px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap; font-size: 8.5pt;">
+                  Qty: ${formatQty(grandTotals.balance_qty)} &nbsp;|&nbsp; Wt: ${formatWeight(grandTotals.balance_weight)}
+                </td>
+                <td colspan="4" style="border: 1px solid #000; background-color: #f8fafc;"></td>
+              </tr>
+            </tfoot>
           </table>
 
           ${PRINT_TRIGGER_SCRIPT}
@@ -3029,6 +3283,7 @@ export function ItemMovementLedgerReport() {
     `);
     printWindow.document.close();
   };
+
 
   const processedRows = movements.map((m: any) => [
     m.date,

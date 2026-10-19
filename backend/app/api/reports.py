@@ -515,8 +515,11 @@ async def item_movement_ledger(
                 continue
             p_info = product_map.get(p_id, {"name": f"Product #{p_id}", "weight": 0.0})
             qty = it["quantity"]
-            wt = it["weight"] or p_info["weight"]
+            unit_wt = it["weight"] or p_info["weight"]
+            tot_wt = it.get("total_weight") if it.get("total_weight", 0) > 0 else (qty * unit_wt)
             movements.append({
+                "id": si_dict["id"],
+                "inward_id": si_dict["id"],
                 "date": str(si_dict["inward_date"]),
                 "type": "Inward",
                 "voucher_no": si_dict["inward_no"],
@@ -525,9 +528,10 @@ async def item_movement_ledger(
                 "product_id": p_id,
                 "product_name": p_info["name"],
                 "inward_qty": qty,
-                "inward_weight": qty * wt,
+                "inward_weight": tot_wt,
                 "outward_qty": 0.0,
                 "outward_weight": 0.0,
+                "unit_weight": unit_wt,
                 "sort_key": f"{si_dict['inward_date']}_0_{si_dict['inward_no']}"
             })
 
@@ -535,6 +539,16 @@ async def item_movement_ledger(
         so_dict = dict(so)
         lid = so_dict.get("ledger_id")
         party_name = ledger_map.get(lid, "Unknown Supplier")
+        so_inw_id = so_dict.get("inward_id")
+        so_inw_ids = so_dict.get("inward_ids")
+        if isinstance(so_inw_ids, str):
+            try: so_inw_ids = json.loads(so_inw_ids)
+            except Exception: so_inw_ids = []
+        if not isinstance(so_inw_ids, list):
+            so_inw_ids = []
+        if so_inw_id and so_inw_id not in so_inw_ids:
+            so_inw_ids.append(so_inw_id)
+
         raw_items = so_dict.get("items")
         if isinstance(raw_items, str):
             try: raw_items = json.loads(raw_items)
@@ -547,6 +561,9 @@ async def item_movement_ledger(
                     "product_id": it.get("product_id") or so_dict.get("product_id"),
                     "quantity": float(it.get("quantity") or 0),
                     "weight": float(it.get("weight") or 0),
+                    "total_weight": float(it.get("total_weight") or 0),
+                    "inward_id": it.get("inward_id") or so_inw_id,
+                    "ref_no": it.get("ref_no") or so_dict.get("ref_no") or so_dict.get("serial_no") or "-",
                 })
         else:
             if so_dict.get("product_id") or float(so_dict.get("quantity") or 0) > 0:
@@ -554,6 +571,9 @@ async def item_movement_ledger(
                     "product_id": so_dict.get("product_id"),
                     "quantity": float(so_dict.get("quantity") or 0),
                     "weight": float(so_dict.get("weight") or 0),
+                    "total_weight": float(so_dict.get("total_weight") or 0),
+                    "inward_id": so_inw_id,
+                    "ref_no": so_dict.get("ref_no") or so_dict.get("serial_no") or "-",
                 })
 
         for it in unrolled:
@@ -565,19 +585,24 @@ async def item_movement_ledger(
                 continue
             p_info = product_map.get(p_id, {"name": f"Product #{p_id}", "weight": 0.0})
             qty = it["quantity"]
-            wt = it["weight"] or p_info["weight"]
+            unit_wt = it["weight"] or p_info["weight"]
+            tot_wt = it.get("total_weight") if it.get("total_weight", 0) > 0 else (qty * unit_wt)
             movements.append({
+                "id": so_dict["id"],
+                "inward_id": it.get("inward_id") or so_inw_id,
+                "inward_ids": so_inw_ids,
                 "date": str(so_dict["outward_date"]),
                 "type": "Outward",
                 "voucher_no": so_dict["outward_no"],
-                "ref_no": so_dict.get("ref_no") or so_dict.get("serial_no") or "-",
+                "ref_no": it.get("ref_no") or so_dict.get("ref_no") or so_dict.get("serial_no") or "-",
                 "party_name": party_name,
                 "product_id": p_id,
                 "product_name": p_info["name"],
                 "inward_qty": 0.0,
                 "inward_weight": 0.0,
                 "outward_qty": qty,
-                "outward_weight": qty * wt,
+                "outward_weight": tot_wt,
+                "unit_weight": unit_wt,
                 "sort_key": f"{so_dict['outward_date']}_1_{so_dict['outward_no']}"
             })
 
@@ -607,6 +632,278 @@ async def item_movement_ledger(
         m["running_balance_qty"] = max(0.0, running_qty)
         m["running_balance_weight"] = max(0.0, running_weight)
 
+    # ── Grouped Inward and Outward Details for Side-by-Side Ledger ──
+    inward_records = []
+    for si in inward_rows:
+        si_dict = dict(si)
+        inw_id = si_dict["id"]
+        inw_no = si_dict["inward_no"]
+        inw_date = str(si_dict["inward_date"])
+        inw_ref = (si_dict.get("ref_no") or si_dict.get("serial_no") or "-").strip()
+        lid = si_dict.get("ledger_id")
+        party = ledger_map.get(lid, "Unknown Supplier")
+
+        raw_items = si_dict.get("items")
+        if isinstance(raw_items, str):
+            try: raw_items = json.loads(raw_items)
+            except Exception: raw_items = []
+
+        unrolled = []
+        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
+            for it in raw_items:
+                unrolled.append({
+                    "product_id": it.get("product_id"),
+                    "quantity": float(it.get("quantity") or 0),
+                    "weight": float(it.get("weight") or 0),
+                    "total_weight": float(it.get("total_weight") or 0),
+                })
+        else:
+            if si_dict.get("product_id") or float(si_dict.get("quantity") or 0) > 0:
+                unrolled.append({
+                    "product_id": si_dict.get("product_id"),
+                    "quantity": float(si_dict.get("quantity") or 0),
+                    "weight": float(si_dict.get("weight") or 0),
+                    "total_weight": float(si_dict.get("total_weight") or 0),
+                })
+
+        for it in unrolled:
+            p_id = it.get("product_id")
+            if not p_id:
+                continue
+            p_id = int(p_id)
+            if product_id and product_id > 0 and p_id != product_id:
+                continue
+            p_info = product_map.get(p_id, {"name": f"Product #{p_id}", "weight": 0.0})
+            qty = it["quantity"]
+            unit_wt = it["weight"] or p_info["weight"]
+            tot_wt = it.get("total_weight") if it.get("total_weight", 0) > 0 else (qty * unit_wt)
+
+            inward_records.append({
+                "inward_id": inw_id,
+                "ref_no": inw_ref,
+                "voucher_no": inw_no,
+                "date": inw_date,
+                "ledger_id": lid,
+                "party_name": party,
+                "product_id": p_id,
+                "product_name": p_info["name"],
+                "inward_qty": qty,
+                "inward_weight": tot_wt,
+                "unit_weight": unit_wt,
+                "unallocated_qty": qty,
+                "outward_transactions": [],
+            })
+
+    outward_records = []
+    for so in outward_rows:
+        so_dict = dict(so)
+        so_id = so_dict["id"]
+        so_no = so_dict["outward_no"]
+        so_date = str(so_dict["outward_date"])
+        so_ref = (so_dict.get("ref_no") or so_dict.get("serial_no") or "-").strip()
+        so_inw_id = so_dict.get("inward_id")
+        so_inw_ids = so_dict.get("inward_ids")
+        if isinstance(so_inw_ids, str):
+            try: so_inw_ids = json.loads(so_inw_ids)
+            except Exception: so_inw_ids = []
+        if not isinstance(so_inw_ids, list):
+            so_inw_ids = []
+        if so_inw_id and so_inw_id not in so_inw_ids:
+            so_inw_ids.append(so_inw_id)
+
+        lid = so_dict.get("ledger_id")
+        party = ledger_map.get(lid, "Unknown Supplier")
+
+        raw_items = so_dict.get("items")
+        if isinstance(raw_items, str):
+            try: raw_items = json.loads(raw_items)
+            except Exception: raw_items = []
+
+        unrolled = []
+        if raw_items and isinstance(raw_items, list) and len(raw_items) > 0:
+            for it in raw_items:
+                unrolled.append({
+                    "product_id": it.get("product_id") or so_dict.get("product_id"),
+                    "quantity": float(it.get("quantity") or 0),
+                    "weight": float(it.get("weight") or 0),
+                    "total_weight": float(it.get("total_weight") or 0),
+                    "inward_id": it.get("inward_id") or so_inw_id,
+                    "ref_no": it.get("ref_no") or so_ref,
+                })
+        else:
+            if so_dict.get("product_id") or float(so_dict.get("quantity") or 0) > 0:
+                unrolled.append({
+                    "product_id": so_dict.get("product_id"),
+                    "quantity": float(so_dict.get("quantity") or 0),
+                    "weight": float(so_dict.get("weight") or 0),
+                    "total_weight": float(so_dict.get("total_weight") or 0),
+                    "inward_id": so_inw_id,
+                    "ref_no": so_ref,
+                })
+
+        for it in unrolled:
+            p_id = it.get("product_id")
+            if not p_id:
+                continue
+            p_id = int(p_id)
+            if product_id and product_id > 0 and p_id != product_id:
+                continue
+            p_info = product_map.get(p_id, {"name": f"Product #{p_id}", "weight": 0.0})
+            qty = it["quantity"]
+            unit_wt = it["weight"] or p_info["weight"]
+            tot_wt = it.get("total_weight") if it.get("total_weight", 0) > 0 else (qty * unit_wt)
+
+            outward_records.append({
+                "outward_id": so_id,
+                "voucher_no": so_no,
+                "date": so_date,
+                "ledger_id": lid,
+                "party_name": party,
+                "product_id": p_id,
+                "product_name": p_info["name"],
+                "quantity": qty,
+                "weight": tot_wt,
+                "unit_weight": unit_wt,
+                "inward_id": it.get("inward_id") or so_inw_id,
+                "inward_ids": so_inw_ids,
+                "ref_no": it.get("ref_no") or so_ref,
+            })
+
+    # Allocation of outward items to inward items
+    unlinked_outwards = []
+    for out in outward_records:
+        p_id = out["product_id"]
+        matched_inv = None
+
+        # Pass 1: exact item inward_id
+        target_iid = out.get("inward_id")
+        if target_iid:
+            for inv in inward_records:
+                if inv["inward_id"] == int(target_iid) and inv["product_id"] == p_id:
+                    matched_inv = inv
+                    break
+
+        # Pass 2: voucher inward_ids list
+        if not matched_inv and out.get("inward_ids"):
+            for iid in out["inward_ids"]:
+                for inv in inward_records:
+                    if inv["inward_id"] == int(iid) and inv["product_id"] == p_id:
+                        matched_inv = inv
+                        break
+                if matched_inv:
+                    break
+
+        # Pass 3: reference number match
+        if not matched_inv and out.get("ref_no") and out["ref_no"] != "-":
+            clean_out_ref = out["ref_no"].strip().lower()
+            for inv in inward_records:
+                clean_inv_ref = inv["ref_no"].strip().lower()
+                if clean_inv_ref == clean_out_ref and inv["product_id"] == p_id:
+                    matched_inv = inv
+                    break
+
+        # Pass 4: FIFO match on unallocated inward of same product
+        if not matched_inv:
+            for inv in inward_records:
+                if inv["product_id"] == p_id and inv["unallocated_qty"] > 0:
+                    matched_inv = inv
+                    break
+
+        # If matched:
+        if matched_inv:
+            matched_inv["outward_transactions"].append({
+                "voucher_no": out["voucher_no"],
+                "date": out["date"],
+                "quantity": out["quantity"],
+                "weight": out["weight"],
+            })
+            matched_inv["unallocated_qty"] -= out["quantity"]
+        else:
+            unlinked_outwards.append(out)
+
+    # Group inward records by inward reference / document
+    groups_map = {}
+    for inv in inward_records:
+        gkey = f"{inv['ref_no']}||{inv['voucher_no']}||{inv['date']}||{inv['party_name']}"
+        if gkey not in groups_map:
+            groups_map[gkey] = {
+                "ref_no": inv["ref_no"],
+                "voucher_no": inv["voucher_no"],
+                "date": inv["date"],
+                "party_name": inv["party_name"],
+                "products": [],
+                "subtotal": {
+                    "inward_qty": 0.0,
+                    "inward_weight": 0.0,
+                    "outward_qty": 0.0,
+                    "outward_weight": 0.0
+                }
+            }
+
+        grp = groups_map[gkey]
+        grp["products"].append({
+            "product_id": inv["product_id"],
+            "product_name": inv["product_name"],
+            "inward_qty": inv["inward_qty"],
+            "inward_weight": inv["inward_weight"],
+            "outward_transactions": inv["outward_transactions"],
+        })
+
+        grp["subtotal"]["inward_qty"] += inv["inward_qty"]
+        grp["subtotal"]["inward_weight"] += inv["inward_weight"]
+        for otx in inv["outward_transactions"]:
+            grp["subtotal"]["outward_qty"] += otx["quantity"]
+            grp["subtotal"]["outward_weight"] += otx["weight"]
+
+    # If there are any unlinked outward records, add them to a distinct group
+    if unlinked_outwards:
+        unlinked_group = {
+            "ref_no": "Direct Outward",
+            "voucher_no": "-",
+            "date": unlinked_outwards[0]["date"],
+            "party_name": unlinked_outwards[0]["party_name"],
+            "products": [],
+            "subtotal": {
+                "inward_qty": 0.0,
+                "inward_weight": 0.0,
+                "outward_qty": 0.0,
+                "outward_weight": 0.0
+            }
+        }
+        for uo in unlinked_outwards:
+            unlinked_group["products"].append({
+                "product_id": uo["product_id"],
+                "product_name": uo["product_name"],
+                "inward_qty": 0.0,
+                "inward_weight": 0.0,
+                "outward_transactions": [{
+                    "voucher_no": uo["voucher_no"],
+                    "date": uo["date"],
+                    "quantity": uo["quantity"],
+                    "weight": uo["weight"]
+                }]
+            })
+            unlinked_group["subtotal"]["outward_qty"] += uo["quantity"]
+            unlinked_group["subtotal"]["outward_weight"] += uo["weight"]
+
+        groups_map["__unlinked__"] = unlinked_group
+
+    grouped_details = list(groups_map.values())
+
+    grand_in_qty = sum(g["subtotal"]["inward_qty"] for g in grouped_details)
+    grand_in_wt = sum(g["subtotal"]["inward_weight"] for g in grouped_details)
+    grand_out_qty = sum(g["subtotal"]["outward_qty"] for g in grouped_details)
+    grand_out_wt = sum(g["subtotal"]["outward_weight"] for g in grouped_details)
+
+    grand_totals = {
+        "total_inward_qty": grand_in_qty,
+        "total_inward_weight": grand_in_wt,
+        "total_outward_qty": grand_out_qty,
+        "total_outward_weight": grand_out_wt,
+        "balance_qty": grand_in_qty - grand_out_qty,
+        "balance_weight": grand_in_wt - grand_out_wt
+    }
+
     return {
         "movements": movements,
         "summary": {
@@ -616,7 +913,9 @@ async def item_movement_ledger(
             "total_outward_weight": total_out_wt,
             "closing_qty": max(0.0, running_qty),
             "closing_weight": max(0.0, running_weight),
-        }
+        },
+        "grouped_details": grouped_details,
+        "grand_totals": grand_totals
     }
 
 
