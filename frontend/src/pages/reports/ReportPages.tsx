@@ -53,7 +53,7 @@ const firstOfMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padSta
   }
 }
 @media print {
-  body { background: #fff !important; padding-bottom: 24px !important; }
+  body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   .MuiDrawer-root, .MuiAppBar-root, .MuiToolbar-root, .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }
   .orbx-global-print-footer {
     position: fixed !important;

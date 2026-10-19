@@ -46,8 +46,9 @@ export const GLOBAL_PRINT_FOOTER_CSS = `
   }
 
   @media print {
-    body {
-      padding-bottom: 24px;
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
     }
     .orbx-global-print-footer {
       position: fixed;
@@ -132,8 +133,9 @@ export const COMMON_PRINT_CSS = `
   }
 
   @media print {
-    body {
-      padding-bottom: 24px;
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
     }
     .orbx-global-print-footer {
       position: fixed;
@@ -340,14 +342,30 @@ export const PRINT_TRIGGER_SCRIPT = `
         supportsMarginBoxes = false;
       }
 
-      // 3. Dynamic page calculation fallback for Firefox / Safari / Screen
+      // 3. Accurate page calculation for single & multi-page documents
       try {
-        var isLandscape = (document.body && document.body.offsetWidth > 900) ||
-                          (document.title && document.title.toLowerCase().indexOf("landscape") !== -1) ||
-                          (document.head && document.head.innerHTML.toLowerCase().indexOf("landscape") !== -1);
-        var pageHeightPx = isLandscape ? 720 : 1020;
-        var scrollH = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
-        var totalPages = Math.max(1, Math.ceil(scrollH / pageHeightPx));
+        var headHtml = (document.head ? document.head.innerHTML : "") + " " + (document.title || "");
+        var isLandscape = /landscape/i.test(headHtml);
+        var isA5 = /a5/i.test(headHtml);
+        
+        // Accurate printable height per page at standard 96 DPI (minus standard margins)
+        var pageHeightPx = isA5 ? 520 : (isLandscape ? 780 : 1050);
+        
+        // Measure body scroll height cleanly without in-flow footer
+        var prevDisplay = footer.style.display;
+        footer.style.display = 'none';
+        var scrollH = Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0
+        );
+        footer.style.display = prevDisplay;
+
+        // Allow 3% buffer for minor line-height or border rounding variations
+        var totalPages = 1;
+        if (scrollH > (pageHeightPx * 1.03)) {
+          totalPages = Math.ceil(scrollH / pageHeightPx);
+        }
+
         var totalSpan = footer.querySelector('.orbx-total-pages');
         if (totalSpan) totalSpan.textContent = String(totalPages);
       } catch (e) {}
@@ -378,6 +396,7 @@ export const PRINT_TRIGGER_SCRIPT = `
           '  }',
           '}',
           '@media print {',
+          '  html, body { margin: 0 !important; padding: 0 !important; }',
           '  .orbx-global-print-footer { display: none !important; }',
           '  .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }',
           '}',
@@ -399,7 +418,7 @@ export const PRINT_TRIGGER_SCRIPT = `
       } else {
         finalStyle.textContent = [
           '@media print {',
-          '  body { padding-bottom: 24px !important; }',
+          '  html, body { margin: 0 !important; padding: 0 !important; }',
           '  .orbx-global-print-footer {',
           '    position: fixed !important;',
           '    bottom: 0 !important;',
