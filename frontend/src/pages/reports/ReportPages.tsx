@@ -3049,92 +3049,153 @@ export function ItemMovementLedgerReport() {
   const movements = reportRes.movements || [];
   const summary = reportRes.summary || {};
 
+  const formatLedgerQty = (val: number | string | null | undefined): string => {
+    if (val === null || val === undefined || val === "") return "";
+    const n = Number(val);
+    if (isNaN(n) || n === 0) return "";
+    return n % 1 === 0 ? String(Math.round(n)) : String(n);
+  };
+
+  const formatLedgerWeight = (val: number | string | null | undefined): string => {
+    if (val === null || val === undefined || val === "") return "";
+    const n = Number(val);
+    if (isNaN(n) || n === 0) return "";
+    return n.toFixed(3);
+  };
+
   const handlePrint = async () => {
-    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
     const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
-    const cDetails = resolveCompanyDetails(compData);
-    const cName = cDetails.name;
-    const cAddress1 = cDetails.address;
-    const cCityStatePin = cDetails.cityStatePin;
-    const cTax = cDetails.gstin;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
 
     const selectedLedger = ledgers.find((l: any) => String(l.id) === String(selectedLedgerId));
-    const selectedSupplierName = selectedLedger ? selectedLedger.name : "";
-    const productName = selectedProduct ? selectedProduct.name : "All Products";
+    const partyHeaderTitle = selectedLedger?.name || movements[0]?.party_name || "TEXMO INDUSTRIES PUMP DIVISION";
 
     const { groupedDetails, grandTotals } = buildInwardOutwardGroupedData(reportRes);
 
     let rowsHtml = "";
+    let totalGeneratedRows = 0;
+
     groupedDetails.forEach((grp: any) => {
       let isFirstRowOfGroup = true;
       const grpProducts = grp.products || [];
+
       grpProducts.forEach((prod: any) => {
         const outs = prod.outward_transactions || [];
+        const prodInQty = Number(prod.inward_qty || 0);
+        const prodInWt = Number(prod.inward_weight || 0);
+        let prodOutQtyTotal = 0;
+        let prodOutWtTotal = 0;
+
         if (outs.length === 0) {
+          // Primary row (no outward transactions)
           rowsHtml += `<tr>
-            <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.ref_no || "-") : ""}</td>
-            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.voucher_no || "-") : ""}</td>
-            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? formatDate(grp.date, "2digit") : ""}</td>
-            <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000;">${prod.product_name || "-"}</td>
-            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(prod.inward_qty) > 0 ? formatQty(prod.inward_qty) : "-"}</td>
-            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${Number(prod.inward_weight) > 0 ? formatWeight(prod.inward_weight) : "-"}</td>
-            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-            <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-            <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
+            <td style="text-align: left;">${isFirstRowOfGroup ? (grp.ref_no || "") : ""}</td>
+            <td style="text-align: center;">${isFirstRowOfGroup ? (grp.voucher_no || "") : ""}</td>
+            <td style="text-align: center;">${isFirstRowOfGroup ? formatDate(grp.date, "2digit") : ""}</td>
+            <td style="text-align: left;">${prod.product_name || ""}</td>
+            <td style="text-align: right;">${formatLedgerQty(prodInQty)}</td>
+            <td style="text-align: right;">${formatLedgerWeight(prodInWt)}</td>
+            <td style="text-align: center;"></td>
+            <td style="text-align: center;"></td>
+            <td style="text-align: right;"></td>
+            <td style="text-align: right;"></td>
           </tr>`;
+          totalGeneratedRows++;
           isFirstRowOfGroup = false;
+
+          // Product Total Row
+          rowsHtml += `<tr class="product-total-row">
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="text-align: right;">${formatLedgerQty(prodInQty)}</td>
+            <td style="text-align: right;">${formatLedgerWeight(prodInWt)}</td>
+            <td></td>
+            <td></td>
+            <td style="text-align: right;"></td>
+            <td style="text-align: right;"></td>
+          </tr>`;
+          totalGeneratedRows++;
         } else {
+          // Multiple or single outward movements
           outs.forEach((otx: any, outIdx: number) => {
+            const oQty = Number(otx.quantity || 0);
+            const oWt = Number(otx.weight || 0);
+            prodOutQtyTotal += oQty;
+            prodOutWtTotal += oWt;
+
             if (outIdx === 0) {
               rowsHtml += `<tr>
-                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.ref_no || "-") : ""}</td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? (grp.voucher_no || "-") : ""}</td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${isFirstRowOfGroup ? formatDate(grp.date, "2digit") : ""}</td>
-                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000;">${prod.product_name || "-"}</td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(prod.inward_qty) > 0 ? formatQty(prod.inward_qty) : "-"}</td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${Number(prod.inward_weight) > 0 ? formatWeight(prod.inward_weight) : "-"}</td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${otx.voucher_no || "-"}</td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${formatDate(otx.date, "2digit")}</td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.quantity) > 0 ? formatQty(otx.quantity) : "-"}</td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.weight) > 0 ? formatWeight(otx.weight) : "-"}</td>
+                <td style="text-align: left;">${isFirstRowOfGroup ? (grp.ref_no || "") : ""}</td>
+                <td style="text-align: center;">${isFirstRowOfGroup ? (grp.voucher_no || "") : ""}</td>
+                <td style="text-align: center;">${isFirstRowOfGroup ? formatDate(grp.date, "2digit") : ""}</td>
+                <td style="text-align: left;">${prod.product_name || ""}</td>
+                <td style="text-align: right;">${formatLedgerQty(prodInQty)}</td>
+                <td style="text-align: right;">${formatLedgerWeight(prodInWt)}</td>
+                <td style="text-align: center;">${otx.voucher_no || ""}</td>
+                <td style="text-align: center;">${formatDate(otx.date, "2digit")}</td>
+                <td style="text-align: right;">${formatLedgerQty(oQty)}</td>
+                <td style="text-align: right;">${formatLedgerWeight(oWt)}</td>
               </tr>`;
+              totalGeneratedRows++;
               isFirstRowOfGroup = false;
             } else {
-              // Continuation row: Inward cells blank to prevent duplicating inward quantities/weights
+              // Continuation row: Inward cells blank
               rowsHtml += `<tr>
-                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-                <td style="text-align: left; padding: 3.5px 5px; border: 1px solid #000;"></td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;"></td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;"></td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${otx.voucher_no || "-"}</td>
-                <td style="text-align: center; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${formatDate(otx.date, "2digit")}</td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.quantity) > 0 ? formatQty(otx.quantity) : "-"}</td>
-                <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(otx.weight) > 0 ? formatWeight(otx.weight) : "-"}</td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td style="text-align: center;">${otx.voucher_no || ""}</td>
+                <td style="text-align: center;">${formatDate(otx.date, "2digit")}</td>
+                <td style="text-align: right;">${formatLedgerQty(oQty)}</td>
+                <td style="text-align: right;">${formatLedgerWeight(oWt)}</td>
               </tr>`;
+              totalGeneratedRows++;
             }
           });
+
+          // Product Total Row (present for every product in reference report)
+          rowsHtml += `<tr class="product-total-row">
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="text-align: right;">${formatLedgerQty(prodInQty)}</td>
+            <td style="text-align: right;">${formatLedgerWeight(prodInWt)}</td>
+            <td></td>
+            <td></td>
+            <td style="text-align: right;">${formatLedgerQty(prodOutQtyTotal)}</td>
+            <td style="text-align: right;">${formatLedgerWeight(prodOutWtTotal)}</td>
+          </tr>`;
+          totalGeneratedRows++;
         }
       });
 
-      // Group Subtotal Row
+      // Group Total Row (Voucher / Reference Total)
       const sub = grp.subtotal || {};
-      rowsHtml += `<tr style="background-color: #f8fafc; font-weight: bold; border-top: 1px solid #000; border-bottom: 1.5px solid #000;">
-        <td colspan="4" style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; text-transform: uppercase;">Total</td>
-        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(sub.inward_qty) > 0 ? formatQty(sub.inward_qty) : "-"}</td>
-        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${Number(sub.inward_weight) > 0 ? formatWeight(sub.inward_weight) : "-"}</td>
-        <td colspan="2" style="border: 1px solid #000; background-color: #fafafa;"></td>
-        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(sub.outward_qty) > 0 ? formatQty(sub.outward_qty) : "-"}</td>
-        <td style="text-align: right; padding: 3.5px 5px; border: 1px solid #000; white-space: nowrap;">${Number(sub.outward_weight) > 0 ? formatWeight(sub.outward_weight) : "-"}</td>
+      rowsHtml += `<tr class="group-total-row" style="font-weight: bold;">
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td style="text-align: right; font-weight: bold;">${formatLedgerQty(sub.inward_qty)}</td>
+        <td style="text-align: right; font-weight: bold;">${formatLedgerWeight(sub.inward_weight)}</td>
+        <td></td>
+        <td></td>
+        <td style="text-align: right; font-weight: bold;">${formatLedgerQty(sub.outward_qty)}</td>
+        <td style="text-align: right; font-weight: bold;">${formatLedgerWeight(sub.outward_weight)}</td>
       </tr>`;
+      totalGeneratedRows++;
     });
 
-    const logoHtml = getCompanyLogoHtml(undefined, compData);
+    const totalPages = Math.max(1, Math.ceil(totalGeneratedRows / 44));
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -3151,10 +3212,10 @@ export function ItemMovementLedgerReport() {
             @page {
               size: A4 landscape;
               margin: 8mm 8mm 10mm 8mm;
-              @bottom-right {
+              @top-right {
                 content: "Page " counter(page) " of " counter(pages);
-                font-size: 8pt;
-                font-family: Arial, Helvetica, sans-serif;
+                font-size: 10pt;
+                font-family: Arial, sans-serif;
                 color: #000;
               }
             }
@@ -3164,8 +3225,8 @@ export function ItemMovementLedgerReport() {
               background-color: #fff;
               color: #000;
               font-family: Arial, Helvetica, sans-serif;
-              font-size: 8.5pt;
-              line-height: 1.25;
+              font-size: 8pt;
+              line-height: 1.2;
             }
             table.ledger-table {
               width: 100%;
@@ -3187,14 +3248,17 @@ export function ItemMovementLedgerReport() {
             table.ledger-table th,
             table.ledger-table td {
               border: 1px solid #000;
-              padding: 3.5px 5px;
+              padding: 2.5px 4px;
               font-size: 8pt;
               color: #000;
+              height: 18px;
             }
-            .company-logo-img {
-              max-height: 44px;
-              max-width: 125px;
-              object-fit: contain;
+            .product-total-row td {
+              background-color: #fff;
+            }
+            .group-total-row td {
+              background-color: #fff;
+              font-weight: bold;
             }
             @media print {
               body { margin: 0; }
@@ -3204,80 +3268,65 @@ export function ItemMovementLedgerReport() {
         <body>
           <table class="ledger-table">
             <thead>
-              <!-- Top repeating company banner & metadata on every printed page -->
+              <!-- Top repeating clean company header exactly matching reference photo -->
               <tr>
-                <th colspan="10" style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 6px 8px; background: #fff; color: #000; font-weight: normal;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <div style="flex: 0 0 130px; text-align: left;">
-                      ${logoHtml ? `<div class="logo-wrapper">${logoHtml}</div>` : ""}
+                <th colspan="10" style="border: none; padding: 0 0 6px 0; background: #fff; color: #000; font-weight: normal; text-align: left;">
+                  <div style="width: 100%; margin-bottom: 2px;">
+                    <!-- Line 1: SRI METAL (Center) -->
+                    <div style="text-align: center; font-size: 13.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #000;">
+                      ${cName}
                     </div>
-                    <div style="flex: 1; text-align: center;">
-                      <div style="font-size: 13pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #000;">${cName}</div>
-                      ${cAddress1 || cCityStatePin ? `<div style="font-size: 7.5pt; color: #333; margin-top: 1px;">${[cAddress1, cCityStatePin].filter(Boolean).join(", ")}</div>` : ""}
-                      ${cTax ? `<div style="font-size: 7.5pt; font-weight: 600; color: #333;">${cTax}</div>` : ""}
-                    </div>
-                    <div style="flex: 0 0 130px; text-align: right; font-size: 8pt; color: #444;">
-                      <div><strong>Print Date:</strong> ${formatDate(today, "2digit")}</div>
-                    </div>
-                  </div>
-                  
-                  <div style="text-align: center; border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 3px 0; margin: 3px 0;">
-                    <span style="font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #000;">Inward and Outward Details</span>
-                  </div>
 
-                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8pt; color: #000; padding: 2px 2px 0 2px;">
-                    <div><strong>Supplier:</strong> ${selectedSupplierName || "All Suppliers"}</div>
-                    <div><strong>Product:</strong> ${productName}</div>
-                    <div><strong>Period:</strong> ${formatDate(fromDate, "2digit")} to ${formatDate(toDate, "2digit")}</div>
+                    <!-- Line 2: Inward and Outward Details (Center) & Page Number (Right) -->
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 1px;">
+                      <div style="flex: 1;"></div>
+                      <div style="flex: 2; text-align: center; font-size: 11pt; font-weight: normal; color: #000;">
+                        Inward and Outward Details
+                      </div>
+                      <div style="flex: 1; text-align: right; font-size: 10pt; font-weight: normal; color: #000;">
+                        Page 1 of ${totalPages}
+                      </div>
+                    </div>
+
+                    <!-- Line 3: TEXMO INDUSTRIES PUMP DIVISION (Left, aligned with table left border) -->
+                    <div style="text-align: left; font-size: 11.5pt; font-weight: bold; text-transform: uppercase; margin-top: 4px; color: #000;">
+                      ${partyHeaderTitle}
+                    </div>
                   </div>
                 </th>
               </tr>
 
-              <!-- Level 1 Header: Inward & Outward Groups -->
-              <tr style="background-color: #f1f5f9; font-weight: 700; font-size: 8.5pt;">
-                <th colspan="6" style="border: 1px solid #000; border-right: 2px solid #000; text-align: center; padding: 4px; text-transform: uppercase;">Inward Details</th>
-                <th colspan="4" style="border: 1px solid #000; text-align: center; padding: 4px; text-transform: uppercase;">Outward Details</th>
+              <!-- Level 1 Header: Inward Details & Outward Details -->
+              <tr style="background-color: #fff; font-weight: normal; font-size: 8.5pt;">
+                <th colspan="6" style="border: 1px solid #000; text-align: center; padding: 3px; font-weight: normal; color: #000;">Inward Details</th>
+                <th colspan="4" style="border: 1px solid #000; text-align: center; padding: 3px; font-weight: normal; color: #000;">Outward Details</th>
               </tr>
 
-              <!-- Level 2 Header: 10 Side-by-side columns -->
-              <tr style="background-color: #f8fafc; font-weight: 700; font-size: 8pt;">
-                <th style="border: 1px solid #000; text-align: left; width: 11%; padding: 4px;">Ref. No.</th>
-                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 4px;">Vou. No.</th>
-                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 4px;">Date</th>
-                <th style="border: 1px solid #000; text-align: left; width: 26%; padding: 4px;">Product Name</th>
-                <th style="border: 1px solid #000; text-align: right; width: 7%; padding: 4px;">Quantity</th>
-                <th style="border: 1px solid #000; border-right: 2px solid #000; text-align: right; width: 8%; padding: 4px;">Weight</th>
-                <th style="border: 1px solid #000; text-align: center; width: 11%; padding: 4px;">Vou. No.</th>
-                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 4px;">Date</th>
-                <th style="border: 1px solid #000; text-align: right; width: 8%; padding: 4px;">Quantity</th>
-                <th style="border: 1px solid #000; text-align: right; width: 8%; padding: 4px;">Weight</th>
+              <!-- Level 2 Header: 10 Columns -->
+              <tr style="background-color: #fff; font-weight: normal; font-size: 8pt;">
+                <th style="border: 1px solid #000; text-align: center; width: 9%; padding: 3px; font-weight: normal; color: #000;">Ref. No.</th>
+                <th style="border: 1px solid #000; text-align: center; width: 6%; padding: 3px; font-weight: normal; color: #000;">Vou. No.</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 3px; font-weight: normal; color: #000;">Date</th>
+                <th style="border: 1px solid #000; text-align: center; width: 25%; padding: 3px; font-weight: normal; color: #000;">Product Name</th>
+                <th style="border: 1px solid #000; text-align: center; width: 6.5%; padding: 3px; font-weight: normal; color: #000;">Quantity</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8.5%; padding: 3px; font-weight: normal; color: #000;">Weight</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 3px; font-weight: normal; color: #000;">Vou. No.</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8%; padding: 3px; font-weight: normal; color: #000;">Date</th>
+                <th style="border: 1px solid #000; text-align: center; width: 6.5%; padding: 3px; font-weight: normal; color: #000;">Quantity</th>
+                <th style="border: 1px solid #000; text-align: center; width: 8.5%; padding: 3px; font-weight: normal; color: #000;">Weight</th>
               </tr>
             </thead>
 
             <tbody>
               ${rowsHtml}
             </tbody>
-
-            <tfoot style="display: table-row-group; page-break-inside: avoid;">
-              <tr style="background-color: #e2e8f0; font-weight: 700; border-top: 2px solid #000; border-bottom: 1px solid #000;">
-                <td colspan="4" style="text-align: right; padding: 4px 6px; border: 1px solid #000; text-transform: uppercase;">Grand Total</td>
-                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; white-space: nowrap;">${formatQty(grandTotals.total_inward_qty)}</td>
-                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap;">${formatWeight(grandTotals.total_inward_weight)}</td>
-                <td colspan="2" style="border: 1px solid #000; background-color: #edf2f7;"></td>
-                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; white-space: nowrap;">${formatQty(grandTotals.total_outward_qty)}</td>
-                <td style="text-align: right; padding: 4px 6px; border: 1px solid #000; white-space: nowrap;">${formatWeight(grandTotals.total_outward_weight)}</td>
-              </tr>
-              <tr style="background-color: #f8fafc; font-weight: 700; border-bottom: 2px solid #000;">
-                <td colspan="4" style="text-align: right; padding: 4px 6px; border: 1px solid #000; text-transform: uppercase;">Net Closing Balance (Inward - Outward)</td>
-                <td colspan="2" style="text-align: right; padding: 4px 6px; border: 1px solid #000; border-right: 2px solid #000; white-space: nowrap; font-size: 8.5pt;">
-                  Qty: ${formatQty(grandTotals.balance_qty)} &nbsp;|&nbsp; Wt: ${formatWeight(grandTotals.balance_weight)}
-                </td>
-                <td colspan="4" style="border: 1px solid #000; background-color: #f8fafc;"></td>
-              </tr>
-            </tfoot>
           </table>
 
-          ${PRINT_TRIGGER_SCRIPT}
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
         </body>
       </html>
     `);
