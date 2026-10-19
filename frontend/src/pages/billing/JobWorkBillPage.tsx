@@ -23,7 +23,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { toWords } from "../../utils/numberToWords";
-import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 import { resolveProcessName } from "../process-voucher/ProcessVoucherPages";
 
@@ -578,6 +578,7 @@ export default function JobWorkBillPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -1256,6 +1257,7 @@ export default function JobWorkBillPage() {
               <div class="signature-label">Authorized Signatory for ${cName}</div>
             </div>
           </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

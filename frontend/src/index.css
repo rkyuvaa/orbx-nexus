@@ -45,30 +45,76 @@ html, body, #root {
 /* =========================================================================
    GLOBAL ORBX BRANDED PRINT FOOTER & DYNAMIC PAGE NUMBERING
    ========================================================================= */
-@media print {
-  @page {
-    @bottom-left {
-      content: "Powered by OrbX | orbx.in";
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 8pt;
-      font-weight: 500;
-      color: #555555;
-      vertical-align: bottom;
-      padding-bottom: 0;
-    }
-    @bottom-right {
-      content: "Pages " counter(page) "/" counter(pages);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 8pt;
-      font-weight: 500;
-      color: #555555;
-      vertical-align: bottom;
-      padding-bottom: 0;
-    }
+@page {
+  @bottom-left {
+    content: "Powered by OrbX | orbx.in";
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8pt;
+    font-weight: 500;
+    color: #555555;
+    vertical-align: bottom;
+    padding-bottom: 0;
   }
+  @bottom-right {
+    content: "Pages " counter(page) "/" counter(pages);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8pt;
+    font-weight: 500;
+    color: #555555;
+    vertical-align: bottom;
+    padding-bottom: 0;
+  }
+}
 
+.orbx-global-print-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 8pt;
+  font-weight: 500;
+  color: #555555;
+  box-sizing: border-box;
+}
+
+@media screen {
+  .orbx-global-print-footer {
+    width: 100%;
+    margin-top: 25px;
+    padding: 8px 10px;
+    border-top: 0.5px solid #e0e0e0;
+  }
+}
+
+@media print {
+  body {
+    padding-bottom: 24px !important;
+  }
+  .orbx-global-print-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background: transparent !important;
+    padding: 0 4px !important;
+    box-sizing: border-box !important;
+    z-index: 999999 !important;
+  }
   .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
     display: none !important;
   }
 }
+
+@supports (display: -webkit-box) and (not (-moz-appearance: none)) {
+  @media print {
+    .orbx-global-print-footer {
+      display: none !important;
+    }
+  }
+}
+
 

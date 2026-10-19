@@ -18,7 +18,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, ensurePrintReady, resolveCompanyDetails } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, ensurePrintReady, resolveCompanyDetails, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -179,6 +179,7 @@ function VoucherModule({
               </tr>
             </tbody>
           </table>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -677,6 +678,7 @@ export function SalaryVoucherPage() {
             </div>
           </div>
 
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

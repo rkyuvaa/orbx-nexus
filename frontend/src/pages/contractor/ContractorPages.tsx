@@ -5,7 +5,7 @@ import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import Print from "@mui/icons-material/Print";
 import { useForm, Controller } from "react-hook-form";
-import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import api from "../../api/client";
@@ -711,6 +711,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               </tr>
             </tbody>
           </table>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

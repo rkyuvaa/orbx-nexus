@@ -13,7 +13,7 @@ import Delete from "@mui/icons-material/Delete";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore, useCompanyStore } from "../../store";
-import { COMMON_PRINT_CSS, getCompanyLogoHtml, ensurePrintReady, PRINT_TRIGGER_SCRIPT, resolveCompanyDetails } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, ensurePrintReady, PRINT_TRIGGER_SCRIPT, resolveCompanyDetails, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount, formatDate } from "../../utils/format";
 
 const ACCENT = "#0f5132";
@@ -30,31 +30,45 @@ const firstOfMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padSta
     try { reportPaperSize = JSON.parse(savedConfig).reportPaperSize || "A4"; } catch (e) {}
   }
   const css = `
-@media print {
-  @page {
-    size: ${reportPaperSize === "A5" ? "A5 landscape" : "A4"};
-    margin: 15mm;
-    @bottom-left {
-      content: "Powered by OrbX | orbx.in";
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 8pt;
-      font-weight: 500;
-      color: #555555;
-      vertical-align: bottom;
-      padding-bottom: 0;
-    }
-    @bottom-right {
-      content: "Pages " counter(page) "/" counter(pages);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 8pt;
-      font-weight: 500;
-      color: #555555;
-      vertical-align: bottom;
-      padding-bottom: 0;
-    }
+@page {
+  size: ${reportPaperSize === "A5" ? "A5 landscape" : "A4"};
+  margin: 15mm;
+  @bottom-left {
+    content: "Powered by OrbX | orbx.in";
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8pt;
+    font-weight: 500;
+    color: #555555;
+    vertical-align: bottom;
+    padding-bottom: 0;
   }
-  body { background: #fff !important; }
+  @bottom-right {
+    content: "Pages " counter(page) "/" counter(pages);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8pt;
+    font-weight: 500;
+    color: #555555;
+    vertical-align: bottom;
+    padding-bottom: 0;
+  }
+}
+@media print {
+  body { background: #fff !important; padding-bottom: 24px !important; }
   .MuiDrawer-root, .MuiAppBar-root, .MuiToolbar-root, .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }
+  .orbx-global-print-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background: transparent !important;
+    padding: 0 4px !important;
+    box-sizing: border-box !important;
+    z-index: 999999 !important;
+  }
   main.MuiBox-root, main { margin-left: 0 !important; width: 100% !important; max-width: 100% !important; }
   .no-print { display: none !important; }
   .print-only { display: block !important; }
@@ -64,6 +78,13 @@ const firstOfMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padSta
   table.MuiTable-root tbody td { border-left: 0.5px solid #198754 !important; border-right: 0.5px solid #198754 !important; border-top: none !important; border-bottom: none !important; color: #000000 !important; }
   table.MuiTable-root tbody tr:last-child td { border-bottom: 0.5px solid #198754 !important; }
   .MuiTableRow-root:last-child td { background: #f0fdf4 !important; color: #0f5132 !important; font-weight: 700 !important; border-top: 0.5px solid #198754 !important; }
+}
+@supports (display: -webkit-box) and (not (-moz-appearance: none)) {
+  @media print {
+    .orbx-global-print-footer {
+      display: none !important;
+    }
+  }
 }`;
   const s = document.createElement("style");
   s.textContent = css;
@@ -356,10 +377,7 @@ export function DayBookReport() {
               </tr>
             </tbody>
           </table>
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -527,10 +545,7 @@ export function InwardRegisterReport() {
               </tr>
             </tbody>
           </table>
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -686,10 +701,7 @@ export function OutwardRegisterReport() {
               </tr>
             </tbody>
           </table>
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -868,10 +880,7 @@ export function LabourBillRegisterReport() {
               </tr>
             </tbody>
           </table>
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -1020,10 +1029,7 @@ export function TrialBalanceReport() {
               </tr>
             </tbody>
           </table>
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -1166,10 +1172,7 @@ export function PendingBillsReport() {
               </tr>
             </tbody>
           </table>
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -1981,7 +1984,7 @@ export function ReceivablesReport() {
           </tr>
         </tbody>
       </table>
-      <p style="margin-top:20px;font-size:10px;color:#777;">Generated on: ${new Date().toLocaleString("en-IN")} | OrbX Nexus ERP</p>
+      ${getGlobalPrintFooterHtml()}
       ${PRINT_TRIGGER_SCRIPT}
     </body></html>`);
     printWindow.document.close();
@@ -2524,11 +2527,7 @@ export function StockInHandReport() {
             </div>
           ` : ""}
 
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
-          
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -2845,11 +2844,7 @@ export function StockSummaryReport() {
             </tbody>
           </table>
           
-          <div class="footer-info" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 8px; display: flex; justify-content: space-between; font-size: 10px; color: #777;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
-          
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -3421,11 +3416,7 @@ export function ItemMovementLedgerReport() {
             </tfoot>
           </table>
 
-          <div class="footer-info" style="margin-top: 15px; border-top: 0.5px solid #198754; padding-top: 6px; display: flex; justify-content: space-between; font-size: 9.5px; color: #555;">
-            <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
-            <span>OrbX Nexus Enterprise ERP</span>
-          </div>
-
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

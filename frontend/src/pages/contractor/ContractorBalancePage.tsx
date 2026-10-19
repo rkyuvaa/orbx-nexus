@@ -31,7 +31,7 @@ import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
@@ -247,6 +247,7 @@ async function handlePrintContractorStatement(contractorData: any, transactionsP
             <div class="signature-label">Authorised Signatory<br/>For ${cName}</div>
           </div>
         </div>
+        ${getGlobalPrintFooterHtml()}
         ${PRINT_TRIGGER_SCRIPT}
       </body>
     </html>

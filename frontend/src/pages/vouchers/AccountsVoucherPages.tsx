@@ -18,7 +18,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { toWords } from "../../utils/numberToWords";
-import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { formatAmount } from "../../utils/format";
 
 const today = new Date().toISOString().split("T")[0];
@@ -271,6 +271,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
               </div>
             </div>
           </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

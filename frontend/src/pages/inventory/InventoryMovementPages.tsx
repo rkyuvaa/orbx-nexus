@@ -18,7 +18,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { toWords } from "../../utils/numberToWords";
 
 
@@ -231,6 +231,7 @@ function handlePrintMovement(row: any, companyData: any, stockItems: any[], ledg
             </div>
           </div>
         </div>
+        ${getGlobalPrintFooterHtml()}
         ${PRINT_TRIGGER_SCRIPT}
       </body>
     </html>

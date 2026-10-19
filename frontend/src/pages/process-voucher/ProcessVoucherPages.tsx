@@ -20,7 +20,7 @@ const AutocompleteAny = Autocomplete as any;
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
-import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 
 export const resolveProcessName = (procId: any, processesList: any[]): string => {
@@ -258,6 +258,7 @@ export function InwardVoucherPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
@@ -1182,6 +1183,7 @@ export function OutwardVoucherPage() {
             </div>
             <div class="thank-you-note">Thank you for your business!</div>
           </div>
+          ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>

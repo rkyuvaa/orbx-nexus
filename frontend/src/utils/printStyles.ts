@@ -1,4 +1,7 @@
 export const GLOBAL_PRINT_FOOTER_CSS = `
+  /* =========================================================================
+     GLOBAL ORBX BRANDED PRINT FOOTER & DYNAMIC PAGE NUMBERING
+     ========================================================================= */
   @page {
     @bottom-left {
       content: "Powered by OrbX | orbx.in";
@@ -20,24 +23,57 @@ export const GLOBAL_PRINT_FOOTER_CSS = `
     }
   }
 
-  /* Prevent duplicate or legacy footers during print */
+  .orbx-global-print-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8pt;
+    font-weight: 500;
+    color: #555555;
+    line-height: 1.2;
+  }
+
+  @media screen {
+    .orbx-global-print-footer {
+      position: relative;
+      margin-top: 25px;
+      padding: 8px 10px;
+      border-top: 0.5px solid #e0e0e0;
+    }
+  }
+
   @media print {
+    body {
+      padding-bottom: 24px;
+    }
+    .orbx-global-print-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      padding: 0 4px;
+      box-sizing: border-box;
+      z-index: 999999;
+    }
     .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
       display: none !important;
     }
   }
 
-  /* On-screen preview fallback if viewed in browser tab prior to print */
-  .orbx-screen-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 10px;
-    font-size: 8pt;
-    font-family: 'Inter', sans-serif;
-    color: #555555;
-    border-top: 0.5px solid #e0e0e0;
-    margin-top: 20px;
+  @supports (display: -webkit-box) and (not (-moz-appearance: none)) {
+    @media print {
+      .orbx-global-print-footer {
+        display: none !important;
+      }
+    }
   }
 `;
 
@@ -73,24 +109,57 @@ export const COMMON_PRINT_CSS = `
     }
   }
 
-  /* Prevent duplicate or legacy footers during print */
+  .orbx-global-print-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 8pt;
+    font-weight: 500;
+    color: #555555;
+    line-height: 1.2;
+  }
+
+  @media screen {
+    .orbx-global-print-footer {
+      position: relative;
+      margin-top: 25px;
+      padding: 8px 10px;
+      border-top: 0.5px solid #e0e0e0;
+    }
+  }
+
   @media print {
+    body {
+      padding-bottom: 24px;
+    }
+    .orbx-global-print-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      padding: 0 4px;
+      box-sizing: border-box;
+      z-index: 999999;
+    }
     .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
       display: none !important;
     }
   }
 
-  /* On-screen preview fallback if viewed in browser tab prior to print */
-  .orbx-screen-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 10px;
-    font-size: 8pt;
-    font-family: 'Inter', sans-serif;
-    color: #555555;
-    border-top: 0.5px solid #e0e0e0;
-    margin-top: 20px;
+  @supports (display: -webkit-box) and (not (-moz-appearance: none)) {
+    @media print {
+      .orbx-global-print-footer {
+        display: none !important;
+      }
+    }
   }
   
   /* Header & Branding */
@@ -243,7 +312,136 @@ export const PRINT_TRIGGER_SCRIPT = `
       setTimeout(function() { window.close(); }, 750);
     }
 
+    function setupGlobalFooter() {
+      // 1. Ensure HTML footer element is present in DOM
+      var footer = document.querySelector('.orbx-global-print-footer');
+      if (!footer) {
+        footer = document.createElement('div');
+        footer.className = 'orbx-global-print-footer';
+        footer.id = 'orbx-global-print-footer';
+        footer.innerHTML = '<span class="orbx-footer-left">Powered by OrbX | orbx.in</span><span class="orbx-footer-right">Pages <span class="orbx-curr-page">1</span>/<span class="orbx-total-pages">1</span></span>';
+        document.body.appendChild(footer);
+      }
+
+      // 2. Feature-detect CSS @page margin boxes (supported in Chromium 131+)
+      var supportsMarginBoxes = false;
+      try {
+        var testStyle = document.createElement('style');
+        testStyle.textContent = '@page { @bottom-left { content: "test"; } }';
+        document.head.appendChild(testStyle);
+        if (testStyle.sheet && testStyle.sheet.cssRules && testStyle.sheet.cssRules.length > 0) {
+          var rule = testStyle.sheet.cssRules[0];
+          if (rule.cssRules && rule.cssRules.length > 0) {
+            supportsMarginBoxes = true;
+          }
+        }
+        document.head.removeChild(testStyle);
+      } catch (e) {
+        supportsMarginBoxes = false;
+      }
+
+      // 3. Dynamic page calculation fallback for Firefox / Safari / Screen
+      try {
+        var isLandscape = (document.body && document.body.offsetWidth > 900) ||
+                          (document.title && document.title.toLowerCase().indexOf("landscape") !== -1) ||
+                          (document.head && document.head.innerHTML.toLowerCase().indexOf("landscape") !== -1);
+        var pageHeightPx = isLandscape ? 720 : 1020;
+        var scrollH = Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0);
+        var totalPages = Math.max(1, Math.ceil(scrollH / pageHeightPx));
+        var totalSpan = footer.querySelector('.orbx-total-pages');
+        if (totalSpan) totalSpan.textContent = String(totalPages);
+      } catch (e) {}
+
+      // 4. Inject overriding style as last child of head so no prior @page rule overrides it
+      var finalStyle = document.createElement('style');
+      finalStyle.id = 'orbx-final-footer-style';
+      if (supportsMarginBoxes) {
+        finalStyle.textContent = [
+          '@page {',
+          '  @bottom-left {',
+          '    content: "Powered by OrbX | orbx.in" !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    vertical-align: bottom !important;',
+          '    padding-bottom: 0 !important;',
+          '  }',
+          '  @bottom-right {',
+          '    content: "Pages " counter(page) "/" counter(pages) !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    vertical-align: bottom !important;',
+          '    padding-bottom: 0 !important;',
+          '  }',
+          '}',
+          '@media print {',
+          '  .orbx-global-print-footer { display: none !important; }',
+          '  .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }',
+          '}',
+          '@media screen {',
+          '  .orbx-global-print-footer {',
+          '    display: flex !important;',
+          '    justify-content: space-between !important;',
+          '    align-items: center !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    margin-top: 25px !important;',
+          '    padding: 8px 10px !important;',
+          '    border-top: 0.5px solid #e0e0e0 !important;',
+          '  }',
+          '}'
+        ].join('\\n');
+      } else {
+        finalStyle.textContent = [
+          '@media print {',
+          '  body { padding-bottom: 24px !important; }',
+          '  .orbx-global-print-footer {',
+          '    position: fixed !important;',
+          '    bottom: 0 !important;',
+          '    left: 0 !important;',
+          '    right: 0 !important;',
+          '    width: 100% !important;',
+          '    display: flex !important;',
+          '    justify-content: space-between !important;',
+          '    align-items: center !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    background: transparent !important;',
+          '    padding: 0 4px !important;',
+          '    box-sizing: border-box !important;',
+          '    z-index: 999999 !important;',
+          '  }',
+          '  .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }',
+          '}',
+          '@media screen {',
+          '  .orbx-global-print-footer {',
+          '    display: flex !important;',
+          '    justify-content: space-between !important;',
+          '    align-items: center !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    margin-top: 25px !important;',
+          '    padding: 8px 10px !important;',
+          '    border-top: 0.5px solid #e0e0e0 !important;',
+          '  }',
+          '}'
+        ].join('\\n');
+      }
+      document.head.appendChild(finalStyle);
+    }
+
     function initPrintWithLogo() {
+      setupGlobalFooter();
+
       var img = document.querySelector('.logo-wrapper img, .logo-container img, img.company-logo-img');
       if (!img) {
         triggerPrint();
@@ -300,14 +498,16 @@ export function injectPrintStyles(css: string): void {
 }
 
 /**
- * Renders the on-screen fallback footer for browser previews when viewed before printing.
- * Hidden automatically during physical print and PDF generation via @media print { display: none !important; }.
+ * Returns the HTML for the branded global OrbX print and preview footer.
+ * Formatted with exact specifications:
+ * Left: "Powered by OrbX | orbx.in"
+ * Right: "Pages 1/1" (dynamically synchronized)
  */
 export function getGlobalPrintFooterHtml(): string {
   return `
-    <div class="orbx-screen-footer">
-      <span>Powered by OrbX | orbx.in</span>
-      <span>Pages 1/1</span>
+    <div class="orbx-global-print-footer" id="orbx-global-print-footer">
+      <span class="orbx-footer-left">Powered by OrbX | orbx.in</span>
+      <span class="orbx-footer-right">Pages <span class="orbx-curr-page">1</span>/<span class="orbx-total-pages">1</span></span>
     </div>
   `;
 }
