@@ -1814,10 +1814,14 @@ export function ReceivablesReport() {
   const [activePaymentBill, setActivePaymentBill] = useState<any>(null);
   const [activeEditBill, setActiveEditBill] = useState<any>(null);
 
-  const { data: ledgers = [] } = useQuery({
+  const { data: rawLaborLedgers = [] } = useQuery({
     queryKey: ["ledgers-account"],
-    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+    queryFn: async () => {
+      const res = await api.get("/ledgers/?ledger_type=Account");
+      return Array.isArray(res.data) ? res.data : [];
+    },
   });
+  const ledgers = useMemo(() => Array.isArray(rawLaborLedgers) ? rawLaborLedgers : [], [rawLaborLedgers]);
 
   const { data: rawData = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ["receivables", activeFY, fromDate, toDate, selectedLedgerId, statusFilter],
@@ -2245,10 +2249,14 @@ export function StockInHandReport() {
   const [enabled, setEnabled] = useState(true);
 
   // Fetch ledgers for supplier dropdown
-  const { data: ledgers = [] } = useQuery({
-    queryKey: ["ledgers"],
-    queryFn: async () => (await api.get("/ledgers/")).data,
+  const { data: rawStockLedgers = [] } = useQuery({
+    queryKey: ["ledgers-all"],
+    queryFn: async () => {
+      const res = await api.get("/ledgers/");
+      return Array.isArray(res.data) ? res.data : [];
+    },
   });
+  const ledgers = useMemo(() => Array.isArray(rawStockLedgers) ? rawStockLedgers : [], [rawStockLedgers]);
 
   // Fetch stock data
   const { data = [], isLoading } = useQuery({
@@ -2889,6 +2897,20 @@ export function StockSummaryReport() {
  * a clean client fallback grouping.
  */
 function buildInwardOutwardGroupedData(reportRes: any) {
+  if (!reportRes || typeof reportRes !== "object") {
+    return {
+      groupedDetails: [],
+      grandTotals: {
+        total_inward_qty: 0,
+        total_inward_weight: 0,
+        total_outward_qty: 0,
+        total_outward_weight: 0,
+        balance_qty: 0,
+        balance_weight: 0,
+      }
+    };
+  }
+
   if (reportRes?.grouped_details && Array.isArray(reportRes.grouped_details) && reportRes.grouped_details.length > 0) {
     return {
       groupedDetails: reportRes.grouped_details,
@@ -2904,11 +2926,11 @@ function buildInwardOutwardGroupedData(reportRes: any) {
   }
 
   // Graceful client fallback in case older cache or response is loaded:
-  const movements = reportRes?.movements || [];
+  const movements = Array.isArray(reportRes?.movements) ? reportRes.movements : [];
   const groupsMap: Record<string, any> = {};
 
-  const inwardMovements = movements.filter((m: any) => m.type === "Inward");
-  const outwardMovements = movements.filter((m: any) => m.type === "Outward");
+  const inwardMovements = movements.filter((m: any) => m && m.type === "Inward");
+  const outwardMovements = movements.filter((m: any) => m && m.type === "Outward");
 
   inwardMovements.forEach((inv: any) => {
     const key = `${inv.ref_no || "-"}||${inv.voucher_no || "-"}||${inv.date}||${inv.party_name || "-"}`;
@@ -2942,10 +2964,11 @@ function buildInwardOutwardGroupedData(reportRes: any) {
       const grp = groupsMap[key];
       const matchRef = out.ref_no && out.ref_no !== "-" && grp.ref_no && grp.ref_no !== "-" && grp.ref_no.trim().toLowerCase() === out.ref_no.trim().toLowerCase();
       if (matchRef || out.voucher_no === grp.voucher_no) {
-        const prod = grp.products.find((p: any) => p.product_name === out.product_name);
+        const prod = Array.isArray(grp.products) ? grp.products.find((p: any) => p && p.product_name === out.product_name) : undefined;
         if (prod) {
           const oQty = Number(out.outward_qty || 0);
           const oWt = Number(out.outward_weight || 0);
+          if (!Array.isArray(prod.outward_transactions)) prod.outward_transactions = [];
           prod.outward_transactions.push({
             voucher_no: out.voucher_no,
             date: out.date,
@@ -2992,10 +3015,10 @@ function buildInwardOutwardGroupedData(reportRes: any) {
   });
 
   const groupedDetails = Object.values(groupsMap);
-  const grand_in_qty = groupedDetails.reduce((sum, g) => sum + g.subtotal.inward_qty, 0);
-  const grand_in_wt = groupedDetails.reduce((sum, g) => sum + g.subtotal.inward_weight, 0);
-  const grand_out_qty = groupedDetails.reduce((sum, g) => sum + g.subtotal.outward_qty, 0);
-  const grand_out_wt = groupedDetails.reduce((sum, g) => sum + g.subtotal.outward_weight, 0);
+  const grand_in_qty = groupedDetails.reduce((sum, g) => sum + (g?.subtotal?.inward_qty || 0), 0);
+  const grand_in_wt = groupedDetails.reduce((sum, g) => sum + (g?.subtotal?.inward_weight || 0), 0);
+  const grand_out_qty = groupedDetails.reduce((sum, g) => sum + (g?.subtotal?.outward_qty || 0), 0);
+  const grand_out_wt = groupedDetails.reduce((sum, g) => sum + (g?.subtotal?.outward_weight || 0), 0);
 
   return {
     groupedDetails,
@@ -3019,16 +3042,24 @@ export function ItemMovementLedgerReport() {
   const [enabled, setEnabled] = useState(true);
 
   // Fetch products for dropdown
-  const { data: products = [] } = useQuery({
+  const { data: rawProducts = [] } = useQuery({
     queryKey: ["products"],
-    queryFn: async () => (await api.get("/products/")).data,
+    queryFn: async () => {
+      const res = await api.get("/products/");
+      return Array.isArray(res.data) ? res.data : [];
+    },
   });
+  const products = useMemo(() => Array.isArray(rawProducts) ? rawProducts : [], [rawProducts]);
 
   // Fetch ledgers for supplier dropdown
-  const { data: ledgers = [] } = useQuery({
-    queryKey: ["ledgers"],
-    queryFn: async () => (await api.get("/ledgers/")).data,
+  const { data: rawLedgers = [] } = useQuery({
+    queryKey: ["ledgers-all"],
+    queryFn: async () => {
+      const res = await api.get("/ledgers/");
+      return Array.isArray(res.data) ? res.data : [];
+    },
   });
+  const ledgers = useMemo(() => Array.isArray(rawLedgers) ? rawLedgers : [], [rawLedgers]);
 
   // Fetch report data
   const { data: reportRes = { movements: [], summary: {} }, isLoading } = useQuery({
@@ -3037,7 +3068,8 @@ export function ItemMovementLedgerReport() {
       let url = `/reports/item-movement-ledger?fy=${activeFY}&from_date=${fromDate}&to_date=${toDate}`;
       if (selectedProduct?.id) url += `&product_id=${selectedProduct.id}`;
       if (selectedLedgerId) url += `&ledger_id=${selectedLedgerId}`;
-      return (await api.get(url)).data;
+      const res = await api.get(url);
+      return res.data && typeof res.data === "object" ? res.data : { movements: [], summary: {} };
     },
     enabled,
   });
@@ -3047,8 +3079,8 @@ export function ItemMovementLedgerReport() {
     queryFn: async () => (await api.get("/company/")).data,
   });
 
-  const movements = reportRes.movements || [];
-  const summary = reportRes.summary || {};
+  const movements = useMemo(() => Array.isArray(reportRes?.movements) ? reportRes.movements : [], [reportRes]);
+  const summary = reportRes?.summary || {};
   const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
 
   const { groupedDetails, grandTotals } = useMemo(
@@ -3082,21 +3114,22 @@ export function ItemMovementLedgerReport() {
     const { name: cName, address: cAddress1, cityStatePin: cCityStatePin, phone: cPhone, email: cEmail, gstin: cTax } = resolveCompanyDetails(compData);
     const logoHtml = getCompanyLogoHtml(undefined, compData);
 
-    const selectedLedger = ledgers.find((l: any) => String(l.id) === String(selectedLedgerId));
+    const safeLedgers = Array.isArray(ledgers) ? ledgers : [];
+    const selectedLedger = safeLedgers.find((l: any) => String(l.id) === String(selectedLedgerId));
     const partyHeaderTitle = selectedLedger?.name || movements[0]?.party_name || "";
     const prodFilterName = selectedProduct ? (selectedProduct.name + (selectedProduct.item_code ? ` [${selectedProduct.item_code}]` : "")) : "";
     const dateStr = `${formatDate(fromDate, "2digit")} to ${formatDate(toDate, "2digit")}`;
 
-    const { groupedDetails, grandTotals } = buildInwardOutwardGroupedData(reportRes);
+    const { groupedDetails: printGroupedDetails, grandTotals: printGrandTotals } = buildInwardOutwardGroupedData(reportRes);
 
     let rowsHtml = "";
 
-    groupedDetails.forEach((grp: any) => {
+    (Array.isArray(printGroupedDetails) ? printGroupedDetails : []).forEach((grp: any) => {
       let isFirstRowOfGroup = true;
-      const grpProducts = grp.products || [];
+      const grpProducts = Array.isArray(grp?.products) ? grp.products : [];
 
       grpProducts.forEach((prod: any) => {
-        const outs = prod.outward_transactions || [];
+        const outs = Array.isArray(prod?.outward_transactions) ? prod.outward_transactions : [];
         const prodInQty = Number(prod.inward_qty || 0);
         const prodInWt = Number(prod.inward_weight || 0);
         let prodOutQtyTotal = 0;
@@ -3355,18 +3388,18 @@ export function ItemMovementLedgerReport() {
               <!-- Grand Total Row -->
               <tr class="grand-total-row">
                 <td colspan="4" style="text-align: right; font-weight: 700; text-transform: uppercase;">Grand Total</td>
-                <td style="text-align: right; font-weight: 700;">${formatLedgerQty(grandTotals.total_inward_qty, true)}</td>
-                <td class="col-divider" style="text-align: right; font-weight: 700;">${formatLedgerWeight(grandTotals.total_inward_weight, true)}</td>
+                <td style="text-align: right; font-weight: 700;">${formatLedgerQty(printGrandTotals.total_inward_qty, true)}</td>
+                <td class="col-divider" style="text-align: right; font-weight: 700;">${formatLedgerWeight(printGrandTotals.total_inward_weight, true)}</td>
                 <td colspan="2"></td>
-                <td style="text-align: right; font-weight: 700;">${formatLedgerQty(grandTotals.total_outward_qty, true)}</td>
-                <td style="text-align: right; font-weight: 700;">${formatLedgerWeight(grandTotals.total_outward_weight, true)}</td>
+                <td style="text-align: right; font-weight: 700;">${formatLedgerQty(printGrandTotals.total_outward_qty, true)}</td>
+                <td style="text-align: right; font-weight: 700;">${formatLedgerWeight(printGrandTotals.total_outward_weight, true)}</td>
               </tr>
 
               <!-- Closing Balance Row -->
               <tr class="closing-balance-row">
                 <td colspan="4" style="text-align: right; font-weight: 700; text-transform: uppercase;">Closing Balance (Inward - Outward)</td>
                 <td colspan="2" class="col-divider" style="text-align: right; font-weight: 700;">
-                  Qty: ${formatLedgerQty(grandTotals.balance_qty, true)} &nbsp;|&nbsp; Wt: ${formatLedgerWeight(grandTotals.balance_weight, true)}
+                  Qty: ${formatLedgerQty(printGrandTotals.balance_qty, true)} &nbsp;|&nbsp; Wt: ${formatLedgerWeight(printGrandTotals.balance_weight, true)}
                 </td>
                 <td colspan="4"></td>
               </tr>
@@ -3386,21 +3419,28 @@ export function ItemMovementLedgerReport() {
   };
 
 
-  const processedRows = movements.map((m: any) => [
-    m.date,
-    m.type,
-    m.voucher_no,
-    m.ref_no || "-",
-    m.party_name || "-",
-    m.product_name || "-",
-    Number(m.inward_qty) > 0 ? formatQty(m.inward_qty) : "-",
-    Number(m.outward_qty) > 0 ? formatQty(m.outward_qty) : "-",
-    formatQty(m.running_balance_qty),
-  ]);
+  const processedRows = useMemo(
+    () =>
+      (Array.isArray(movements) ? movements : []).map((m: any) => [
+        m.date,
+        m.type,
+        m.voucher_no,
+        m.ref_no || "-",
+        m.party_name || "-",
+        m.product_name || "-",
+        Number(m.inward_qty) > 0 ? formatQty(m.inward_qty) : "-",
+        Number(m.outward_qty) > 0 ? formatQty(m.outward_qty) : "-",
+        formatQty(m.running_balance_qty),
+      ]),
+    [movements]
+  );
 
-  const totalsRows = [
-    ["", "TOTALS", "", "", "", "", formatQty(summary.total_inward_qty || 0), formatQty(summary.total_outward_qty || 0), formatQty(summary.closing_qty || 0)]
-  ];
+  const totalsRows = useMemo(
+    () => [
+      ["", "TOTALS", "", "", "", "", formatQty(summary?.total_inward_qty || 0), formatQty(summary?.total_outward_qty || 0), formatQty(summary?.closing_qty || 0)]
+    ],
+    [summary]
+  );
 
   return (
     <Box>
@@ -3410,10 +3450,11 @@ export function ItemMovementLedgerReport() {
           <Autocomplete
             size="small"
             sx={{ minWidth: 260 }}
-            options={products}
+            options={Array.isArray(products) ? products : []}
             value={selectedProduct}
             onChange={(_, val) => setSelectedProduct(val)}
-            getOptionLabel={(p: any) => p.name || ""}
+            getOptionLabel={(p: any) => p?.name || ""}
+            isOptionEqualToValue={(option: any, val: any) => option?.id === val?.id}
             renderInput={(params) => <TextField {...params} label="Filter by Product (Item)" placeholder="All Products" />}
           />
           <TextField
@@ -3425,8 +3466,8 @@ export function ItemMovementLedgerReport() {
             sx={{ minWidth: 200 }}
           >
             <MenuItem value="">All Suppliers</MenuItem>
-            {ledgers.map((l: any) => (
-              <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+            {(Array.isArray(ledgers) ? ledgers : []).map((l: any) => (
+              <MenuItem key={l?.id} value={l?.id}>{l?.name}</MenuItem>
             ))}
           </TextField>
           <TextField label="From" type="date" size="small" value={fromDate} onChange={(e) => setFromDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 150 }} />
@@ -3487,14 +3528,14 @@ export function ItemMovementLedgerReport() {
             </TableHead>
 
             <TableBody>
-              {groupedDetails.map((grp: any, gIdx: number) => {
+              {(Array.isArray(groupedDetails) ? groupedDetails : []).map((grp: any, gIdx: number) => {
                 let isFirstRowOfGroup = true;
-                const grpProducts = grp.products || [];
+                const grpProducts = Array.isArray(grp?.products) ? grp.products : [];
 
                 return (
-                  <React.Fragment key={`grp-${gIdx}-${grp.ref_no}-${grp.voucher_no}`}>
+                  <React.Fragment key={`grp-${gIdx}-${grp?.ref_no || ""}-${grp?.voucher_no || ""}`}>
                     {grpProducts.map((prod: any, pIdx: number) => {
-                      const outs = prod.outward_transactions || [];
+                      const outs = Array.isArray(prod?.outward_transactions) ? prod.outward_transactions : [];
                       const prodInQty = Number(prod.inward_qty || 0);
                       const prodInWt = Number(prod.inward_weight || 0);
                       let prodOutQtyTotal = 0;
