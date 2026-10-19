@@ -433,7 +433,7 @@ export default function PayrollConfigPage() {
                   Select the days that are weekly off. These will be excluded from attendance calculations.
                 </Typography>
                 <FormControl component="fieldset">
-                  <FormLabel component="legend" sx={{ fontWeight: 600, mb: 1.5, color: "#92400e" }}>
+                  <FormLabel component="legend" sx={{ fontWeight: 600, mb: 1.5, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#92400e" }}>
                     Select Weekly Off Days
                   </FormLabel>
                   <FormGroup row sx={{ gap: 1.5, flexWrap: "wrap" }}>
@@ -505,8 +505,25 @@ export default function PayrollConfigPage() {
                   </Typography>
                 </Box>
 
-                <Paper variant="outlined" sx={{ p: 2, mb: 2.5, bgcolor: "#faf5ff", borderRadius: "8px", border: "1px dashed #a78bfa" }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#7c3aed", mb: 1.5 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mb: 2.5,
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(124, 58, 237, 0.08)" : "#faf5ff",
+                    borderRadius: "8px",
+                    border: "1px dashed",
+                    borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(167, 139, 250, 0.3)" : "#a78bfa",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontWeight: 700,
+                      color: (theme) => theme.palette.mode === "dark" ? "#c4b5fd" : "#7c3aed",
+                      mb: 1.5,
+                    }}
+                  >
                     Add New Holiday
                   </Typography>
                   <Grid container spacing={2} sx={{ alignItems: "center" }}>
@@ -521,7 +538,7 @@ export default function PayrollConfigPage() {
                         slotProps={{ inputLabel: { shrink: true } }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 4 }}>
+                    <Grid size={{ xs: 12, sm: 3.5 }}>
                       <TextField
                         label="Holiday Name *"
                         value={newName}
@@ -543,15 +560,15 @@ export default function PayrollConfigPage() {
                         slotProps={{ inputLabel: { shrink: true } }}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12, sm: 1 }}>
+                    <Grid size={{ xs: 12, sm: 1.5 }}>
                       <Button
                         variant="contained"
-                        color="secondary"
+                        color="primary"
                         startIcon={<Add />}
                         onClick={() => addHolidayMutation.mutate()}
                         disabled={addHolidayMutation.isPending || !newDate || !newName.trim()}
                         fullWidth
-                        sx={{ fontWeight: 700 }}
+                        sx={{ fontWeight: 700, height: 40 }}
                       >
                         Add
                       </Button>
@@ -566,7 +583,7 @@ export default function PayrollConfigPage() {
                 ) : (
                   <Table size="small">
                     <TableHead>
-                      <TableRow sx={{ bgcolor: "#f3f0ff" }}>
+                      <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === "dark" ? "transparent" : "#f3f0ff" }}>
                         <TableCell sx={{ fontWeight: 700 }}>#</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Day</TableCell>
@@ -581,7 +598,17 @@ export default function PayrollConfigPage() {
                         const dayName = dt.toLocaleDateString("en-IN", { weekday: "long" });
                         const dateStr = dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
                         return (
-                          <TableRow key={h.id} sx={{ "&:hover": { bgcolor: "#faf5ff" } }}>
+                          <TableRow
+                            key={h.id}
+                            sx={{
+                              "&:hover": {
+                                bgcolor: (theme) =>
+                                  theme.palette.mode === "dark"
+                                    ? "rgba(167, 139, 250, 0.08)"
+                                    : "#faf5ff",
+                              },
+                            }}
+                          >
                             <TableCell sx={{ color: "text.secondary" }}>{idx + 1}</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>{dateStr}</TableCell>
                             <TableCell>
@@ -620,7 +647,7 @@ export default function PayrollConfigPage() {
 
             {/* ── Save Button at bottom of settings tabs ── */}
             {activeTab !== 3 && (
-              <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3, pt: 2, borderTop: "1px solid #e2e8f0" }}>
+              <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
                 <Button
                   variant="contained"
                   color="success"

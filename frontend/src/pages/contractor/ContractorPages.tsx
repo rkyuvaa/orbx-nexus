@@ -950,7 +950,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                           </TableRow>
                         )}
                         {lineItems.length > 0 && (
-                          <TableRow sx={{ bgcolor: "#fafafa" }}>
+                          <TableRow sx={{ bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#fafafa" }}>
                             <TableCell colSpan={3} sx={{ fontWeight: 700 }} align="right">
                               Total:
                             </TableCell>
