@@ -2,6 +2,27 @@ export const GLOBAL_PRINT_FOOTER_CSS = `
   /* =========================================================================
      GLOBAL ORBX BRANDED PRINT FOOTER & DYNAMIC PAGE NUMBERING
      ========================================================================= */
+  @page {
+    @bottom-left {
+      content: "Powered by OrbX | orbx.in";
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+    @bottom-right {
+      content: "Pages " counter(page) "/" counter(pages);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+  }
+
   .orbx-global-print-footer {
     display: flex;
     justify-content: space-between;
@@ -16,11 +37,6 @@ export const GLOBAL_PRINT_FOOTER_CSS = `
   }
 
   @media screen {
-    .orbx-print-page {
-      margin-bottom: 25px;
-      border-bottom: 1px dashed #cbd5e1;
-      padding-bottom: 15px;
-    }
     .orbx-global-print-footer {
       position: relative;
       margin-top: 25px;
@@ -33,41 +49,31 @@ export const GLOBAL_PRINT_FOOTER_CSS = `
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      background: #ffffff !important;
-    }
-    .orbx-print-page {
-      page-break-after: always !important;
-      break-after: page !important;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-      box-sizing: border-box !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
-      height: 100vh !important;
-      max-height: 100vh !important;
-      overflow: hidden !important;
-    }
-    .orbx-print-page:last-child {
-      page-break-after: avoid !important;
-      break-after: avoid !important;
-    }
-    .orbx-print-page-content {
-      flex: 1 1 auto !important;
     }
     .orbx-global-print-footer {
-      flex: 0 0 auto !important;
-      display: flex !important;
-      justify-content: space-between !important;
-      align-items: center !important;
-      width: 100% !important;
-      background: transparent !important;
-      padding: 0 4px !important;
-      box-sizing: border-box !important;
-      margin-top: auto !important;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      padding: 0 4px;
+      box-sizing: border-box;
+      z-index: 999999;
     }
     .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
       display: none !important;
+    }
+  }
+
+  @supports (display: -webkit-box) and (not (-moz-appearance: none)) {
+    @media print {
+      .orbx-global-print-footer {
+        display: none !important;
+      }
     }
   }
 `;
@@ -83,6 +89,27 @@ export const COMMON_PRINT_CSS = `
   /* =========================================================================
      GLOBAL ORBX BRANDED PRINT FOOTER & DYNAMIC PAGE NUMBERING
      ========================================================================= */
+  @page {
+    @bottom-left {
+      content: "Powered by OrbX | orbx.in";
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+    @bottom-right {
+      content: "Pages " counter(page) "/" counter(pages);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 8pt;
+      font-weight: 500;
+      color: #555555;
+      vertical-align: bottom;
+      padding-bottom: 0;
+    }
+  }
+
   .orbx-global-print-footer {
     display: flex;
     justify-content: space-between;
@@ -97,11 +124,6 @@ export const COMMON_PRINT_CSS = `
   }
 
   @media screen {
-    .orbx-print-page {
-      margin-bottom: 25px;
-      border-bottom: 1px dashed #cbd5e1;
-      padding-bottom: 15px;
-    }
     .orbx-global-print-footer {
       position: relative;
       margin-top: 25px;
@@ -114,41 +136,31 @@ export const COMMON_PRINT_CSS = `
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      background: #ffffff !important;
-    }
-    .orbx-print-page {
-      page-break-after: always !important;
-      break-after: page !important;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-      box-sizing: border-box !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
-      height: 100vh !important;
-      max-height: 100vh !important;
-      overflow: hidden !important;
-    }
-    .orbx-print-page:last-child {
-      page-break-after: avoid !important;
-      break-after: avoid !important;
-    }
-    .orbx-print-page-content {
-      flex: 1 1 auto !important;
     }
     .orbx-global-print-footer {
-      flex: 0 0 auto !important;
-      display: flex !important;
-      justify-content: space-between !important;
-      align-items: center !important;
-      width: 100% !important;
-      background: transparent !important;
-      padding: 0 4px !important;
-      box-sizing: border-box !important;
-      margin-top: auto !important;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: transparent;
+      padding: 0 4px;
+      box-sizing: border-box;
+      z-index: 999999;
     }
     .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
       display: none !important;
+    }
+  }
+
+  @supports (display: -webkit-box) and (not (-moz-appearance: none)) {
+    @media print {
+      .orbx-global-print-footer {
+        display: none !important;
+      }
     }
   }
   
@@ -302,250 +314,196 @@ export const PRINT_TRIGGER_SCRIPT = `
       setTimeout(function() { window.close(); }, 750);
     }
 
-    function getElementTotalHeight(el) {
-      if (!el) return 0;
-      var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
-      var mt = style ? (parseFloat(style.marginTop) || 0) : 0;
-      var mb = style ? (parseFloat(style.marginBottom) || 0) : 0;
-      return el.offsetHeight + mt + mb;
-    }
+    function setupGlobalFooter() {
+      // 1. Ensure HTML footer element is present in DOM
+      var footer = document.querySelector('.orbx-global-print-footer');
+      if (!footer) {
+        footer = document.createElement('div');
+        footer.className = 'orbx-global-print-footer';
+        footer.id = 'orbx-global-print-footer';
+        footer.innerHTML = '<span class="orbx-footer-left">Powered by OrbX | orbx.in</span><span class="orbx-footer-right">Pages <span class="orbx-curr-page">1</span>/<span class="orbx-total-pages">1</span></span>';
+        document.body.appendChild(footer);
+      }
 
-    function paginateDocumentForPrint() {
+      // 2. Feature-detect CSS @page margin boxes (supported in Chromium 131+)
+      var supportsMarginBoxes = false;
       try {
-        var table = document.querySelector('table.items-table, table');
-        if (!table) return;
+        var testStyle = document.createElement('style');
+        testStyle.textContent = '@page { @bottom-left { content: "test"; } }';
+        document.head.appendChild(testStyle);
+        if (testStyle.sheet && testStyle.sheet.cssRules && testStyle.sheet.cssRules.length > 0) {
+          var rule = testStyle.sheet.cssRules[0];
+          if (rule.cssRules && rule.cssRules.length > 0) {
+            supportsMarginBoxes = true;
+          }
+        }
+        document.head.removeChild(testStyle);
+      } catch (e) {
+        supportsMarginBoxes = false;
+      }
 
+      // 3. Accurate page calculation for single & multi-page documents
+      try {
         var headHtml = (document.head ? document.head.innerHTML : "") + " " + (document.title || "");
         var isLandscape = /landscape/i.test(headHtml);
         var isA5 = /a5/i.test(headHtml);
+        
+        // Accurate printable height per page at standard 96 DPI (minus standard margins)
+        var pageHeightPx = isA5 ? 520 : (isLandscape ? 780 : 1050);
+        
+        // Measure body scroll height cleanly without in-flow footer
+        var prevDisplay = footer.style.display;
+        footer.style.display = 'none';
+        var scrollH = Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0
+        );
+        footer.style.display = prevDisplay;
 
-        var marginMm = 10;
-        var mMatch = headHtml.match(/margin:\s*(\d+)mm/i);
-        if (mMatch && mMatch[1]) {
-          marginMm = parseInt(mMatch[1], 10);
-        }
-        var pxPerMm = 3.779527559;
-        var totalSheetHeightPx = (isA5 ? 148 : (isLandscape ? 210 : 297)) * pxPerMm;
-        var marginTotalPx = marginMm * pxPerMm * 2;
-        var usablePageHeight = totalSheetHeightPx - marginTotalPx;
-
-        var footerHeight = 28;
-        var safetyBuffer = 18;
-        var contentMaxHeight = usablePageHeight - footerHeight - safetyBuffer;
-
-        // Collect top elements before table
-        var topElements = [];
-        var prev = table.previousElementSibling;
-        while (prev) {
-          if (prev.tagName !== 'SCRIPT' && prev.tagName !== 'STYLE') {
-            topElements.unshift(prev);
-          }
-          prev = prev.previousElementSibling;
-        }
-        var topHeight = 0;
-        topElements.forEach(function(el) { topHeight += getElementTotalHeight(el); });
-
-        var thead = table.querySelector('thead');
-        var theadHeight = thead ? getElementTotalHeight(thead) : 0;
-        var tfoot = table.querySelector('tfoot');
-
-        // Collect bottom elements after table (excluding footer and scripts)
-        var bottomElements = [];
-        var next = table.nextElementSibling;
-        while (next) {
-          if (!next.classList.contains('orbx-global-print-footer') && next.tagName !== 'SCRIPT' && next.tagName !== 'STYLE') {
-            bottomElements.push(next);
-          }
-          next = next.nextElementSibling;
-        }
-        var bottomHeight = 0;
-        bottomElements.forEach(function(el) { bottomHeight += getElementTotalHeight(el); });
-
-        // Group rows atomically (honoring rowspan)
-        var allRows = Array.from(table.querySelectorAll('tbody > tr'));
-        var atomicGroups = [];
-        var rIdx = 0;
-        while (rIdx < allRows.length) {
-          var tr = allRows[rIdx];
-          var maxRs = 1;
-          var cells = tr.querySelectorAll('td, th');
-          cells.forEach(function(c) {
-            var rs = parseInt(c.getAttribute('rowspan') || '1', 10);
-            if (rs > maxRs) maxRs = rs;
-          });
-          var groupRows = [];
-          var groupHeight = 0;
-          for (var k = 0; k < maxRs && rIdx < allRows.length; k++) {
-            groupRows.push(allRows[rIdx]);
-            groupHeight += allRows[rIdx].offsetHeight;
-            rIdx++;
-          }
-          atomicGroups.push({ rows: groupRows, height: groupHeight });
+        // Allow 3% buffer for minor line-height or border rounding variations
+        var totalPages = 1;
+        if (scrollH > (pageHeightPx * 1.03)) {
+          totalPages = Math.ceil(scrollH / pageHeightPx);
         }
 
-        // Check if entire content fits in 1 page cleanly
-        var totalRowsHeight = atomicGroups.reduce(function(sum, g) { return sum + g.height; }, 0);
-        var totalDocContentHeight = topHeight + theadHeight + totalRowsHeight + bottomHeight;
+        var totalSpan = footer.querySelector('.orbx-total-pages');
+        if (totalSpan) totalSpan.textContent = String(totalPages);
+      } catch (e) {}
 
-        if (totalDocContentHeight <= contentMaxHeight) {
-          // Document fits on exactly 1 page
-          var footer = document.querySelector('.orbx-global-print-footer');
-          if (footer) {
-            var currSpan = footer.querySelector('.orbx-curr-page');
-            var totalSpan = footer.querySelector('.orbx-total-pages');
-            if (currSpan) currSpan.textContent = '1';
-            if (totalSpan) totalSpan.textContent = '1';
-          }
-          return;
-        }
-
-        // Multi-page document: distribute atomic groups into pages
-        var pagesData = [];
-        var currentPageRows = [];
-        var currentHeight = topHeight + theadHeight;
-
-        for (var g = 0; g < atomicGroups.length; g++) {
-          var grp = atomicGroups[g];
-          if (currentHeight + grp.height > contentMaxHeight && currentPageRows.length > 0) {
-            pagesData.push(currentPageRows);
-            currentPageRows = [];
-            currentHeight = theadHeight;
-          }
-          currentPageRows.push(grp);
-          currentHeight += grp.height;
-        }
-
-        var bottomFitsOnLast = (currentHeight + bottomHeight <= contentMaxHeight);
-        if (!bottomFitsOnLast && currentPageRows.length > 0) {
-          pagesData.push(currentPageRows);
-          currentPageRows = [];
-          currentHeight = theadHeight;
-        }
-        pagesData.push(currentPageRows);
-
-        var totalPages = pagesData.length;
-
-        // Cache exact column widths from rendered header to ensure perfect alignment
-        var tableClass = table.className;
-        var tableStyle = table.getAttribute('style') || '';
-        var colWidths = [];
-        if (thead) {
-          var lastHeaderRow = thead.querySelector('tr:last-child');
-          if (lastHeaderRow) {
-            var thList = lastHeaderRow.querySelectorAll('th, td');
-            thList.forEach(function(th) {
-              colWidths.push(th.getBoundingClientRect().width);
-            });
-          }
-        }
-
-        var container = document.createElement('div');
-        container.id = 'orbx-paginated-container';
-
-        for (var p = 0; p < totalPages; p++) {
-          var pageDiv = document.createElement('div');
-          pageDiv.className = 'orbx-print-page';
-          pageDiv.setAttribute('data-page', (p + 1) + '/' + totalPages);
-
-          var pageContent = document.createElement('div');
-          pageContent.className = 'orbx-print-page-content';
-
-          if (p === 0) {
-            topElements.forEach(function(el) {
-              pageContent.appendChild(el.cloneNode(true));
-            });
-          }
-
-          var pageGroups = pagesData[p];
-          if (pageGroups.length > 0 || (p === totalPages - 1 && !bottomFitsOnLast)) {
-            var pageTable = document.createElement('table');
-            pageTable.className = tableClass;
-            pageTable.style.width = '100%';
-            pageTable.style.tableLayout = 'fixed';
-            if (tableStyle) {
-              pageTable.style.cssText = tableStyle + '; width: 100% !important; table-layout: fixed !important;';
-            }
-
-            if (thead) {
-              var clonedThead = thead.cloneNode(true);
-              if (colWidths.length > 0) {
-                var lastClonedRow = clonedThead.querySelector('tr:last-child');
-                if (lastClonedRow) {
-                  var clonedThs = lastClonedRow.querySelectorAll('th, td');
-                  clonedThs.forEach(function(th, idx) {
-                    if (colWidths[idx]) {
-                      th.style.width = colWidths[idx] + 'px';
-                      th.style.minWidth = colWidths[idx] + 'px';
-                      th.style.maxWidth = colWidths[idx] + 'px';
-                    }
-                  });
-                }
-              }
-              pageTable.appendChild(clonedThead);
-            }
-
-            var pageTbody = document.createElement('tbody');
-            pageGroups.forEach(function(grp) {
-              grp.rows.forEach(function(r) {
-                pageTbody.appendChild(r.cloneNode(true));
-              });
-            });
-            pageTable.appendChild(pageTbody);
-
-            if (tfoot && p === totalPages - 1) {
-              pageTable.appendChild(tfoot.cloneNode(true));
-            }
-
-            pageContent.appendChild(pageTable);
-          }
-
-          if (p === totalPages - 1) {
-            bottomElements.forEach(function(el) {
-              pageContent.appendChild(el.cloneNode(true));
-            });
-          }
-
-          pageDiv.appendChild(pageContent);
-
-          var pageFooter = document.createElement('div');
-          pageFooter.className = 'orbx-global-print-footer';
-          pageFooter.innerHTML = '<span class="orbx-footer-left">Powered by OrbX | orbx.in</span><span class="orbx-footer-right">Pages ' + (p + 1) + '/' + totalPages + '</span>';
-          pageDiv.appendChild(pageFooter);
-
-          container.appendChild(pageDiv);
-        }
-
-        document.body.innerHTML = '';
-        document.body.appendChild(container);
-      } catch (e) {
-        console.error("Pagination error:", e);
+      // 4. Inject overriding style as last child of head so no prior @page rule overrides it
+      var finalStyle = document.createElement('style');
+      finalStyle.id = 'orbx-final-footer-style';
+      if (supportsMarginBoxes) {
+        finalStyle.textContent = [
+          '@page {',
+          '  @bottom-left {',
+          '    content: "Powered by OrbX | orbx.in" !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    vertical-align: bottom !important;',
+          '    padding-bottom: 0 !important;',
+          '  }',
+          '  @bottom-right {',
+          '    content: "Pages " counter(page) "/" counter(pages) !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    vertical-align: bottom !important;',
+          '    padding-bottom: 0 !important;',
+          '  }',
+          '}',
+          '@media print {',
+          '  html, body { margin: 0 !important; padding: 0 !important; }',
+          '  .orbx-global-print-footer { display: none !important; }',
+          '  .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }',
+          '}',
+          '@media screen {',
+          '  .orbx-global-print-footer {',
+          '    display: flex !important;',
+          '    justify-content: space-between !important;',
+          '    align-items: center !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    margin-top: 25px !important;',
+          '    padding: 8px 10px !important;',
+          '    border-top: 0.5px solid #e0e0e0 !important;',
+          '  }',
+          '}'
+        ].join('\\n');
+      } else {
+        finalStyle.textContent = [
+          '@media print {',
+          '  html, body { margin: 0 !important; padding: 0 !important; }',
+          '  .orbx-global-print-footer {',
+          '    position: fixed !important;',
+          '    bottom: 0 !important;',
+          '    left: 0 !important;',
+          '    right: 0 !important;',
+          '    width: 100% !important;',
+          '    display: flex !important;',
+          '    justify-content: space-between !important;',
+          '    align-items: center !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    background: transparent !important;',
+          '    padding: 0 4px !important;',
+          '    box-sizing: border-box !important;',
+          '    z-index: 999999 !important;',
+          '  }',
+          '  .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }',
+          '}',
+          '@media screen {',
+          '  .orbx-global-print-footer {',
+          '    display: flex !important;',
+          '    justify-content: space-between !important;',
+          '    align-items: center !important;',
+          '    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;',
+          '    font-size: 8pt !important;',
+          '    font-weight: 500 !important;',
+          '    color: #555555 !important;',
+          '    margin-top: 25px !important;',
+          '    padding: 8px 10px !important;',
+          '    border-top: 0.5px solid #e0e0e0 !important;',
+          '  }',
+          '}'
+        ].join('\\n');
       }
+      document.head.appendChild(finalStyle);
     }
 
-    function initPrintProcess() {
+    function initPrintWithLogo() {
+      setupGlobalFooter();
+
       var img = document.querySelector('.logo-wrapper img, .logo-container img, img.company-logo-img');
-      if (img && (!img.complete || img.naturalWidth === 0)) {
-        var hasTriggered = false;
-        var onReady = function() {
-          if (hasTriggered) return;
-          hasTriggered = true;
-          paginateDocumentForPrint();
-          triggerPrint();
-        };
-        img.onload = onReady;
-        img.onerror = onReady;
-        setTimeout(onReady, 2000);
+      if (!img) {
+        triggerPrint();
         return;
       }
 
-      paginateDocumentForPrint();
-      triggerPrint();
+      // If image is already complete and decoded
+      if (img.complete && img.naturalWidth > 0) {
+        if (typeof img.decode === 'function') {
+          img.decode().then(triggerPrint).catch(triggerPrint);
+        } else {
+          triggerPrint();
+        }
+        return;
+      }
+
+      var hasTriggered = false;
+      var onReady = function() {
+        if (hasTriggered) return;
+        hasTriggered = true;
+        if (typeof img.decode === 'function') {
+          img.decode().then(triggerPrint).catch(triggerPrint);
+        } else {
+          triggerPrint();
+        }
+      };
+
+      img.onload = onReady;
+      img.onerror = function() {
+        console.warn("Logo failed to load in printout, continuing with print");
+        if (hasTriggered) return;
+        hasTriggered = true;
+        triggerPrint();
+      };
+
+      // Safety timeout: Ensure document ALWAYS prints even on slow or failed network
+      setTimeout(onReady, 2500);
     }
 
     if (document.readyState === 'complete') {
-      initPrintProcess();
+      initPrintWithLogo();
     } else {
-      window.addEventListener('load', initPrintProcess);
+      window.addEventListener('load', initPrintWithLogo);
     }
   </script>
 `;
