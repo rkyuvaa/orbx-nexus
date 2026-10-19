@@ -18,7 +18,7 @@ import PageHeader from "../../components/PageHeader";
 
 const AutocompleteAny = Autocomplete as any;
 import OrbxGrid from "../../components/tables/OrbxGrid";
-import { useAuthStore } from "../../store";
+import { useAuthStore, useCompanyStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
@@ -97,7 +97,7 @@ export function InwardVoucherPage() {
     if (!printWindow) return;
 
     const savedConfig = localStorage.getItem("orbx_print_config");
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
     let printConfig = {
       showLogo: compData?.show_logo ?? true,
       inwardPaperSize: compData?.inward_paper_size || "A4",
@@ -896,7 +896,7 @@ export function OutwardVoucherPage() {
     if (!printWindow) return;
 
     const savedConfig = localStorage.getItem("orbx_print_config");
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
     let printConfig = {
       showLogo: compData?.show_logo ?? true,
       outwardPaperSize: compData?.outward_paper_size || "A4",

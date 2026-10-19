@@ -15,10 +15,10 @@ import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
-import { useAuthStore } from "../../store";
+import { useAuthStore, useCompanyStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { toWords } from "../../utils/numberToWords";
-import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { formatAmount } from "../../utils/format";
 
 const today = new Date().toISOString().split("T")[0];
@@ -89,12 +89,8 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
       } catch (e) {}
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64)
-      ? `<img src="${logoBase64}" />`
-      : "";
-
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, compData);
     const cName = compData?.name || compData?.company_name || "SRI METAL";
     const cAddress = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
@@ -275,12 +271,7 @@ function AccountsVoucherPage({ voucherType }: { voucherType: string }) {
               </div>
             </div>
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);

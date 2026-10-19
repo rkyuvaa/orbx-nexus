@@ -1,7 +1,7 @@
 import { Box, Toolbar, useMediaQuery, useTheme } from "@mui/material";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
-import { useUIStore } from "../../store";
+import { useUIStore, useAuthStore, useCompanyStore } from "../../store";
 import { Outlet } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -13,6 +13,14 @@ export default function AppShell() {
   const isTablet = useMediaQuery("(max-width: 992px)");
   const isMobile = useMediaQuery("(max-width: 600px)");
   const { sidebarOpen, setSidebarOpen } = useUIStore();
+  const { token } = useAuthStore();
+  const { isInitialized, fetchCompany } = useCompanyStore();
+
+  useEffect(() => {
+    if (token) {
+      fetchCompany(!isInitialized);
+    }
+  }, [token]);
 
   useEffect(() => {
     if (isTablet) {

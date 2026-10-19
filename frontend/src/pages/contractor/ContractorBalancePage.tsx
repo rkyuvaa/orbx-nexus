@@ -29,9 +29,9 @@ import { ColDef } from "../../components/tables/OrbxGrid";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
-import { useAuthStore } from "../../store";
+import { useAuthStore, useCompanyStore } from "../../store";
 import { formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS, getPageSizeCSS } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
@@ -60,10 +60,8 @@ async function handlePrintContractorStatement(contractorData: any, transactionsP
     try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
   }
 
-  const logoBase64 = localStorage.getItem("company_logo");
-  const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
-
-  const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+  const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+  const logoHtml = getCompanyLogoHtml(printConfig.showLogo, compData);
   const cName = compData?.name || "SRI METAL";
   const cAddress1 = compData?.address || "";
   const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
@@ -249,14 +247,11 @@ async function handlePrintContractorStatement(contractorData: any, transactionsP
             <div class="signature-label">Authorised Signatory<br/>For ${cName}</div>
           </div>
         </div>
+        ${PRINT_TRIGGER_SCRIPT}
       </body>
     </html>
   `);
   printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => {
-    printWindow.print();
-  }, 400);
 }
 
 

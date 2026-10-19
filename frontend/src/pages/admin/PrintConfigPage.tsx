@@ -5,6 +5,7 @@ import Refresh from "@mui/icons-material/Refresh";
 import PageHeader from "../../components/PageHeader";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../api/client";
+import { useCompanyStore } from "../../store";
 
 interface PrintConfig {
   showLogo: boolean;
@@ -55,9 +56,11 @@ export default function PrintConfigPage() {
     queryFn: async () => {
       try {
         const response = await api.get("/company/");
+        useCompanyStore.getState().setCompany(response.data);
         return response.data;
       } catch (err: any) {
         if (err.response?.status === 404) {
+          useCompanyStore.getState().setCompany(null);
           return null;
         }
         throw err;
@@ -113,6 +116,7 @@ export default function PrintConfigPage() {
       return api.put("/company/", payload);
     },
     onSuccess: (res) => {
+      useCompanyStore.getState().setCompany(res.data);
       qc.invalidateQueries({ queryKey: ["company"] });
       const updatedConfig = {
         showLogo: res.data.show_logo ?? true,

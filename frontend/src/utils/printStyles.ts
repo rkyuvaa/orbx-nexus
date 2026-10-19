@@ -64,39 +64,143 @@ export const COMMON_PRINT_CSS = `
   .thank-you-note { text-align: center; font-size: 9.5px; color: #0f5132; margin-top: 8px; font-weight: 600; }
 `;
 
+import { useCompanyStore, preloadAndDecodeImage } from "../store";
+
 export function getPageSizeCSS(paperSize: "A4" | "A5"): string {
   if (paperSize === "A5") return "A5 landscape";
   return "A4 portrait";
 }
 
-export function getCompanyLogoHtml(showLogo: boolean, companyData?: any): string {
-  if (!showLogo) return "";
-  const comp = Array.isArray(companyData) ? companyData[0] : companyData;
-  const stored = localStorage.getItem("company_logo");
-  const logoSrc = stored || comp?.logo_path || "/logo-light.svg";
-  
-  if (comp?.logo_path && !stored) {
-    try { localStorage.setItem("company_logo", comp.logo_path); } catch (e) {}
+/**
+ * Returns company logo HTML with reliable fallback to centralized store and cached values.
+ * Resolves asynchronously pre-decoded logo data and maintains localStorage synchronization.
+ */
+export function getCompanyLogoHtml(showLogo?: boolean, companyData?: any): string {
+  const store = useCompanyStore.getState();
+  const comp = (Array.isArray(companyData) ? companyData[0] : companyData) || store.company;
+
+  const shouldShow = showLogo !== undefined ? showLogo : (comp?.show_logo ?? store.printConfig?.showLogo ?? true);
+  if (!shouldShow) return "";
+
+  const logoSrc = comp?.logo_path || store.company?.logo_path || localStorage.getItem("company_logo") || "/logo-light.svg";
+
+  if (logoSrc && logoSrc !== "/logo-light.svg") {
+    try {
+      localStorage.setItem("company_logo", logoSrc);
+    } catch {}
   }
-  
-  return logoSrc ? `<img src="${logoSrc}" alt="Logo" />` : "";
+
+  return logoSrc ? `<img src="${logoSrc}" alt="Logo" class="company-logo-img" />` : "";
+}
+
+/**
+ * Resolves complete company information for print headers, falling back seamlessly
+ * to the centralized persistent store if the local page query has not yet resolved.
+ */
+export function resolveCompanyDetails(companyData?: any) {
+  const storeComp = useCompanyStore.getState().company;
+  const comp = (Array.isArray(companyData) ? companyData[0] : companyData) || storeComp;
+
+  const name = comp?.name || comp?.company_name || "SRI METAL";
+  const address = comp?.address || [comp?.address_line1, comp?.address_line2].filter(Boolean).join(", ") || "";
+  const city = comp?.city || "";
+  const state = comp?.state || "";
+  const pincode = comp?.pincode || "";
+  const cityStatePin = [city, state, pincode].filter(Boolean).join(" - ");
+  const phone = comp?.phone || comp?.mobile ? `Tel: ${[comp?.phone, comp?.mobile].filter(Boolean).join(" / ")}` : "";
+  const email = comp?.email ? `Email: ${comp?.email}` : "";
+  const gstin = comp?.gstin ? `GSTIN: ${comp?.gstin}` : "";
+  const pan = comp?.pan ? `PAN: ${comp?.pan}` : "";
+
+  return {
+    raw: comp,
+    name,
+    address,
+    cityStatePin,
+    phone,
+    email,
+    gstin,
+    pan,
+    logoPath: comp?.logo_path || null,
+    showLogo: comp?.show_logo ?? true,
+  };
+}
+
+/**
+ * Ensures company details and logo are completely initialized and pre-decoded in memory
+ * before triggering a print dialog.
+ */
+export async function ensurePrintReady(): Promise<{
+  company: any;
+  printConfig: any;
+  logoHtml: string;
+}> {
+  const store = useCompanyStore.getState();
+  const company = await store.ensureReady();
+  const logoHtml = getCompanyLogoHtml(undefined, company);
+  if (company?.logo_path) {
+    await preloadAndDecodeImage(company.logo_path).catch(() => {});
+  }
+  return {
+    company,
+    printConfig: store.printConfig,
+    logoHtml,
+  };
 }
 
 export const PRINT_TRIGGER_SCRIPT = `
   <script>
     function triggerPrint() {
+      window.focus();
       window.print();
-      setTimeout(function() { window.close(); }, 500);
+      setTimeout(function() { window.close(); }, 750);
     }
-    window.addEventListener('load', function() {
-      const img = document.querySelector('.logo-wrapper img');
-      if (img && !img.complete) {
-        img.onload = triggerPrint;
-        img.onerror = triggerPrint;
-      } else {
+
+    function initPrintWithLogo() {
+      var img = document.querySelector('.logo-wrapper img, .logo-container img, img.company-logo-img');
+      if (!img) {
         triggerPrint();
+        return;
       }
-    });
+
+      // If image is already complete and decoded
+      if (img.complete && img.naturalWidth > 0) {
+        if (typeof img.decode === 'function') {
+          img.decode().then(triggerPrint).catch(triggerPrint);
+        } else {
+          triggerPrint();
+        }
+        return;
+      }
+
+      var hasTriggered = false;
+      var onReady = function() {
+        if (hasTriggered) return;
+        hasTriggered = true;
+        if (typeof img.decode === 'function') {
+          img.decode().then(triggerPrint).catch(triggerPrint);
+        } else {
+          triggerPrint();
+        }
+      };
+
+      img.onload = onReady;
+      img.onerror = function() {
+        console.warn("Logo failed to load in printout, continuing with print");
+        if (hasTriggered) return;
+        hasTriggered = true;
+        triggerPrint();
+      };
+
+      // Safety timeout: Ensure document ALWAYS prints even on slow or failed network
+      setTimeout(onReady, 2500);
+    }
+
+    if (document.readyState === 'complete') {
+      initPrintWithLogo();
+    } else {
+      window.addEventListener('load', initPrintWithLogo);
+    }
   </script>
 `;
 

@@ -22,7 +22,7 @@ import PageHeader from "../../components/PageHeader";
 
 import OrbxGrid from "../../components/tables/OrbxGrid";
 
-import { useAuthStore } from "../../store";
+import { useAuthStore, useCompanyStore } from "../../store";
 
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 
@@ -360,7 +360,7 @@ export default function LabourBillPage() {
 
     // Company details
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
 
     const cName = compData?.name || "SRI METAL";
 
@@ -653,7 +653,7 @@ export default function LabourBillPage() {
 
     // Company details
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
 
     const cName = compData?.name || "SRI METAL";
 
@@ -1400,7 +1400,7 @@ export default function LabourBillPage() {
   };
 
   const handleExportLabourWorkDetailsExcel = (row: any) => {
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
     const cName = compData?.name || "SRI METAL";
     const cAddress = [compData?.address, compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(", ");
     const cGstin = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";

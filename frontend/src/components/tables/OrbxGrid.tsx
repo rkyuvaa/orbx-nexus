@@ -18,8 +18,8 @@ import Deselect from "@mui/icons-material/Deselect";
 import Block from "@mui/icons-material/Block";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Delete from "@mui/icons-material/Delete";
-import { useUIStore } from "../../store";
-import { getPageSizeCSS } from "../../utils/printStyles";
+import { useUIStore, useCompanyStore } from "../../store";
+import { getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { formatDate } from "../../utils/format";
 
 export interface ColDef<T = any> {
@@ -363,18 +363,22 @@ export default function OrbxGrid<T = any>({
     const now = new Date().toLocaleString();
     const title = headerState.title || "Report";
 
+    const comp = useCompanyStore.getState().company;
+    const companyTitle = comp?.name || "OrbX Nexus ERP";
+    const logoHtml = getCompanyLogoHtml(true, comp);
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${title} - OrbX Nexus</title>
+          <title>${title} - ${companyTitle}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
             @page { size: ${getPageSizeCSS(gridPaperSize)}; margin: 15mm; }
             body { font-family: 'Inter', sans-serif; color: #1a1a1a; margin: 0; padding: 0; line-height: 1.5; font-size: 11px; }
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 12px; margin-bottom: 20px; }
             .logo-container { display: flex; align-items: center; gap: 12px; }
-            .logo { height: 57px; }
+            .logo-wrapper img { height: 57px; max-width: 140px; object-fit: contain; }
             .company-title { font-size: 18px; font-weight: 700; color: #104f32; letter-spacing: -0.01em; }
             .report-info { text-align: right; font-size: 10px; color: #718096; line-height: 1.4; }
             .report-title { font-size: 18px; font-weight: 700; color: #1c3f60; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -387,8 +391,8 @@ export default function OrbxGrid<T = any>({
         <body>
           <div class="header">
             <div class="logo-container">
-              <img src="/logo-light.svg" class="logo" alt="OrbX Nexus" />
-              <span class="company-title">OrbX Nexus ERP</span>
+              <div class="logo-wrapper">${logoHtml}</div>
+              <span class="company-title">${companyTitle}</span>
             </div>
             <div class="report-info">
               <div>Date/Time: ${now}</div>
@@ -405,21 +409,10 @@ export default function OrbxGrid<T = any>({
             </tbody>
           </table>
           <div class="footer">
-            <span>OrbX Nexus ERP - Professional Enterprise Report</span>
+            <span>${companyTitle} - Professional Enterprise Report</span>
             <span>Page 1 of 1</span>
           </div>
-          ${
-            previewOnly
-              ? ""
-              : `
-          <script>
-            window.onload = function() {
-              window.print();
-              window.close();
-            }
-          </script>
-          `
-          }
+          ${previewOnly ? "" : PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);

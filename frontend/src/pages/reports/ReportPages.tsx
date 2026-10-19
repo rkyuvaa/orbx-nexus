@@ -11,8 +11,8 @@ import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
-import { useAuthStore } from "../../store";
-import { COMMON_PRINT_CSS } from "../../utils/printStyles";
+import { useAuthStore, useCompanyStore } from "../../store";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, ensurePrintReady, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 import { formatQty, formatWeight, formatAmount } from "../../utils/format";
 
 const ACCENT = "#0f5132";
@@ -65,8 +65,8 @@ export function PrintHeader({ title }: { title: string }) {
     queryFn: async () => (await api.get("/company/")).data,
   });
 
-  const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-  const logoBase64 = localStorage.getItem("company_logo");
+  const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+  const logoBase64 = compData?.logo || useCompanyStore.getState().logoBase64 || localStorage.getItem("company_logo");
   
   let showLogo = true;
   try {
@@ -240,13 +240,14 @@ export function DayBookReport() {
   const totalAmt = data.reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
   const totalEntries = data.length;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
     const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
@@ -267,13 +268,7 @@ export function DayBookReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -343,7 +338,7 @@ export function DayBookReport() {
             <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -417,15 +412,16 @@ export function InwardRegisterReport() {
   const totalWeight = data.reduce((s: number, r: any) => s + Number(r.total_weight || 0), 0);
   const totalEntries = data.length;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -444,13 +440,7 @@ export function InwardRegisterReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -519,7 +509,7 @@ export function InwardRegisterReport() {
             <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -585,15 +575,16 @@ export function OutwardRegisterReport() {
   const totalWeight = data.reduce((s: number, r: any) => s + Number(r.total_weight || 0), 0);
   const totalEntries = data.length;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -611,13 +602,7 @@ export function OutwardRegisterReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -683,7 +668,7 @@ export function OutwardRegisterReport() {
             <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -762,15 +747,16 @@ export function LabourBillRegisterReport() {
     return Object.values(map);
   }, [data]);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -790,13 +776,7 @@ export function LabourBillRegisterReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -870,7 +850,7 @@ export function LabourBillRegisterReport() {
             <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -934,15 +914,16 @@ export function TrialBalanceReport() {
   const totalCr = data.reduce((s: number, r: any) => s + Number(r.closing_cr || 0), 0);
   const totalEntries = data.length;
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -956,13 +937,7 @@ export function TrialBalanceReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -1027,7 +1002,7 @@ export function TrialBalanceReport() {
             <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -1085,15 +1060,16 @@ export function PendingBillsReport() {
 
   const total = data.reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -1108,13 +1084,7 @@ export function PendingBillsReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -1178,7 +1148,7 @@ export function PendingBillsReport() {
             <span>Generated on: ${new Date().toLocaleString("en-IN")}</span>
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -1913,17 +1883,15 @@ export function ReceivablesReport() {
     "90+ days": "#7b1fa2",
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "";
-    const cAddress = [compData?.address, compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(", ");
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "";
+    const cAddress = [compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", "), compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(", ");
     const cGstin = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try { const cfg = localStorage.getItem("orbx_print_config"); if (cfg) showLogo = JSON.parse(cfg).showLogo !== false; } catch (_) {}
-    const logoHtml = showLogo && logoBase64 ? `<img src="${logoBase64}" style="max-height:50px;object-fit:contain;" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     let tableRows = "";
     grouped.forEach((grp) => {
@@ -1963,7 +1931,7 @@ export function ReceivablesReport() {
         .total-row td { font-weight:700; background:#f0fdf4; border-top:2px solid #0f5132; }
       </style></head><body>
       <div style="display:flex;align-items:center;border-bottom:1px solid #000;padding-bottom:10px;margin-bottom:14px;">
-        ${logoHtml}
+        <div class="logo-wrapper">${logoHtml}</div>
         <div style="flex:1;text-align:center;">
           <h2 style="margin:0;">${cName}</h2>
           <p style="margin:2px 0;font-size:11px;">${cAddress}</p>
@@ -1988,7 +1956,7 @@ export function ReceivablesReport() {
         </tbody>
       </table>
       <p style="margin-top:20px;font-size:10px;color:#777;">Generated on: ${new Date().toLocaleString("en-IN")} | OrbX Nexus ERP</p>
-      <script>window.onload=function(){window.print();}</script>
+      ${PRINT_TRIGGER_SCRIPT}
     </body></html>`);
     printWindow.document.close();
   };
@@ -2319,16 +2287,17 @@ export function StockInHandReport() {
     return map;
   }, [data]);
 
-  const handlePrintStock = () => {
+  const handlePrintStock = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cAddress2 = "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -2471,13 +2440,7 @@ export function StockInHandReport() {
       `;
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) showLogo = JSON.parse(savedConfig).showLogo !== false;
-    } catch (e) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -2536,11 +2499,7 @@ export function StockInHandReport() {
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
           
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -2750,16 +2709,17 @@ export function StockSummaryReport() {
   const closingQty = totalInQty - totalOutQty;
   const closingWeight = totalInWeight - totalOutWeight;
 
-  const handlePrintSummary = () => {
+  const handlePrintSummary = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cAddress2 = "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -2779,15 +2739,7 @@ export function StockSummaryReport() {
       </tr>`;
     });
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    let showLogo = true;
-    try {
-      const savedConfig = localStorage.getItem("orbx_print_config");
-      if (savedConfig) {
-        showLogo = JSON.parse(savedConfig).showLogo !== false;
-      }
-    } catch (_) {}
-    const logoHtml = (showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -2868,11 +2820,7 @@ export function StockSummaryReport() {
             <span>OrbX Nexus Enterprise ERP</span>
           </div>
           
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);
@@ -2974,15 +2922,16 @@ export function ItemMovementLedgerReport() {
   const movements = reportRes.movements || [];
   const summary = reportRes.summary || {};
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    await ensurePrintReady();
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
-    const cName = compData?.name || "SRI METAL";
-    const cAddress1 = compData?.address || "";
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const cName = compData?.name || compData?.company_name || "SRI METAL";
+    const cAddress1 = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
-    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${compData?.phone || compData?.mobile}` : "";
+    const cPhone = compData?.phone || compData?.mobile ? `Tel: ${[compData?.phone, compData?.mobile].filter(Boolean).join(" / ")}` : "";
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
@@ -3003,6 +2952,8 @@ export function ItemMovementLedgerReport() {
         <td style="text-align: right; font-weight: 700; background-color: #f8fafc;">${formatQty(m.running_balance_qty)}</td>
       </tr>`;
     });
+
+    const logoHtml = getCompanyLogoHtml(undefined, compData);
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -3031,7 +2982,7 @@ export function ItemMovementLedgerReport() {
         </head>
         <body>
           <div class="header-container">
-            <div class="logo-wrapper"></div>
+            <div class="logo-wrapper">${logoHtml}</div>
             <div class="company-details">
               <h1>${cName}</h1>
               ${cAddress1 ? `<p>${cAddress1}</p>` : ""}
@@ -3072,9 +3023,7 @@ export function ItemMovementLedgerReport() {
             </tbody>
           </table>
 
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);

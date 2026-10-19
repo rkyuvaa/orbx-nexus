@@ -16,9 +16,9 @@ import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
-import { useAuthStore } from "../../store";
+import { useAuthStore, useCompanyStore } from "../../store";
 import { formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -104,9 +104,8 @@ function VoucherModule({
       try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
     }
 
-    const logoBase64 = localStorage.getItem("company_logo");
-    const logoHtml = (printConfig.showLogo && logoBase64) ? `<img src="${logoBase64}" />` : "";
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
+    const logoHtml = getCompanyLogoHtml(printConfig.showLogo, compData);
     const cName = compData?.name || compData?.company_name || "SRI METAL";
     const cAddress = compData?.address || [compData?.address_line1, compData?.address_line2].filter(Boolean).join(", ") || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");
@@ -180,7 +179,7 @@ function VoucherModule({
               </tr>
             </tbody>
           </table>
-          <script>window.onload = function() { window.print(); }</script>
+          ${PRINT_TRIGGER_SCRIPT}
         </body>
       </html>
     `);

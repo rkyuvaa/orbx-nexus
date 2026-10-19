@@ -13,7 +13,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { alpha, useTheme } from "@mui/material/styles";
 import api from "../../api/client";
-import { useAuthStore, useUIStore } from "../../store";
+import { useAuthStore, useUIStore, useCompanyStore } from "../../store";
 
 const schema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -50,6 +50,11 @@ export default function LoginPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setAuth(res.data.access_token, res.data.user);
+      try {
+        await useCompanyStore.getState().fetchCompany(true);
+      } catch (e) {
+        console.warn("Could not prefetch company data on login", e);
+      }
       navigate("/");
     } catch (err: any) {
       setError(err.response?.data?.detail || "Login failed. Please check your credentials.");

@@ -20,7 +20,7 @@ import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
 import OrbxGrid from "../../components/tables/OrbxGrid";
-import { useAuthStore } from "../../store";
+import { useAuthStore, useCompanyStore } from "../../store";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { toWords } from "../../utils/numberToWords";
 import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT } from "../../utils/printStyles";
@@ -271,7 +271,7 @@ export default function JobWorkBillPage() {
 
     const logoHtml = getCompanyLogoHtml(printConfig.showLogo, companyData);
 
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
     const cName = compData?.name || "Company";
     const cAddress1 = compData?.address || "";
     const cAddress2 = "";
@@ -586,7 +586,7 @@ export default function JobWorkBillPage() {
   };
 
   const buildJobWorkDetailsReportData = (row: any) => {
-    const compData = Array.isArray(companyData) ? companyData[0] : companyData;
+    const compData = (Array.isArray(companyData) ? companyData[0] : companyData) || useCompanyStore.getState().company;
     const cName = compData?.name || "Company";
     const cAddress1 = compData?.address || "";
     const cCityStatePin = [compData?.city, compData?.state, compData?.pincode].filter(Boolean).join(" - ");

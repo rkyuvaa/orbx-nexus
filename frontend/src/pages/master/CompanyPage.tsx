@@ -8,6 +8,7 @@ import Delete from "@mui/icons-material/Delete";
 import { useForm } from "react-hook-form";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
+import { useCompanyStore } from "../../store";
 
 export default function CompanyPage() {
   const qc = useQueryClient();
@@ -18,6 +19,7 @@ export default function CompanyPage() {
     queryFn: async () => {
       try {
         const response = await api.get("/company/");
+        useCompanyStore.getState().setCompany(response.data);
         if (response.data.logo_path) {
           localStorage.setItem("company_logo", response.data.logo_path);
           setLogo(response.data.logo_path);
@@ -28,6 +30,7 @@ export default function CompanyPage() {
         return response.data;
       } catch (err: any) {
         if (err.response?.status === 404) {
+          useCompanyStore.getState().setCompany(null);
           return null;
         }
         throw err;
@@ -49,6 +52,7 @@ export default function CompanyPage() {
       return api.put("/company/", payload);
     },
     onSuccess: (res) => {
+      useCompanyStore.getState().setCompany(res.data);
       qc.invalidateQueries({ queryKey: ["company"] });
       // Persistent logo save
       if (res.data.logo_path) {

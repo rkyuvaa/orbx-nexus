@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { useCompanyStore } from "./companyStore";
+
+export * from "./companyStore";
+
 export interface User {
   id: number;
   username: string;
@@ -34,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem("orbx_token");
         localStorage.removeItem("orbx_user");
         set({ token: null, user: null });
+        useCompanyStore.getState().invalidate();
       },
     }),
     {
