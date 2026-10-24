@@ -268,13 +268,12 @@ export function InwardVoucherPage() {
 
   const colDefs: ColDef[] = [
     { field: "inward_no", headerName: "Voucher No.", width: 140 },
-    { field: "inward_date", headerName: "Date", width: 100, maxWidth: 100 },
-    { field: "ledger_id", headerName: "Supplier Name", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
-    { field: "serial_no", headerName: "Serial No", width: 95, maxWidth: 95 },
-    { field: "ref_date", headerName: "Ref Date", width: 90, maxWidth: 90 },
+    { field: "inward_date", headerName: "Date", width: 120, minWidth: 110 },
+    { field: "ledger_id", headerName: "Supplier Name", width: 220, minWidth: 180, align: "left", valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
+    { field: "serial_no", headerName: "Serial No", width: 120, minWidth: 100, align: "left" },
+    { field: "ref_date", headerName: "Ref Date", width: 120, minWidth: 110 },
     { field: "quantity", headerName: "Total Qty", width: 95, maxWidth: 95, type: "numericColumn" },
     { field: "total_weight", headerName: "Net Weight (kg)", width: 140, type: "numericColumn", valueFormatter: (p) => `${formatWeight(p.value)} kg` },
-    { field: "is_completed", headerName: "Status", width: 80, maxWidth: 80, cellRenderer: (p: any) => <Chip size="small" label={p.value ? "Completed" : "Pending"} color={p.value ? "success" : "warning"} /> },
     { headerName: "Actions", width: 130, sortable: false, filter: false, cellRenderer: (p: any) => (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
         <Tooltip title="Print Slip"><IconButton size="small" onClick={() => handlePrintInward(p.data)}><Print fontSize="small" /></IconButton></Tooltip>
@@ -1193,9 +1192,9 @@ export function OutwardVoucherPage() {
 
   const colDefs: ColDef[] = [
     { field: "outward_no", headerName: "Voucher No.", width: 140 },
-    { field: "outward_date", headerName: "Date", width: 100, maxWidth: 100 },
-    { field: "ledger_id", headerName: "Customer Name", width: 180, valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
-    { field: "serial_no", headerName: "Serial No", width: 95, maxWidth: 95 },
+    { field: "outward_date", headerName: "Date", width: 120, minWidth: 110 },
+    { field: "ledger_id", headerName: "Customer Name", width: 220, minWidth: 180, align: "left", valueGetter: (p) => ledgerMap[p.data?.ledger_id] || p.data?.ledger_id || "" },
+    { field: "serial_no", headerName: "Serial No", width: 120, minWidth: 100, align: "left" },
     { field: "inward_id", headerName: "Inward Ref.", width: 160, maxWidth: 200, cellRenderer: (p: any) => {
       const ids = p.data?.inward_ids || (p.data?.inward_id ? [p.data.inward_id] : []);
       const names = ids.map((id: number) => inwardMap[id]).filter(Boolean);

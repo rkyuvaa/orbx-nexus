@@ -172,11 +172,27 @@ export default function OrbxGrid<T = any>({
     
     const fieldName = (col.field || "").toLowerCase();
     const headerName = (col.headerName || "").toLowerCase();
-    
+
+    // Names, descriptions, and party headers should align left even if field contains 'id' (e.g. ledger_id)
+    if (
+      headerName.includes("name") ||
+      headerName.includes("desc") ||
+      headerName.includes("title") ||
+      headerName.includes("party") ||
+      headerName.includes("supplier") ||
+      headerName.includes("customer")
+    ) {
+      return "left";
+    }
+
     const centerAlignKeys = [
-      "no", "number", "code", "date", "status", "id", "serial", "ref", "year", "active"
+      "no", "number", "code", "date", "status", "serial", "ref", "year", "active"
     ];
-    if (centerAlignKeys.some(k => fieldName.includes(k) || headerName.includes(k))) {
+    if (
+      fieldName === "id" ||
+      headerName === "id" ||
+      centerAlignKeys.some(k => fieldName.includes(k) || headerName.includes(k))
+    ) {
       return "center";
     }
 
