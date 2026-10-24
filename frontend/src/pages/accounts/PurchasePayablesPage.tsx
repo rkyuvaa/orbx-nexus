@@ -105,7 +105,6 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
         <td style="text-align: center;">${r.date}</td>
         <td style="font-weight: 600;">${r.voucher_no}</td>
         <td>${r.type}</td>
-        <td>${r.particulars}</td>
         <td style="text-align: right; color: ${r.dr > 0 ? '#198754' : '#6c757d'};">${r.dr > 0 ? `₹${formatAmount(r.dr)}` : '—'}</td>
         <td style="text-align: right;">${r.cr > 0 ? `₹${formatAmount(r.cr)}` : '—'}</td>
         <td style="text-align: right; font-weight: 700; color: ${r.balance > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(r.balance)}</td>
@@ -144,14 +143,13 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
             <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-              <th style="width: 40px; text-align: center;">S.NO</th>
-              <th style="width: 95px; text-align: center;">DATE</th>
-              <th style="width: 110px;">VOUCHER NO</th>
-              <th style="width: 110px;">TYPE</th>
-              <th>PARTICULARS / DESCRIPTION</th>
-              <th style="width: 110px; text-align: right;">DEBIT (DR)</th>
-              <th style="width: 110px; text-align: right;">CREDIT (CR)</th>
-              <th style="width: 120px; text-align: right;">BALANCE</th>
+              <th style="width: 50px; text-align: center;">S.NO</th>
+              <th style="width: 110px; text-align: center;">DATE</th>
+              <th style="width: 140px;">VOUCHER NO</th>
+              <th style="width: 140px;">TYPE</th>
+              <th style="width: 130px; text-align: right;">DEBIT (DR)</th>
+              <th style="width: 130px; text-align: right;">CREDIT (CR)</th>
+              <th style="width: 140px; text-align: right;">BALANCE</th>
             </tr>
           </thead>
           <tbody>
