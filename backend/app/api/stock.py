@@ -741,6 +741,67 @@ async def update_movement_payment(
     return {"message": "Payment details updated"}
 
 
+class BillAllocationIn(BaseModel):
+    movement_id: int
+    allocated_amount: float
+    paid_amount: float | None = None
+    payment_status: str | None = None
+
+
+class BatchPaymentIn(BaseModel):
+    payment_date: str | None = None
+    payment_mode: str | None = None
+    payment_notes: str | None = None
+    allocations: list[BillAllocationIn]
+
+
+@router.post("/inventory/movements/batch-payment")
+async def batch_update_movement_payment(
+    body: BatchPaymentIn,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+):
+    """Update payment details for multiple purchase (Inward) movements atomically."""
+    s = _schema(fy)
+    for alloc in body.allocations:
+        if alloc.allocated_amount <= 0:
+            continue
+        if alloc.paid_amount is not None and alloc.payment_status is not None:
+            new_paid = alloc.paid_amount
+            new_status = alloc.payment_status
+        else:
+            res = await db.execute(
+                text(f"SELECT amount, COALESCE(paid_amount, 0) as paid_amount FROM {s}.stock_item_movements WHERE id = :id"),
+                {"id": alloc.movement_id}
+            )
+            row = res.mappings().first()
+            if not row:
+                continue
+            total_amt = float(row["amount"] or 0)
+            curr_paid = float(row["paid_amount"] or 0)
+            new_paid = round(curr_paid + alloc.allocated_amount, 2)
+            new_status = "Paid" if (total_amt - new_paid) <= 0.01 else "Partial"
+
+        await db.execute(
+            text(
+                f"UPDATE {s}.stock_item_movements SET "
+                f"payment_status=:pstatus, paid_amount=:paid, payment_date=:pdate, "
+                f"payment_mode=:pmode, payment_notes=:pnotes, updated_at=NOW() "
+                f"WHERE id=:id"
+            ),
+            {
+                "pstatus": new_status,
+                "paid": new_paid,
+                "pdate": body.payment_date,
+                "pmode": body.payment_mode,
+                "pnotes": body.payment_notes,
+                "id": alloc.movement_id,
+            },
+        )
+    return {"message": "Batch payments updated successfully"}
+
+
 
 from app.models.master import Location
 from sqlalchemy import select

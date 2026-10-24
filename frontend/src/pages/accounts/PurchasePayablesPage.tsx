@@ -204,24 +204,27 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
 interface PaymentDialogProps {
   open: boolean;
   onClose: () => void;
-  purchases: any[];
-  isBulk: boolean;
+  allPurchases: any[];
   companyData: any;
 }
 
-function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: PaymentDialogProps) {
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
 
-  const totalInvoice = purchases.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalPaid = purchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
-  const totalPending = Math.max(0, totalInvoice - totalPaid);
-  const supplierName = purchases[0]?.ledger_name || "Supplier";
+  const totalInvoice = allPurchases.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalPaid = allPurchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
+  const totalPending = Math.max(0, round2(totalInvoice - totalPaid));
+  const supplierName = allPurchases[0]?.ledger_name || "Supplier";
 
   // Build Chronological Date-Wise Detailed Ledger Statement (Dr / Cr / Running Balance)
   const ledgerRows = useMemo(() => {
     const rows: any[] = [];
-    purchases.forEach((p) => {
+    allPurchases.forEach((p) => {
       // 1. Credit entry for Purchase Invoice
       const invAmount = Number(p.amount || 0);
       rows.push({
@@ -258,69 +261,171 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
     let running = 0;
     return rows.map((r) => {
       running += r.cr - r.dr;
-      return { ...r, balance: running };
+      return { ...r, balance: round2(running) };
     });
-  }, [purchases]);
+  }, [allPurchases]);
 
-  const { register, handleSubmit, watch, setValue, control, reset } = useForm({
-    defaultValues: {
-      payment_status: totalPending <= 0.01 ? "Paid" : "Paid",
-      paid_amount: String(totalPending),
-      payment_date: new Date().toISOString().split("T")[0],
-      payment_mode: "Bank Transfer",
-      payment_notes: "",
-    },
-  });
+  // Pending Bills list for settlement (sorted oldest first)
+  const pendingBills = useMemo(() => {
+    return allPurchases
+      .filter((p) => {
+        const pending = round2(Math.max(0, Number(p.amount || 0) - Number(p.paid_amount || 0)));
+        return pending > 0.01;
+      })
+      .sort((a, b) => ((a.movement_date || "") > (b.movement_date || "") ? 1 : -1));
+  }, [allPurchases]);
 
-  const paymentStatus = watch("payment_status");
-
-  useEffect(() => {
-    if (paymentStatus === "Paid") {
-      setValue("paid_amount", String(totalPending));
-    } else if (paymentStatus === "Unpaid") {
-      setValue("paid_amount", "0");
-    }
-  }, [paymentStatus, totalPending, setValue]);
+  // Form & Bill Allocation States
+  const [paymentAmountStr, setPaymentAmountStr] = useState<string>("");
+  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [paymentMode, setPaymentMode] = useState<string>("Bank Transfer");
+  const [paymentNotes, setPaymentNotes] = useState<string>("");
+  const [allocations, setAllocations] = useState<Record<number, number>>({});
+  const [selectedBillIds, setSelectedBillIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (open) {
-      reset({
-        payment_status: totalPending <= 0.01 ? "Paid" : "Paid",
-        paid_amount: String(totalPending),
-        payment_date: new Date().toISOString().split("T")[0],
-        payment_mode: "Bank Transfer",
-        payment_notes: "",
-      });
+      setPaymentAmountStr(totalPending > 0 ? String(round2(totalPending)) : "");
+      setPaymentDate(new Date().toISOString().split("T")[0]);
+      setPaymentMode("Bank Transfer");
+      setPaymentNotes("");
+      setAllocations({});
+      setSelectedBillIds(new Set());
     }
-  }, [open, purchases, totalPending, reset]);
+  }, [open, totalPending]);
+
+  const totalAllocated = useMemo(() => {
+    return round2(Object.values(allocations).reduce((sum, v) => sum + (Number(v) || 0), 0));
+  }, [allocations]);
+
+  const paymentAmount = Number(paymentAmountStr) || 0;
+  const unallocatedAmount = round2(paymentAmount - totalAllocated);
+
+  // Ticking / unticking a bill
+  const handleToggleBill = (bill: any) => {
+    const billId = bill.id;
+    const isCurrentlySelected = selectedBillIds.has(billId);
+
+    const nextSelected = new Set(selectedBillIds);
+    const nextAlloc = { ...allocations };
+
+    if (isCurrentlySelected) {
+      nextSelected.delete(billId);
+      delete nextAlloc[billId];
+    } else {
+      const otherAllocated = Array.from(nextSelected).reduce((sum, id) => sum + (nextAlloc[id] || 0), 0);
+      const billPending = round2(Math.max(0, Number(bill.amount || 0) - Number(bill.paid_amount || 0)));
+
+      if (paymentAmount <= 0) {
+        nextAlloc[billId] = billPending;
+        nextSelected.add(billId);
+        setPaymentAmountStr(String(round2(otherAllocated + billPending)));
+      } else {
+        const remainingCapacity = round2(Math.max(0, paymentAmount - otherAllocated));
+        const toAllocate = round2(Math.min(billPending, remainingCapacity));
+        nextAlloc[billId] = toAllocate;
+        nextSelected.add(billId);
+      }
+    }
+
+    setSelectedBillIds(nextSelected);
+    setAllocations(nextAlloc);
+  };
+
+  // Manual allocation input change
+  const handleAllocationChange = (bill: any, valStr: string) => {
+    const billId = bill.id;
+    const billPending = round2(Math.max(0, Number(bill.amount || 0) - Number(bill.paid_amount || 0)));
+    const num = Number(valStr);
+
+    if (valStr === "" || isNaN(num) || num <= 0) {
+      const nextAlloc = { ...allocations };
+      delete nextAlloc[billId];
+      setAllocations(nextAlloc);
+      const nextSel = new Set(selectedBillIds);
+      nextSel.delete(billId);
+      setSelectedBillIds(nextSel);
+      return;
+    }
+
+    const clamped = round2(Math.min(num, billPending));
+    setAllocations((prev) => ({ ...prev, [billId]: clamped }));
+    setSelectedBillIds((prev) => new Set(prev).add(billId));
+  };
+
+  // Auto-Allocate (FIFO: Oldest bills first)
+  const handleAutoAllocate = () => {
+    if (paymentAmount <= 0) return;
+    let rem = paymentAmount;
+    const nextAlloc: Record<number, number> = {};
+    const nextSel = new Set<number>();
+
+    for (const bill of pendingBills) {
+      if (rem <= 0) break;
+      const billPending = round2(Math.max(0, Number(bill.amount || 0) - Number(bill.paid_amount || 0)));
+      const take = round2(Math.min(billPending, rem));
+      if (take > 0) {
+        nextAlloc[bill.id] = take;
+        nextSel.add(bill.id);
+        rem = round2(rem - take);
+      }
+    }
+
+    setAllocations(nextAlloc);
+    setSelectedBillIds(nextSel);
+  };
+
+  const handleClearSelection = () => {
+    setAllocations({});
+    setSelectedBillIds(new Set());
+  };
+
+  const handleSetAmountToAllocated = () => {
+    setPaymentAmountStr(String(totalAllocated));
+  };
 
   const saveMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const payload = {
-        payment_status: data.payment_status,
-        paid_amount: paymentStatus === "Paid"
-          ? totalInvoice
-          : Number(data.paid_amount) || 0,
-        payment_date: data.payment_date || null,
-        payment_mode: data.payment_mode || null,
-        payment_notes: data.payment_notes || null,
-      };
-      await Promise.all(
-        purchases.map((p) =>
-          api.patch(`/stock/inventory/movements/${p.id}/payment?fy=${activeFY}`, payload)
-        )
-      );
+    mutationFn: async () => {
+      const allocList = Object.entries(allocations)
+        .filter(([_, amt]) => Number(amt) > 0)
+        .map(([idStr, amt]) => {
+          const mId = Number(idStr);
+          const bill = pendingBills.find((b) => b.id === mId);
+          const currPaid = Number(bill?.paid_amount || 0);
+          const billTotal = Number(bill?.amount || 0);
+          const newPaid = round2(currPaid + Number(amt));
+          const newStatus = (billTotal - newPaid) <= 0.01 ? "Paid" : "Partial";
+          return {
+            movement_id: mId,
+            allocated_amount: Number(amt),
+            paid_amount: newPaid,
+            payment_status: newStatus,
+          };
+        });
+
+      if (allocList.length === 0) {
+        throw new Error("Please select at least one bill to allocate payment.");
+      }
+
+      await api.post(`/stock/inventory/movements/batch-payment?fy=${activeFY}`, {
+        payment_date: paymentDate || null,
+        payment_mode: paymentMode || null,
+        payment_notes: paymentNotes || null,
+        allocations: allocList,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchase-payables"] });
       onClose();
     },
     onError: (err: any) => {
-      alert(err.response?.data?.detail || "Failed to update payment details.");
+      alert(err.response?.data?.detail || err.message || "Failed to update payment details.");
     },
   });
 
-  if (!purchases.length) return null;
+  const canSave = totalAllocated > 0 && unallocatedAmount >= -0.01 && !saveMutation.isPending;
+
+  if (!allPurchases.length) return null;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -331,7 +436,7 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
           variant="outlined"
           color="primary"
           size="small"
-          onClick={() => handlePrintSupplierLedger({ supplier: supplierName, items: purchases }, companyData)}
+          onClick={() => handlePrintSupplierLedger({ supplier: supplierName, items: allPurchases }, companyData)}
         >
           Print Statement
         </Button>
@@ -339,118 +444,390 @@ function PaymentDialog({ open, onClose, purchases, isBulk, companyData }: Paymen
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
         {/* Supplier Chronological Date-Wise Detailed Ledger Statement */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132" }}>
+            Supplier Date-Wise Detailed Ledger (Debit / Credit Statement from NIL)
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {ledgerRows.length} transactions recorded
+          </Typography>
+        </Box>
+        <Paper variant="outlined" sx={{ mb: 2.5, borderRadius: "8px", overflow: "hidden" }}>
+          <TableContainer sx={{ maxHeight: 200 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Voucher No.</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Particulars / Description</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Debit - Paid (Dr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Credit - Invoice (Cr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Running Balance</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {ledgerRows.map((r, idx) => (
+                  <TableRow key={idx} hover sx={{ bgcolor: r.type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
+                    <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
+                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>
+                      <Chip
+                        label={r.type}
+                        size="small"
+                        color={r.type === "Payment" ? "success" : "default"}
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>{r.particulars}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
+                      {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.cr > 0 ? "text.primary" : "text.disabled" }}>
+                      {r.cr > 0 ? `${RUPEE}${formatAmount(r.cr)}` : "—"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
+                      {RUPEE}{formatAmount(r.balance)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
+                <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
+                  <TableCell colSpan={4} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </TableContainer>
+        </Paper>
+
+        {/* Record Bill-Wise Payment Details Form */}
         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132", mb: 1 }}>
-          Supplier Date-Wise Detailed Ledger (Debit / Credit Statement from NIL)
+          Record Bill-Wise Payment Details
         </Typography>
-        <Paper variant="outlined" sx={{ mb: 3, borderRadius: "8px", overflow: "hidden" }}>
+
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField
+              label="Paying Amount (₹) *"
+              type="number"
+              fullWidth
+              size="small"
+              value={paymentAmountStr}
+              onChange={(e) => setPaymentAmountStr(e.target.value)}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { step: "0.01", min: 0 },
+              }}
+              helperText="Enter total amount to pay, then tick bills below"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField
+              label="Payment Date *"
+              type="date"
+              fullWidth
+              size="small"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField
+              select
+              label="Payment Mode *"
+              fullWidth
+              size="small"
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              {PAYMENT_MODE_OPTIONS.map((m) => (
+                <MenuItem key={m} value={m}>{m}</MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+        </Grid>
+
+        {/* Bill-Wise Allocation Section */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132" }}>
+              Select Bills to Settle (Bill-Wise Allocation)
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Tick the bills to settle. The last selected bill will automatically take the remaining partial amount.
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              onClick={handleAutoAllocate}
+              disabled={paymentAmount <= 0}
+              sx={{ textTransform: "none", fontSize: 11.5, py: 0.3, px: 1.2, borderRadius: "6px" }}
+            >
+              Auto-Allocate (FIFO)
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              color="inherit"
+              onClick={handleClearSelection}
+              disabled={selectedBillIds.size === 0}
+              sx={{ textTransform: "none", fontSize: 11.5, py: 0.3, px: 1 }}
+            >
+              Clear
+            </Button>
+          </Box>
+        </Box>
+
+        <Paper variant="outlined" sx={{ mb: 2, borderRadius: "8px", overflow: "hidden" }}>
           <Table size="small">
             <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 120 }}>Voucher No.</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Particulars / Description</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Debit - Paid (Dr)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Credit - Invoice (Cr)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Running Balance</TableCell>
+              <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#f8faf9" }}>
+                <TableCell sx={{ width: 44, textAlign: "center", fontWeight: 700 }} padding="checkbox">
+                  Select
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 110 }}>Bill No.</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 95 }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Particulars / Item</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Bill Amount</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 105 }}>Already Paid</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Pending Balance</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 135 }}>Pay Now (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Remaining</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 90 }}>Status After</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {ledgerRows.map((r, idx) => (
-                <TableRow key={idx} hover sx={{ bgcolor: r.type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
-                  <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
-                  <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>
-                    <Chip
-                      label={r.type}
-                      size="small"
-                      color={r.type === "Payment" ? "success" : "default"}
-                      variant="outlined"
-                      sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{r.particulars}</TableCell>
-                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
-                    {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.cr > 0 ? "text.primary" : "text.disabled" }}>
-                    {r.cr > 0 ? `${RUPEE}${formatAmount(r.cr)}` : "—"}
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
-                    {RUPEE}{formatAmount(r.balance)}
+              {pendingBills.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                    All bills for this supplier are fully settled (0 pending).
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                pendingBills.map((bill) => {
+                  const billTotal = Number(bill.amount || 0);
+                  const alreadyPaid = Number(bill.paid_amount || 0);
+                  const pending = round2(Math.max(0, billTotal - alreadyPaid));
+                  const isSelected = selectedBillIds.has(bill.id);
+                  const allocNow = allocations[bill.id] !== undefined ? allocations[bill.id] : 0;
+                  const remaining = round2(Math.max(0, pending - allocNow));
+                  const statusAfter = remaining <= 0.01 && isSelected ? "Paid" : (allocNow > 0 ? "Partial" : (alreadyPaid > 0 ? "Partial" : "Unpaid"));
+
+                  return (
+                    <TableRow
+                      key={bill.id}
+                      hover
+                      sx={{
+                        cursor: "pointer",
+                        bgcolor: isSelected
+                          ? (t) => t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.12)" : "rgba(22, 196, 127, 0.06)"
+                          : "inherit",
+                      }}
+                      onClick={() => handleToggleBill(bill)}
+                    >
+                      <TableCell padding="checkbox" align="center" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          size="small"
+                          checked={isSelected}
+                          onChange={() => handleToggleBill(bill)}
+                          sx={{ p: 0.5, "&.Mui-checked": { color: "#16C47F" } }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12, fontWeight: 700, color: "primary.main", whiteSpace: "nowrap" }}>
+                        {bill.movement_no}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        {bill.movement_date || "-"}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 12 }}>
+                        {bill.stock_item_name ? `Purchase: ${bill.stock_item_name}` : `Purchase ${bill.movement_no}`}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
+                        {RUPEE}{formatAmount(billTotal)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontSize: 12, color: alreadyPaid > 0 ? "success.main" : "text.disabled", fontWeight: 600 }}>
+                        {alreadyPaid > 0 ? `${RUPEE}${formatAmount(alreadyPaid)}` : "—"}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "#dc3545" }}>
+                        {RUPEE}{formatAmount(pending)}
+                      </TableCell>
+                      <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={allocations[bill.id] !== undefined ? allocations[bill.id] : ""}
+                          onChange={(e) => handleAllocationChange(bill, e.target.value)}
+                          placeholder="0.00"
+                          slotProps={{
+                            htmlInput: {
+                              min: 0,
+                              max: pending,
+                              step: "0.01",
+                              style: { textAlign: "right", fontWeight: 700, fontSize: 12, padding: "4px 8px" },
+                            },
+                          }}
+                          disabled={!isSelected}
+                          sx={{
+                            width: 120,
+                            "& .MuiOutlinedInput-root": {
+                              borderRadius: "6px",
+                              bgcolor: isSelected ? "background.paper" : "action.disabledBackground",
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: remaining > 0 ? "warning.main" : "success.main" }}>
+                        {RUPEE}{formatAmount(remaining)}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          size="small"
+                          label={statusAfter}
+                          color={statusAfter === "Paid" ? "success" : statusAfter === "Partial" ? "warning" : "default"}
+                          sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
             <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                <TableCell colSpan={4} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
-                <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
-                <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
-                <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
+                <TableCell colSpan={6} align="right" sx={{ fontSize: 12 }}>
+                  Selected Bills Settlement Total:
+                </TableCell>
+                <TableCell align="right" sx={{ fontSize: 13, color: "#dc3545" }}>
+                  {RUPEE}{formatAmount(totalPending)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontSize: 14, color: "success.main", fontWeight: 800 }}>
+                  {RUPEE}{formatAmount(totalAllocated)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>
+                  {RUPEE}{formatAmount(Math.max(0, round2(totalPending - totalAllocated)))}
+                </TableCell>
+                <TableCell />
               </TableRow>
             </TableFooter>
           </Table>
         </Paper>
 
-        {/* Record Payment Form */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132", mb: 1 }}>
-          Record New Payment Details
-        </Typography>
+        {/* Real-time Allocation Summary Strip */}
+        <Box
+          sx={{
+            p: 1.5,
+            mb: 2,
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 1.5,
+            bgcolor: (t) =>
+              unallocatedAmount < -0.01
+                ? "error.dark"
+                : unallocatedAmount > 0.01
+                ? (t.palette.mode === "dark" ? "rgba(237, 108, 2, 0.15)" : "#fff8e1")
+                : (t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.15)" : "#e8f5e9"),
+            border: "1px solid",
+            borderColor: (t) =>
+              unallocatedAmount < -0.01
+                ? "error.main"
+                : unallocatedAmount > 0.01
+                ? "warning.main"
+                : "success.main",
+          }}
+        >
+          <Box sx={{ display: "flex", gap: 3, alignItems: "center", flexWrap: "wrap" }}>
+            <Box>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+                Total Payment Amount:
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                {RUPEE}{formatAmount(paymentAmount)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+                Allocated to Bills:
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 800, color: "success.main" }}>
+                {RUPEE}{formatAmount(totalAllocated)}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+                Unallocated Remaining:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 800,
+                  color:
+                    unallocatedAmount < -0.01
+                      ? "error.main"
+                      : unallocatedAmount > 0.01
+                      ? "warning.main"
+                      : "success.main",
+                }}
+              >
+                {RUPEE}{formatAmount(Math.abs(unallocatedAmount))}
+                {unallocatedAmount < -0.01 ? " (Exceeded!)" : unallocatedAmount === 0 ? " (All Allocated)" : " (Remaining)"}
+              </Typography>
+            </Box>
+          </Box>
+
+          {unallocatedAmount > 0.01 && totalAllocated > 0 && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              onClick={handleSetAmountToAllocated}
+              sx={{ textTransform: "none", fontSize: 11, py: 0.2, px: 1, borderRadius: "6px" }}
+            >
+              Set Payment Amount to {RUPEE}{formatAmount(totalAllocated)}
+            </Button>
+          )}
+        </Box>
+
         <Grid container spacing={2}>
-          <Grid size={{ xs: 6 }}>
-            <Controller
-              name="payment_status"
-              control={control}
-              render={({ field }) => (
-                <TextField select label="Payment Status" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...field}>
-                  <MenuItem value="Unpaid">Unpaid</MenuItem>
-                  <MenuItem value="Partial">Partial</MenuItem>
-                  <MenuItem value="Paid">Paid (Full Payment)</MenuItem>
-                </TextField>
-              )}
-            />
-          </Grid>
-          <Grid size={{ xs: 6 }}>
+          <Grid size={{ xs: 12 }}>
             <TextField
-              label="Payment Amount (₹)"
-              type="number"
+              label="Notes / Narration"
               fullWidth
               size="small"
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { step: "0.01", min: 0, readOnly: paymentStatus === "Paid" },
-              }}
-              {...register("paid_amount")}
-              sx={paymentStatus === "Paid" ? { "& .MuiOutlinedInput-root": { bgcolor: "action.disabledBackground" } } : {}}
+              multiline
+              rows={2}
+              value={paymentNotes}
+              onChange={(e) => setPaymentNotes(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
-          </Grid>
-          <Grid size={{ xs: 6 }}>
-            <TextField label="Payment Date" type="date" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...register("payment_date")} />
-          </Grid>
-          <Grid size={{ xs: 6 }}>
-            <Controller
-              name="payment_mode"
-              control={control}
-              render={({ field }) => (
-                <TextField select label="Payment Mode" fullWidth size="small" slotProps={{ inputLabel: { shrink: true } }} {...field}>
-                  <MenuItem value="">— Select —</MenuItem>
-                  {PAYMENT_MODE_OPTIONS.map((m) => (
-                    <MenuItem key={m} value={m}>{m}</MenuItem>
-                  ))}
-                </TextField>
-              )}
-            />
-          </Grid>
-          <Grid size={{ xs: 12 }}>
-            <TextField label="Notes / Narration" fullWidth size="small" multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} {...register("payment_notes")} />
           </Grid>
         </Grid>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
-        <Button onClick={handleSubmit((d) => saveMutation.mutate(d))} variant="contained" size="small" color="success" disabled={saveMutation.isPending}>
-          {saveMutation.isPending ? "Saving..." : "Save Payment"}
+        <Button onClick={onClose} variant="outlined" size="small">
+          Cancel
+        </Button>
+        <Button
+          onClick={() => saveMutation.mutate()}
+          variant="contained"
+          size="small"
+          color="success"
+          disabled={!canSave}
+          startIcon={<PaymentIcon fontSize="small" />}
+        >
+          {saveMutation.isPending ? "Saving..." : `Save Payment (${RUPEE}${formatAmount(totalAllocated)})`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -707,8 +1084,7 @@ export default function PurchasePayablesPage() {
       <PaymentDialog
         open={payOpen}
         onClose={handleClose}
-        purchases={dialogPurchases}
-        isBulk={dialogPurchases.length > 1}
+        allPurchases={activeSupplierRow?.items || []}
         companyData={companyData}
       />
     </Box>
