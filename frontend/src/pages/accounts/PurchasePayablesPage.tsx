@@ -460,10 +460,9 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
                   <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: 120 }}>Voucher No.</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Particulars / Description</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Debit - Paid (Dr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Credit - Invoice (Cr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Running Balance</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Debit - Paid (Dr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Credit - Invoice (Cr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Running Balance</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -480,7 +479,6 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
                         sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
                       />
                     </TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>{r.particulars}</TableCell>
                     <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
                       {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
                     </TableCell>
@@ -495,7 +493,7 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
               </TableBody>
               <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
                 <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                  <TableCell colSpan={4} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
+                  <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
                   <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
@@ -595,21 +593,20 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
                 <TableCell sx={{ width: 44, textAlign: "center", fontWeight: 700 }} padding="checkbox">
                   Select
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 110 }}>Bill No.</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 95 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Particulars / Item</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Bill Amount</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 105 }}>Already Paid</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Pending Balance</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 135 }}>Pay Now (₹)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 115 }}>Remaining</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700, width: 90 }}>Status After</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 120 }}>Bill No.</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 110 }}>Date</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Bill Amount</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Already Paid</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Pending Balance</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Pay Now (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Remaining</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 100 }}>Status After</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {pendingBills.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     All bills for this supplier are fully settled (0 pending).
                   </TableCell>
                 </TableRow>
@@ -648,9 +645,6 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
                       </TableCell>
                       <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
                         {bill.movement_date || "-"}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>
-                        {bill.stock_item_name ? `Purchase: ${bill.stock_item_name}` : `Purchase ${bill.movement_no}`}
                       </TableCell>
                       <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
                         {RUPEE}{formatAmount(billTotal)}
@@ -704,7 +698,7 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
             </TableBody>
             <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                <TableCell colSpan={6} align="right" sx={{ fontSize: 12 }}>
+                <TableCell colSpan={5} align="right" sx={{ fontSize: 12 }}>
                   Selected Bills Settlement Total:
                 </TableCell>
                 <TableCell align="right" sx={{ fontSize: 13, color: "#dc3545" }}>
