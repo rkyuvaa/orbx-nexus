@@ -13,6 +13,7 @@ import Search from "@mui/icons-material/Search";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import PrintIcon from "@mui/icons-material/Print";
+import Visibility from "@mui/icons-material/Visibility";
 import { useForm, Controller } from "react-hook-form";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
@@ -201,7 +202,7 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
   printWindow.document.close();
 }
 
-interface PaymentDialogProps {
+interface SupplierLedgerReportDialogProps {
   open: boolean;
   onClose: () => void;
   allPurchases: any[];
@@ -212,32 +213,25 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDialogProps) {
-  const { activeFY } = useAuthStore();
-  const qc = useQueryClient();
-
+function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }: SupplierLedgerReportDialogProps) {
   const totalInvoice = allPurchases.reduce((s, p) => s + Number(p.amount || 0), 0);
   const totalPaid = allPurchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
   const totalPending = Math.max(0, round2(totalInvoice - totalPaid));
   const supplierName = allPurchases[0]?.ledger_name || "Supplier";
 
-  // Build Chronological Date-Wise Detailed Ledger Statement (Dr / Cr / Running Balance)
   const ledgerRows = useMemo(() => {
     const rows: any[] = [];
     allPurchases.forEach((p) => {
-      // 1. Credit entry for Purchase Invoice
       const invAmount = Number(p.amount || 0);
       rows.push({
         date: p.movement_date || "-",
         voucher_no: p.movement_no || "-",
         type: "Purchase Invoice",
-        particulars: p.stock_item_name ? `Purchase: ${p.stock_item_name}` : `Purchase ${p.movement_no}`,
         dr: 0,
         cr: invAmount,
         status: p.payment_status,
       });
 
-      // 2. Debit entry for Payment Made (if paid_amount > 0)
       const paidAmt = Number(p.paid_amount || 0);
       if (paidAmt > 0) {
         const pMode = p.payment_mode || "Direct Payment";
@@ -246,7 +240,6 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
           date: p.payment_date || p.movement_date || "-",
           voucher_no: `PAY-${p.movement_no}`,
           type: "Payment",
-          particulars: `Payment via ${pMode}${pNotes}`,
           dr: paidAmt,
           cr: 0,
           status: p.payment_status,
@@ -254,16 +247,113 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
       }
     });
 
-    // Sort chronologically by date
     rows.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
 
-    // Compute line-by-line running balance
     let running = 0;
     return rows.map((r) => {
       running += r.cr - r.dr;
       return { ...r, balance: round2(running) };
     });
   }, [allPurchases]);
+
+  if (!allPurchases.length) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ pb: 1, color: "text.primary", fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Supplier Ledger Statement — {supplierName}</span>
+        <Button
+          startIcon={<PrintIcon />}
+          variant="outlined"
+          color="primary"
+          size="small"
+          onClick={() => handlePrintSupplierLedger({ supplier: supplierName, items: allPurchases }, companyData)}
+        >
+          Print Statement
+        </Button>
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ pt: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132" }}>
+            Date-Wise Detailed Ledger (Debit / Credit Statement from NIL)
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {ledgerRows.length} transactions recorded
+          </Typography>
+        </Box>
+        <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
+          <TableContainer sx={{ maxHeight: 420 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, width: 110 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 130 }}>Voucher No.</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 130 }}>Type</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Debit - Paid (Dr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Credit - Invoice (Cr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Running Balance</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {ledgerRows.map((r, idx) => (
+                  <TableRow key={idx} hover sx={{ bgcolor: r.type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
+                    <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
+                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
+                    <TableCell sx={{ fontSize: 12 }}>
+                      <Chip
+                        label={r.type}
+                        size="small"
+                        color={r.type === "Payment" ? "success" : "default"}
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
+                      />
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
+                      {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.cr > 0 ? "text.primary" : "text.disabled" }}>
+                      {r.cr > 0 ? `${RUPEE}${formatAmount(r.cr)}` : "—"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
+                      {RUPEE}{formatAmount(r.balance)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
+                <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
+                  <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </TableContainer>
+        </Paper>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} variant="contained" size="small">Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+interface PaymentDialogProps {
+  open: boolean;
+  onClose: () => void;
+  allPurchases: any[];
+}
+
+function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
+  const { activeFY } = useAuthStore();
+  const qc = useQueryClient();
+
+  const totalInvoice = allPurchases.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalPaid = allPurchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
+  const totalPending = Math.max(0, round2(totalInvoice - totalPaid));
+  const supplierName = allPurchases[0]?.ledger_name || "Supplier";
 
   // Pending Bills list for settlement (sorted oldest first)
   const pendingBills = useMemo(() => {
@@ -430,84 +520,11 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ pb: 1, color: "text.primary", fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Supplier Ledger Statement & Payment — {supplierName}</span>
-        <Button
-          startIcon={<PrintIcon />}
-          variant="outlined"
-          color="primary"
-          size="small"
-          onClick={() => handlePrintSupplierLedger({ supplier: supplierName, items: allPurchases }, companyData)}
-        >
-          Print Statement
-        </Button>
+        <span>Record Bill-Wise Payment — {supplierName}</span>
       </DialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2 }}>
-        {/* Supplier Chronological Date-Wise Detailed Ledger Statement */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132" }}>
-            Supplier Date-Wise Detailed Ledger (Debit / Credit Statement from NIL)
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {ledgerRows.length} transactions recorded
-          </Typography>
-        </Box>
-        <Paper variant="outlined" sx={{ mb: 2.5, borderRadius: "8px", overflow: "hidden" }}>
-          <TableContainer sx={{ maxHeight: 200 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Voucher No.</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Debit - Paid (Dr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Credit - Invoice (Cr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Running Balance</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {ledgerRows.map((r, idx) => (
-                  <TableRow key={idx} hover sx={{ bgcolor: r.type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
-                    <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
-                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>
-                      <Chip
-                        label={r.type}
-                        size="small"
-                        color={r.type === "Payment" ? "success" : "default"}
-                        variant="outlined"
-                        sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
-                      {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.cr > 0 ? "text.primary" : "text.disabled" }}>
-                      {r.cr > 0 ? `${RUPEE}${formatAmount(r.cr)}` : "—"}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
-                      {RUPEE}{formatAmount(r.balance)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
-                <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                  <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
-                  <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
-                  <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
-                  <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </TableContainer>
-        </Paper>
-
         {/* Record Bill-Wise Payment Details Form */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132", mb: 1 }}>
-          Record Bill-Wise Payment Details
-        </Typography>
-
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid size={{ xs: 12, sm: 4 }}>
             <TextField
@@ -827,7 +844,6 @@ function PaymentDialog({ open, onClose, allPurchases, companyData }: PaymentDial
     </Dialog>
   );
 }
-
 export default function PurchasePayablesPage() {
   const { activeFY } = useAuthStore();
   const [payOpen, setPayOpen] = useState(false);
@@ -916,6 +932,19 @@ export default function PurchasePayablesPage() {
   const totalPendingPayable = useMemo(() => {
     return supplierList.reduce((s, row) => s + row.totalPayable, 0);
   }, [supplierList]);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [activeReportSupplierRow, setActiveReportSupplierRow] = useState<any>(null);
+
+  const openSupplierReport = (supplierRow: any) => {
+    setActiveReportSupplierRow(supplierRow);
+    setReportOpen(true);
+  };
+
+  const handleCloseReport = () => {
+    setReportOpen(false);
+    setActiveReportSupplierRow(null);
+  };
 
   const openSupplierPayment = (supplierRow: any) => {
     setActiveSupplierRow(supplierRow);
@@ -1026,6 +1055,15 @@ export default function PurchasePayablesPage() {
                   </TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center", alignItems: "center" }}>
+                      <Tooltip title={`View Statement for ${row.supplier}`}>
+                        <IconButton
+                          size="small"
+                          color="info"
+                          onClick={() => openSupplierReport(row)}
+                        >
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title={`Print Ledger Statement for ${row.supplier}`}>
                         <IconButton
                           size="small"
@@ -1075,11 +1113,17 @@ export default function PurchasePayablesPage() {
         </TableContainer>
       </Paper>
 
+      <SupplierLedgerReportDialog
+        open={reportOpen}
+        onClose={handleCloseReport}
+        allPurchases={activeReportSupplierRow?.items || []}
+        companyData={companyData}
+      />
+
       <PaymentDialog
         open={payOpen}
         onClose={handleClose}
         allPurchases={activeSupplierRow?.items || []}
-        companyData={companyData}
       />
     </Box>
   );
