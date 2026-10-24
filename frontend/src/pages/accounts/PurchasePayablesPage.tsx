@@ -14,6 +14,7 @@ import ExpandMore from "@mui/icons-material/ExpandMore";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import PrintIcon from "@mui/icons-material/Print";
 import Visibility from "@mui/icons-material/Visibility";
+import Edit from "@mui/icons-material/Edit";
 import { useForm, Controller } from "react-hook-form";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
@@ -200,18 +201,257 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
   printWindow.document.close();
 }
 
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+interface EditPaidAmountDialogProps {
+  open: boolean;
+  onClose: () => void;
+  bill: any | null;
+  onSuccess?: () => void;
+}
+
+function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmountDialogProps) {
+  const { activeFY } = useAuthStore();
+  const qc = useQueryClient();
+
+  const [paidAmountStr, setPaidAmountStr] = useState<string>("");
+  const [paymentDate, setPaymentDate] = useState<string>("");
+  const [paymentMode, setPaymentMode] = useState<string>("Bank Transfer");
+  const [paymentNotes, setPaymentNotes] = useState<string>("");
+
+  useEffect(() => {
+    if (bill && open) {
+      setPaidAmountStr(String(Number(bill.paid_amount || 0)));
+      setPaymentDate(bill.payment_date || new Date().toISOString().split("T")[0]);
+      setPaymentMode(bill.payment_mode || "Bank Transfer");
+      setPaymentNotes(bill.payment_notes || "");
+    }
+  }, [bill, open]);
+
+  const billTotal = Number(bill?.amount || 0);
+  const newPaidAmount = round2(Number(paidAmountStr) || 0);
+  const newPending = round2(Math.max(0, billTotal - newPaidAmount));
+  const newStatus =
+    newPaidAmount <= 0.001
+      ? "Unpaid"
+      : billTotal - newPaidAmount <= 0.01
+      ? "Paid"
+      : "Partial";
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      if (!bill) return;
+      if (newPaidAmount < 0) {
+        throw new Error("Paid amount cannot be negative.");
+      }
+      if (newPaidAmount > billTotal + 0.01) {
+        throw new Error(`Paid amount cannot exceed total bill amount (${RUPEE}${formatAmount(billTotal)}).`);
+      }
+
+      await api.patch(`/stock/inventory/movements/${bill.id}/payment?fy=${activeFY}`, {
+        paid_amount: newPaidAmount,
+        payment_status: newStatus,
+        payment_date: newPaidAmount > 0 ? paymentDate || null : null,
+        payment_mode: newPaidAmount > 0 ? paymentMode || null : null,
+        payment_notes: paymentNotes || null,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["purchase-payables"] });
+      if (onSuccess) onSuccess();
+      onClose();
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.detail || err.message || "Failed to update payment details.");
+    },
+  });
+
+  if (!bill) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ pb: 1, fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>Edit / Correct Paid Amount</span>
+        <Chip label={bill.movement_no} color="primary" variant="outlined" size="small" sx={{ fontWeight: 700 }} />
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ pt: 2.5 }}>
+        {/* Bill summary information */}
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 2,
+            mb: 2.5,
+            borderRadius: 2,
+            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8faf9"),
+          }}
+        >
+          <Grid container spacing={1.5}>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">Supplier</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>{bill.ledger_name || "—"}</Typography>
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">Bill Date</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{bill.movement_date || "—"}</Typography>
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">Total Bill Amount</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 700, color: "text.primary" }}>
+                {RUPEE}{formatAmount(billTotal)}
+              </Typography>
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <Typography variant="caption" color="text.secondary">Current Recorded Paid</Typography>
+              <Typography
+                variant="body1"
+                sx={{ fontWeight: 700, color: Number(bill.paid_amount || 0) > 0 ? "success.main" : "text.secondary" }}
+              >
+                {RUPEE}{formatAmount(Number(bill.paid_amount || 0))}
+              </Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* Quick Correction Shortcuts */}
+        <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary", mr: 0.5 }}>
+            Quick Actions:
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onClick={() => setPaidAmountStr("0")}
+            sx={{ textTransform: "none", fontSize: 11.5, py: 0.3, px: 1.2, borderRadius: "6px" }}
+          >
+            Reset to ₹0 (Unpaid)
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="success"
+            onClick={() => setPaidAmountStr(String(billTotal))}
+            sx={{ textTransform: "none", fontSize: 11.5, py: 0.3, px: 1.2, borderRadius: "6px" }}
+          >
+            Full Payment ({RUPEE}{formatAmount(billTotal)})
+          </Button>
+        </Box>
+
+        {/* Inputs */}
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Corrected Paid Amount (₹) *"
+              type="number"
+              fullWidth
+              size="small"
+              value={paidAmountStr}
+              onChange={(e) => setPaidAmountStr(e.target.value)}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { step: "0.01", min: 0, max: billTotal },
+              }}
+              helperText={`Max: ${RUPEE}${formatAmount(billTotal)}`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Payment Date"
+              type="date"
+              fullWidth
+              size="small"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              disabled={newPaidAmount <= 0}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              select
+              label="Payment Mode"
+              fullWidth
+              size="small"
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              disabled={newPaidAmount <= 0}
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              {PAYMENT_MODE_OPTIONS.map((m) => (
+                <MenuItem key={m} value={m}>{m}</MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label="Correction / Payment Notes"
+              fullWidth
+              size="small"
+              placeholder="e.g. Corrected mistaken entry"
+              value={paymentNotes}
+              onChange={(e) => setPaymentNotes(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Grid>
+        </Grid>
+
+        {/* Live Calculation Preview */}
+        <Box
+          sx={{
+            mt: 2.5,
+            p: 1.5,
+            borderRadius: 2,
+            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "#f0fdf4"),
+            border: "1px solid",
+            borderColor: (t) => (t.palette.mode === "dark" ? "divider" : "#bbf7d0"),
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Box>
+            <Typography variant="caption" color="text.secondary">New Pending Balance</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: newPending > 0.01 ? "#dc3545" : "success.main" }}>
+              {RUPEE}{formatAmount(newPending)}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: "right" }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Resulting Status</Typography>
+            {statusChip(newStatus)}
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button onClick={onClose} variant="outlined" size="small">
+          Cancel
+        </Button>
+        <Button
+          onClick={() => editMutation.mutate()}
+          variant="contained"
+          size="small"
+          color="primary"
+          disabled={editMutation.isPending || newPaidAmount < 0 || newPaidAmount > billTotal + 0.01}
+          startIcon={<Edit fontSize="small" />}
+        >
+          {editMutation.isPending ? "Updating..." : "Update Payment"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 interface SupplierLedgerReportDialogProps {
   open: boolean;
   onClose: () => void;
   allPurchases: any[];
   companyData: any;
+  onEditBillPayment?: (bill: any) => void;
 }
 
-function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
-function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }: SupplierLedgerReportDialogProps) {
+function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData, onEditBillPayment }: SupplierLedgerReportDialogProps) {
   const totalInvoice = allPurchases.reduce((s, p) => s + Number(p.amount || 0), 0);
   const totalPaid = allPurchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
   const totalPending = Math.max(0, round2(totalInvoice - totalPaid));
@@ -228,6 +468,7 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }
         dr: 0,
         cr: invAmount,
         status: p.payment_status,
+        bill: p,
       });
 
       const paidAmt = Number(p.paid_amount || 0);
@@ -241,6 +482,7 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }
           dr: paidAmt,
           cr: 0,
           status: p.payment_status,
+          bill: p,
         });
       }
     });
@@ -285,12 +527,13 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: 110 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 130 }}>Voucher No.</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 130 }}>Type</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 105 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 125 }}>Voucher No.</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Debit - Paid (Dr)</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Credit - Invoice (Cr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Running Balance</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Running Balance</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700, width: 60 }}>Edit</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -316,6 +559,20 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }
                     <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
                       {RUPEE}{formatAmount(r.balance)}
                     </TableCell>
+                    <TableCell align="center">
+                      {r.bill && onEditBillPayment && (
+                        <Tooltip title={`Edit payment for ${r.bill.movement_no}`}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => onEditBillPayment(r.bill)}
+                            sx={{ p: 0.3 }}
+                          >
+                            <Edit sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -325,6 +582,7 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData }
                   <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
+                  <TableCell />
                 </TableRow>
               </TableFooter>
             </Table>
@@ -342,9 +600,10 @@ interface PaymentDialogProps {
   open: boolean;
   onClose: () => void;
   allPurchases: any[];
+  onEditBillPayment?: (bill: any) => void;
 }
 
-function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
+function PaymentDialog({ open, onClose, allPurchases, onEditBillPayment }: PaymentDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
 
@@ -352,6 +611,8 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
   const totalPaid = allPurchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
   const totalPending = Math.max(0, round2(totalInvoice - totalPaid));
   const supplierName = allPurchases[0]?.ledger_name || "Supplier";
+
+  const [showSettled, setShowSettled] = useState<boolean>(false);
 
   // Pending Bills list for settlement (sorted oldest first)
   const pendingBills = useMemo(() => {
@@ -362,6 +623,17 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
       })
       .sort((a, b) => ((a.movement_date || "") > (b.movement_date || "") ? 1 : -1));
   }, [allPurchases]);
+
+  // All bills to display in the table (including settled if toggled)
+  const displayedBills = useMemo(() => {
+    return allPurchases
+      .filter((p) => {
+        if (showSettled) return true;
+        const pending = round2(Math.max(0, Number(p.amount || 0) - Number(p.paid_amount || 0)));
+        return pending > 0.01;
+      })
+      .sort((a, b) => ((a.movement_date || "") > (b.movement_date || "") ? 1 : -1));
+  }, [allPurchases, showSettled]);
 
   // Form & Bill Allocation States
   const [paymentAmountStr, setPaymentAmountStr] = useState<string>("");
@@ -391,6 +663,9 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
 
   // Ticking / unticking a bill
   const handleToggleBill = (bill: any) => {
+    const billPending = round2(Math.max(0, Number(bill.amount || 0) - Number(bill.paid_amount || 0)));
+    if (billPending <= 0.01) return; // Cannot allocate more payment to fully settled bills
+
     const billId = bill.id;
     const isCurrentlySelected = selectedBillIds.has(billId);
 
@@ -402,7 +677,6 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
       delete nextAlloc[billId];
     } else {
       const otherAllocated = Array.from(nextSelected).reduce((sum, id) => sum + (nextAlloc[id] || 0), 0);
-      const billPending = round2(Math.max(0, Number(bill.amount || 0) - Number(bill.paid_amount || 0)));
 
       if (paymentAmount <= 0) {
         nextAlloc[billId] = billPending;
@@ -424,6 +698,7 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
   const handleAllocationChange = (bill: any, valStr: string) => {
     const billId = bill.id;
     const billPending = round2(Math.max(0, Number(bill.amount || 0) - Number(bill.paid_amount || 0)));
+    if (billPending <= 0.01) return;
     const num = Number(valStr);
 
     if (valStr === "" || isNaN(num) || num <= 0) {
@@ -478,7 +753,7 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
         .filter(([_, amt]) => Number(amt) > 0)
         .map(([idStr, amt]) => {
           const mId = Number(idStr);
-          const bill = pendingBills.find((b) => b.id === mId);
+          const bill = allPurchases.find((b) => b.id === mId);
           const currPaid = Number(bill?.paid_amount || 0);
           const billTotal = Number(bill?.amount || 0);
           const newPaid = round2(currPaid + Number(amt));
@@ -568,7 +843,7 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
         </Grid>
 
         {/* Bill-Wise Allocation Section */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1, flexWrap: "wrap", gap: 1 }}>
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: (t) => t.palette.mode === "dark" ? "primary.light" : "#0f5132" }}>
               Select Bills to Settle (Bill-Wise Allocation)
@@ -577,7 +852,22 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
               Tick the bills to settle. The last selected bill will automatically take the remaining partial amount.
             </Typography>
           </Box>
-          <Box sx={{ display: "flex", gap: 1 }}>
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={showSettled}
+                  onChange={(e) => setShowSettled(e.target.checked)}
+                />
+              }
+              label={
+                <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                  Show settled (paid) bills
+                </Typography>
+              }
+              sx={{ mr: 0 }}
+            />
             <Button
               size="small"
               variant="outlined"
@@ -611,7 +901,7 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
                 <TableCell sx={{ fontWeight: 700, width: 120 }}>Bill No.</TableCell>
                 <TableCell sx={{ fontWeight: 700, width: 110 }}>Date</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Bill Amount</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Already Paid</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Already Paid</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Pending Balance</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Pay Now (₹)</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Remaining</TableCell>
@@ -619,38 +909,62 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {pendingBills.length === 0 ? (
+              {displayedBills.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} align="center" sx={{ py: 3, color: "text.secondary" }}>
                     All bills for this supplier are fully settled (0 pending).
+                    {!showSettled && (
+                      <Button
+                        size="small"
+                        variant="text"
+                        color="primary"
+                        onClick={() => setShowSettled(true)}
+                        sx={{ ml: 1, textTransform: "none", fontSize: 12 }}
+                      >
+                        Show settled bills to edit past payments
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
-                pendingBills.map((bill) => {
+                displayedBills.map((bill) => {
                   const billTotal = Number(bill.amount || 0);
                   const alreadyPaid = Number(bill.paid_amount || 0);
                   const pending = round2(Math.max(0, billTotal - alreadyPaid));
+                  const isSettled = pending <= 0.01;
                   const isSelected = selectedBillIds.has(bill.id);
                   const allocNow = allocations[bill.id] !== undefined ? allocations[bill.id] : 0;
                   const remaining = round2(Math.max(0, pending - allocNow));
-                  const statusAfter = remaining <= 0.01 && isSelected ? "Paid" : (allocNow > 0 ? "Partial" : (alreadyPaid > 0 ? "Partial" : "Unpaid"));
+                  const statusAfter = isSettled
+                    ? "Settled"
+                    : remaining <= 0.01 && isSelected
+                    ? "Paid"
+                    : allocNow > 0
+                    ? "Partial"
+                    : alreadyPaid > 0
+                    ? "Partial"
+                    : "Unpaid";
 
                   return (
                     <TableRow
                       key={bill.id}
                       hover
                       sx={{
-                        cursor: "pointer",
+                        cursor: isSettled ? "default" : "pointer",
                         bgcolor: isSelected
                           ? (t) => t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.12)" : "rgba(22, 196, 127, 0.06)"
+                          : isSettled
+                          ? (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.02)"
                           : "inherit",
+                        opacity: isSettled ? 0.8 : 1,
                       }}
-                      onClick={() => handleToggleBill(bill)}
+                      onClick={() => !isSettled && handleToggleBill(bill)}
                     >
                       <TableCell padding="checkbox" align="center" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           size="small"
                           checked={isSelected}
+                          disabled={isSettled}
                           onChange={() => handleToggleBill(bill)}
                           sx={{ p: 0.5, "&.Mui-checked": { color: "#16C47F" } }}
                         />
@@ -664,10 +978,39 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
                       <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
                         {RUPEE}{formatAmount(billTotal)}
                       </TableCell>
-                      <TableCell align="right" sx={{ fontSize: 12, color: alreadyPaid > 0 ? "success.main" : "text.disabled", fontWeight: 600 }}>
-                        {alreadyPaid > 0 ? `${RUPEE}${formatAmount(alreadyPaid)}` : "—"}
+                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
+                        <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 0.5 }}>
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: alreadyPaid > 0 ? "success.main" : "text.disabled",
+                            }}
+                          >
+                            {alreadyPaid > 0 ? `${RUPEE}${formatAmount(alreadyPaid)}` : "—"}
+                          </Typography>
+                          {onEditBillPayment && (
+                            <Tooltip title={`Edit / Correct Paid Amount for ${bill.movement_no}`}>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditBillPayment(bill);
+                                }}
+                                sx={{
+                                  p: 0.2,
+                                  color: "text.secondary",
+                                  "&:hover": { color: "primary.main", bgcolor: "action.hover" },
+                                }}
+                              >
+                                <Edit sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
-                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: "#dc3545" }}>
+                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: isSettled ? "success.main" : "#dc3545" }}>
                         {RUPEE}{formatAmount(pending)}
                       </TableCell>
                       <TableCell align="right" onClick={(e) => e.stopPropagation()}>
@@ -677,6 +1020,7 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
                           value={allocations[bill.id] !== undefined ? allocations[bill.id] : ""}
                           onChange={(e) => handleAllocationChange(bill, e.target.value)}
                           placeholder="0.00"
+                          disabled={!isSelected || isSettled}
                           slotProps={{
                             htmlInput: {
                               min: 0,
@@ -685,7 +1029,6 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
                               style: { textAlign: "right", fontWeight: 700, fontSize: 12, padding: "4px 8px" },
                             },
                           }}
-                          disabled={!isSelected}
                           sx={{
                             width: 120,
                             "& .MuiOutlinedInput-root": {
@@ -702,7 +1045,7 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
                         <Chip
                           size="small"
                           label={statusAfter}
-                          color={statusAfter === "Paid" ? "success" : statusAfter === "Partial" ? "warning" : "default"}
+                          color={statusAfter === "Paid" || statusAfter === "Settled" ? "success" : statusAfter === "Partial" ? "warning" : "default"}
                           sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
                         />
                       </TableCell>
@@ -842,12 +1185,30 @@ function PaymentDialog({ open, onClose, allPurchases }: PaymentDialogProps) {
     </Dialog>
   );
 }
+
 export default function PurchasePayablesPage() {
   const { activeFY } = useAuthStore();
   const [payOpen, setPayOpen] = useState(false);
-  const [activeSupplierRow, setActiveSupplierRow] = useState<any>(null);
+  const [selectedSupplierName, setSelectedSupplierName] = useState<string | null>(null);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [selectedReportSupplierName, setSelectedReportSupplierName] = useState<string | null>(null);
+
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingBill, setEditingBill] = useState<any>(null);
+
   const [search, setSearch] = useState("");
   const [hideZeroPayables, setHideZeroPayables] = useState(true);
+
+  const handleOpenEditBill = (bill: any) => {
+    setEditingBill(bill);
+    setEditDialogOpen(true);
+  };
+
+  const handleCloseEditBill = () => {
+    setEditDialogOpen(false);
+    setEditingBill(null);
+  };
 
   const { data: companyData } = useQuery({
     queryKey: ["company"],
@@ -860,7 +1221,7 @@ export default function PurchasePayablesPage() {
       (await api.get(`/stock/inventory/movements?fy=${activeFY}&movement_type=Inward`)).data,
   });
 
-  const supplierList = useMemo(() => {
+  const allSuppliersList = useMemo(() => {
     const groupsMap: Record<string, any[]> = {};
     movements.forEach((m: any) => {
       const supplierName = m.ledger_name || "Unassigned Supplier";
@@ -868,7 +1229,7 @@ export default function PurchasePayablesPage() {
       groupsMap[supplierName].push(m);
     });
 
-    let list = Object.entries(groupsMap).map(([supplier, items]) => {
+    return Object.entries(groupsMap).map(([supplier, items]) => {
       let totalAmount = 0;
       let totalPaid = 0;
       let totalGst = 0;
@@ -903,7 +1264,10 @@ export default function PurchasePayablesPage() {
       const status = totalPayable <= 0.01 ? "Paid" : (totalPaid > 0 ? "Partial" : "Unpaid");
       return { supplier, items, pendingItems, totalAmount, totalPaid, totalGst, totalPayable, status };
     });
+  }, [movements]);
 
+  const supplierList = useMemo(() => {
+    let list = allSuppliersList;
     if (hideZeroPayables) {
       list = list.filter((g) => g.totalPayable > 0.01);
     }
@@ -917,7 +1281,7 @@ export default function PurchasePayablesPage() {
     }
 
     return list;
-  }, [movements, search, hideZeroPayables]);
+  }, [allSuppliersList, search, hideZeroPayables]);
 
   const summary = useMemo(() => {
     const totalAmount = movements.reduce((s: number, m: any) => s + Number(m.amount || 0), 0);
@@ -931,30 +1295,35 @@ export default function PurchasePayablesPage() {
     return supplierList.reduce((s, row) => s + row.totalPayable, 0);
   }, [supplierList]);
 
-  const [reportOpen, setReportOpen] = useState(false);
-  const [activeReportSupplierRow, setActiveReportSupplierRow] = useState<any>(null);
+  const activeSupplierRow = useMemo(() => {
+    if (!selectedSupplierName) return null;
+    return allSuppliersList.find((s) => s.supplier === selectedSupplierName) || null;
+  }, [allSuppliersList, selectedSupplierName]);
+
+  const activeReportSupplierRow = useMemo(() => {
+    if (!selectedReportSupplierName) return null;
+    return allSuppliersList.find((s) => s.supplier === selectedReportSupplierName) || null;
+  }, [allSuppliersList, selectedReportSupplierName]);
 
   const openSupplierReport = (supplierRow: any) => {
-    setActiveReportSupplierRow(supplierRow);
+    setSelectedReportSupplierName(supplierRow.supplier);
     setReportOpen(true);
   };
 
   const handleCloseReport = () => {
     setReportOpen(false);
-    setActiveReportSupplierRow(null);
+    setSelectedReportSupplierName(null);
   };
 
   const openSupplierPayment = (supplierRow: any) => {
-    setActiveSupplierRow(supplierRow);
+    setSelectedSupplierName(supplierRow.supplier);
     setPayOpen(true);
   };
 
   const handleClose = () => {
     setPayOpen(false);
-    setActiveSupplierRow(null);
+    setSelectedSupplierName(null);
   };
-
-  const dialogPurchases = activeSupplierRow ? (activeSupplierRow.pendingItems.length > 0 ? activeSupplierRow.pendingItems : activeSupplierRow.items) : [];
 
   const pills = [
     { label: "Total Pending Payable", value: `${RUPEE}${formatAmount(summary.totalPending)}`, color: "error.main" },
@@ -998,6 +1367,21 @@ export default function PurchasePayablesPage() {
               },
             }}
             sx={{ width: 280, "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={!hideZeroPayables}
+                onChange={(e) => setHideZeroPayables(!e.target.checked)}
+              />
+            }
+            label={
+              <Typography variant="body2" sx={{ fontSize: 13, color: "text.secondary" }}>
+                Show Settled Suppliers
+              </Typography>
+            }
           />
 
           <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
@@ -1116,12 +1500,20 @@ export default function PurchasePayablesPage() {
         onClose={handleCloseReport}
         allPurchases={activeReportSupplierRow?.items || []}
         companyData={companyData}
+        onEditBillPayment={handleOpenEditBill}
       />
 
       <PaymentDialog
         open={payOpen}
         onClose={handleClose}
         allPurchases={activeSupplierRow?.items || []}
+        onEditBillPayment={handleOpenEditBill}
+      />
+
+      <EditPaidAmountDialog
+        open={editDialogOpen}
+        onClose={handleCloseEditBill}
+        bill={editingBill}
       />
     </Box>
   );
