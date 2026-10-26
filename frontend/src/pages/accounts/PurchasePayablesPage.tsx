@@ -41,6 +41,7 @@ function buildSupplierLedgerRows(purchases: any[], payments: any[] = []) {
   const rows: any[] = [];
   const handledMovementIdsWithPayments = new Set<number>();
 
+  // 1. Inward Purchase Invoices (Credit)
   purchases.forEach((p: any) => {
     const invAmount = Number(p.amount || 0);
     let particularText = "Purchase Invoice";
@@ -66,31 +67,60 @@ function buildSupplierLedgerRows(purchases: any[], payments: any[] = []) {
     });
   });
 
+  // Track all movement IDs accounted for in payment vouchers
   payments.forEach((pay: any) => {
-    const paidAmt = Number(pay.paid_amount || 0);
-    if (paidAmt > 0 && pay.bill_status !== "Unpaid") {
-      if (pay.movement_id) {
-        handledMovementIdsWithPayments.add(pay.movement_id);
-      }
+    if (Array.isArray(pay.lines)) {
+      pay.lines.forEach((l: any) => {
+        if (l.movement_id) handledMovementIdsWithPayments.add(l.movement_id);
+      });
+    }
+    if (pay.movement_id) {
+      handledMovementIdsWithPayments.add(pay.movement_id);
+    }
+  });
+
+  // 2. Payment Vouchers (Debit) - One row per payment voucher with full voucher value
+  payments.forEach((pay: any) => {
+    const paidAmt = Number(pay.amount || pay.paid_amount || 0);
+    if (paidAmt > 0) {
       const pMode = pay.payment_mode || "Direct Payment";
       const pNotes = pay.payment_notes ? ` (${pay.payment_notes})` : "";
-      const forBill = pay.movement_no ? ` towards ${pay.movement_no}` : "";
+
+      // Aggregate reference numbers from child bill lines if available
+      let refNo = pay.ref_no || "";
+      if (!refNo && Array.isArray(pay.lines) && pay.lines.length > 0) {
+        const lineRefs = pay.lines.map((l: any) => l.ref_no).filter(Boolean);
+        refNo = Array.from(new Set(lineRefs)).join(", ");
+      }
+      if (!refNo) refNo = "—";
+
+      let billsSummary = "";
+      if (Array.isArray(pay.lines) && pay.lines.length > 0) {
+        billsSummary = ` towards ${pay.lines.map((l: any) => l.movement_no).join(", ")}`;
+      } else if (pay.movement_no) {
+        billsSummary = ` towards ${pay.movement_no}`;
+      }
+
+      const linkedMid = (pay.lines && pay.lines[0]?.movement_id) || pay.movement_id;
+      const linkedBill = purchases.find((p: any) => p.id === linkedMid) || null;
 
       rows.push({
         date: pay.payment_date || "-",
-        particulars: `Payment via ${pMode}${forBill}${pNotes}`,
+        particulars: `Payment via ${pMode}${billsSummary}${pNotes}`,
         voucher_type: "Payment",
         voucher_no: pay.payment_no || (pay.movement_no ? `PAY-${pay.movement_no}` : "PAYMENT"),
-        purchase_ref_no: pay.ref_no || "—",
+        purchase_ref_no: refNo,
         cr: 0,
         dr: paidAmt,
-        bill: purchases.find((p: any) => p.id === pay.movement_id) || null,
-        status: pay.bill_status,
+        bill: linkedBill,
+        payment: pay,
+        status: pay.bill_status || "Paid",
         isPayment: true,
       });
     }
   });
 
+  // 3. Fallback for any legacy direct movements not covered by purchase_payments table
   purchases.forEach((p: any) => {
     const paidAmt = Number(p.paid_amount || 0);
     if (paidAmt > 0 && p.payment_status !== "Unpaid" && !handledMovementIdsWithPayments.has(p.id)) {
@@ -1354,6 +1384,7 @@ export default function PurchasePayablesPage() {
     if (!activeReportSupplierRow) return [];
     return purchasePayments.filter((pay: any) =>
       pay.supplier_name === activeReportSupplierRow.supplier ||
+      (Array.isArray(pay.lines) && pay.lines.some((l: any) => activeReportSupplierRow.items?.some((m: any) => m.id === l.movement_id))) ||
       (activeReportSupplierRow.items && activeReportSupplierRow.items.some((m: any) => m.id === pay.movement_id))
     );
   }, [activeReportSupplierRow, purchasePayments]);
@@ -1506,6 +1537,7 @@ export default function PurchasePayablesPage() {
                           onClick={() => {
                             const suppPayments = purchasePayments.filter((pay: any) =>
                               pay.supplier_name === row.supplier ||
+                              (Array.isArray(pay.lines) && pay.lines.some((l: any) => row.items?.some((m: any) => m.id === l.movement_id))) ||
                               (row.items && row.items.some((m: any) => m.id === pay.movement_id))
                             );
                             handlePrintSupplierLedger({ ...row, payments: suppPayments }, companyData);
