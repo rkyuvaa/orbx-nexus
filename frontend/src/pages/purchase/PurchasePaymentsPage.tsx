@@ -620,7 +620,9 @@ export default function PurchasePaymentsPage() {
   const uniqueSuppliers = useMemo(() => {
     const set = new Set<string>();
     payments.forEach((p) => {
-      if (p.supplier_name) set.add(p.supplier_name);
+      if (p.supplier_name && Number(p.paid_amount || 0) > 0 && p.bill_status !== "Unpaid") {
+        set.add(p.supplier_name);
+      }
     });
     return Array.from(set).sort();
   }, [payments]);
@@ -628,6 +630,10 @@ export default function PurchasePaymentsPage() {
   // Filtered rows (sorted by payment date, newest at top by default)
   const filteredRows = useMemo(() => {
     const list = payments.filter((p) => {
+      // Must be an active purchase payment with positive paid_amount and non-unpaid status
+      if (Number(p.paid_amount || 0) <= 0) return false;
+      if (p.bill_status === "Unpaid") return false;
+
       if (search) {
         const q = search.toLowerCase();
         const matches =

@@ -68,7 +68,7 @@ function buildSupplierLedgerRows(purchases: any[], payments: any[] = []) {
 
   payments.forEach((pay: any) => {
     const paidAmt = Number(pay.paid_amount || 0);
-    if (paidAmt > 0) {
+    if (paidAmt > 0 && pay.bill_status !== "Unpaid") {
       if (pay.movement_id) {
         handledMovementIdsWithPayments.add(pay.movement_id);
       }
@@ -93,7 +93,7 @@ function buildSupplierLedgerRows(purchases: any[], payments: any[] = []) {
 
   purchases.forEach((p: any) => {
     const paidAmt = Number(p.paid_amount || 0);
-    if (paidAmt > 0 && !handledMovementIdsWithPayments.has(p.id)) {
+    if (paidAmt > 0 && p.payment_status !== "Unpaid" && !handledMovementIdsWithPayments.has(p.id)) {
       const pMode = p.payment_mode || "Direct Payment";
       const pNotes = p.payment_notes ? ` (${p.payment_notes})` : "";
       rows.push({
@@ -321,6 +321,7 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchase-payables"] });
+      qc.invalidateQueries({ queryKey: ["purchase-payments"] });
       if (onSuccess) onSuccess();
       onClose();
     },
