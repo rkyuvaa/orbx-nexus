@@ -167,7 +167,6 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any, directPay
       <tr>
         <td style="text-align: center;">${idx + 1}</td>
         <td style="text-align: center; white-space: nowrap;">${r.date}</td>
-        <td style="font-size: 11px;">${r.particulars}</td>
         <td style="text-align: center; font-weight: 600; color: ${r.voucher_type === 'Payment' ? '#198754' : '#0d6efd'};">${r.voucher_type}</td>
         <td style="font-weight: 600; white-space: nowrap;">${r.voucher_no}</td>
         <td style="white-space: nowrap; color: #495057;">${r.purchase_ref_no}</td>
@@ -209,15 +208,14 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any, directPay
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
             <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-              <th style="width: 40px; text-align: center;">S.NO</th>
-              <th style="width: 90px; text-align: center;">DATE</th>
-              <th>PARTICULARS</th>
-              <th style="width: 100px; text-align: center;">VOUCHER TYPE</th>
-              <th style="width: 110px;">VOUCHER NO</th>
-              <th style="width: 110px;">PURCHASE REF NO</th>
-              <th style="width: 110px; text-align: right;">CREDIT (CR)</th>
-              <th style="width: 110px; text-align: right;">DEBIT (DR)</th>
-              <th style="width: 115px; text-align: right;">BALANCE</th>
+              <th style="width: 50px; text-align: center;">S.NO</th>
+              <th style="width: 105px; text-align: center;">DATE</th>
+              <th style="width: 120px; text-align: center;">VOUCHER TYPE</th>
+              <th style="width: 135px;">VOUCHER NO</th>
+              <th style="width: 135px;">PURCHASE REF NO</th>
+              <th style="width: 130px; text-align: right;">CREDIT (CR)</th>
+              <th style="width: 130px; text-align: right;">DEBIT (DR)</th>
+              <th style="width: 140px; text-align: right;">BALANCE</th>
             </tr>
           </thead>
           <tbody>
@@ -564,14 +562,13 @@ function SupplierLedgerReportDialog({
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700, width: 45, textAlign: "center" }}>#</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Particulars</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 110, textAlign: "center" }}>Voucher Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 125 }}>Voucher No.</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 125 }}>Purchase Ref No</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Credit (Cr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Debit (Dr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Balance</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 105 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 120, textAlign: "center" }}>Voucher Type</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 135 }}>Voucher No.</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 135 }}>Purchase Ref No</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Credit (Cr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Debit (Dr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 140 }}>Balance</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 700, width: 55 }}>Edit</TableCell>
                 </TableRow>
               </TableHead>
@@ -580,9 +577,6 @@ function SupplierLedgerReportDialog({
                   <TableRow key={idx} hover sx={{ bgcolor: r.voucher_type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
                     <TableCell sx={{ fontSize: 12, textAlign: "center", color: "text.secondary" }}>{idx + 1}</TableCell>
                     <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
-                    <TableCell sx={{ fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.particulars}>
-                      {r.particulars}
-                    </TableCell>
                     <TableCell align="center" sx={{ fontSize: 12 }}>
                       <Chip
                         label={r.voucher_type}
@@ -622,7 +616,7 @@ function SupplierLedgerReportDialog({
               </TableBody>
               <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
                 <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                  <TableCell colSpan={6} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
+                  <TableCell colSpan={5} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
                   <TableCell align="right" sx={{ fontSize: 13, color: "text.primary" }}>{RUPEE}{formatAmount(totalCredit)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalDebit)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
