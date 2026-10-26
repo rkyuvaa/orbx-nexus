@@ -59,6 +59,8 @@ export default function StockItemsPage() {
         name: formData.name,
         item_code: formData.item_code || null,
         uom_id: formData.uom_id ? Number(formData.uom_id) : null,
+        rate: Number(formData.rate || 0),
+        gst_percent: Number(formData.gst_percent || 0),
         opening_stock: Number(formData.opening_stock || 0),
         reorder_level: Number(formData.reorder_level || 0),
       };
@@ -88,6 +90,8 @@ export default function StockItemsPage() {
       name: "",
       item_code: "",
       uom_id: "",
+      rate: 0,
+      gst_percent: 0,
       opening_stock: 0,
       reorder_level: 0,
     });
@@ -105,6 +109,8 @@ export default function StockItemsPage() {
       name: item.name,
       item_code: item.item_code || "",
       uom_id: uomId || "",
+      rate: item.rate ?? 0,
+      gst_percent: item.gst_percent ?? 0,
       opening_stock: item.opening_stock ?? 0,
       reorder_level: item.reorder_level ?? 0,
     });
@@ -117,8 +123,14 @@ export default function StockItemsPage() {
 
   const colDefs: ColDef[] = [
     { field: "name", headerName: "Tool / Consumable", flex: 2, minWidth: 200 },
-    { field: "item_code", headerName: "Code", width: 110 },
-    { field: "uom_symbol", headerName: "UoM", width: 80 },
+    {
+      field: "rate", headerName: "Rate (₹)", width: 110, type: "numericColumn",
+      valueFormatter: (p) => formatAmount(p.value),
+    },
+    {
+      field: "gst_percent", headerName: "GST %", width: 90, type: "numericColumn",
+      valueFormatter: (p) => (p.value !== null && p.value !== undefined ? `${p.value}%` : "—"),
+    },
     {
       field: "opening_stock", headerName: "Opening Qty", width: 120, type: "numericColumn",
       valueFormatter: (p) => formatQty(p.value),
@@ -146,8 +158,8 @@ export default function StockItemsPage() {
         const reorder = Number(p.data?.reorder_level || 0);
         const isLow = reorder > 0 && balance <= reorder;
         return (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, height: "100%" }}>
-            <Typography variant="body2" sx={{ fontWeight: 700, color: isLow ? "warning.main" : "text.primary" }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.5, height: "100%", width: "100%" }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: isLow ? "warning.main" : "text.primary", textAlign: "right" }}>
               {formatQty(balance)}
             </Typography>
             {isLow && <Chip label="Low" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />}
@@ -268,6 +280,39 @@ export default function StockItemsPage() {
               <Grid size={{ xs: 6 }}>
                 <TextField
                   type="number"
+                  label="Purchase Rate (₹)"
+                  fullWidth
+                  size="small"
+                  slotProps={{ htmlInput: { step: "any" }, inputLabel: { shrink: true } }}
+                  {...register("rate")}
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <Controller
+                  name="gst_percent"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      select
+                      label="GST %"
+                      fullWidth
+                      size="small"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      {...field}
+                      value={field.value ?? 0}
+                    >
+                      {[0, 5, 12, 18, 28].map((rate) => (
+                        <MenuItem key={rate} value={rate}>
+                          {rate}%
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  )}
+                />
+              </Grid>
+              <Grid size={{ xs: 6 }}>
+                <TextField
+                  type="number"
                   label="Opening Stock"
                   fullWidth
                   size="small"
@@ -317,19 +362,27 @@ export default function StockItemsPage() {
         <Divider />
         <DialogContent sx={{ pt: 2 }}>
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid size={{ xs: 3 }}>
+            <Grid size={{ xs: 4, sm: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Item Code</Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{viewingItem?.item_code || "-"}</Typography>
             </Grid>
-            <Grid size={{ xs: 3 }}>
+            <Grid size={{ xs: 4, sm: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Unit of Measure</Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{viewingItem?.uom_symbol || "-"}</Typography>
             </Grid>
-            <Grid size={{ xs: 3 }}>
+            <Grid size={{ xs: 4, sm: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Purchase Rate</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{formatAmount(viewingItem?.rate)}</Typography>
+            </Grid>
+            <Grid size={{ xs: 4, sm: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>GST %</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{viewingItem?.gst_percent ? `${viewingItem.gst_percent}%` : "0%"}</Typography>
+            </Grid>
+            <Grid size={{ xs: 4, sm: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Opening Stock Qty</Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{formatQty(viewingItem?.opening_stock)}</Typography>
             </Grid>
-            <Grid size={{ xs: 3 }}>
+            <Grid size={{ xs: 4, sm: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Reorder Level</Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{formatQty(viewingItem?.reorder_level)}</Typography>
             </Grid>

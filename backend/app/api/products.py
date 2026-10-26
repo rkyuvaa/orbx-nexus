@@ -118,6 +118,8 @@ class StockItemOut(BaseModel):
     uom_id: int | None = None
     opening_stock: float
     reorder_level: float
+    rate: float | None = 0
+    gst_percent: float | None = 0
     is_active: bool
 
 
@@ -127,6 +129,8 @@ class StockItemCreate(BaseModel):
     uom_id: int | None = None
     opening_stock: float = 0
     reorder_level: float = 0
+    rate: float | None = 0
+    gst_percent: float | None = 0
 
 
 # ──── UoM ────
@@ -170,14 +174,25 @@ async def delete_uom(uom_id: int, current_user: CurrentUser, db: DBSession):
 
 # ──── Stock Items ────
 
+async def ensure_stock_items_columns(db: DBSession):
+    try:
+        await db.execute(text("ALTER TABLE master.stock_items ADD COLUMN IF NOT EXISTS rate NUMERIC(15, 2) DEFAULT 0"))
+        await db.execute(text("ALTER TABLE master.stock_items ADD COLUMN IF NOT EXISTS gst_percent NUMERIC(5, 2) DEFAULT 0"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+
 @router.get("/stock-items", response_model=list[StockItemOut])
 async def list_stock_items(current_user: CurrentUser, db: DBSession):
+    await ensure_stock_items_columns(db)
     result = await db.execute(select(StockItem).order_by(StockItem.name))
     return result.scalars().all()
 
 
 @router.post("/stock-items", response_model=StockItemOut, status_code=201)
 async def create_stock_item(body: StockItemCreate, current_user: CurrentUser, db: DBSession):
+    await ensure_stock_items_columns(db)
     item = StockItem(**body.model_dump())
     db.add(item)
     await db.flush()
@@ -187,6 +202,7 @@ async def create_stock_item(body: StockItemCreate, current_user: CurrentUser, db
 
 @router.put("/stock-items/{item_id}", response_model=StockItemOut)
 async def update_stock_item(item_id: int, body: StockItemCreate, current_user: CurrentUser, db: DBSession):
+    await ensure_stock_items_columns(db)
     result = await db.execute(select(StockItem).where(StockItem.id == item_id))
     item = result.scalar_one_or_none()
     if not item:

@@ -176,6 +176,13 @@ async def lifespan(app: FastAPI):
             """))
         except Exception as e:
             print(f"Payroll config table creation notice: {e}")
+
+        # Ensure stock_items columns
+        try:
+            await conn.execute(text("ALTER TABLE master.stock_items ADD COLUMN IF NOT EXISTS rate NUMERIC(15, 2) DEFAULT 0"))
+            await conn.execute(text("ALTER TABLE master.stock_items ADD COLUMN IF NOT EXISTS gst_percent NUMERIC(5, 2) DEFAULT 0"))
+        except Exception as e:
+            print(f"Stock items rate/gst migration notice: {e}")
     print("[OK] Master tables created")
 
     # 3. Ensure financial year schemas exist and run migrations on year tables

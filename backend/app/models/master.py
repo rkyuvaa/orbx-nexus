@@ -183,6 +183,8 @@ class StockItem(Base):
     uom_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("master.units_of_measure.id"))
     opening_stock: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
     reorder_level: Mapped[float] = mapped_column(Numeric(15, 3), default=0)
+    rate: Mapped[float | None] = mapped_column(Numeric(15, 2), default=0)
+    gst_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

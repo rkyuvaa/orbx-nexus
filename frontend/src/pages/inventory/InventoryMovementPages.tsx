@@ -314,11 +314,17 @@ function MovementDialog({ open, onClose, editing, movementType }: MovementDialog
             } else {
               updated.uom_id = "";
             }
+            if (stockItem?.rate !== undefined && stockItem?.rate !== null && Number(stockItem.rate) > 0) {
+              updated.rate = String(stockItem.rate);
+            }
+            if (stockItem?.gst_percent !== undefined && stockItem?.gst_percent !== null) {
+              updated.gst_percent = String(stockItem.gst_percent);
+            }
           }
-          if (field === "quantity" || field === "rate" || field === "gst_percent") {
-            const q = Number(field === "quantity" ? value : item.quantity) || 0;
-            const r = Number(field === "rate" ? value : item.rate) || 0;
-            const gstP = Number(field === "gst_percent" ? value : item.gst_percent) || 0;
+          if (field === "quantity" || field === "rate" || field === "gst_percent" || field === "stock_item_id") {
+            const q = Number(field === "quantity" ? value : updated.quantity) || 0;
+            const r = Number(field === "rate" ? value : updated.rate) || 0;
+            const gstP = Number(field === "gst_percent" ? value : updated.gst_percent) || 0;
             
             const taxable = q > 0 && r > 0 ? (q * r) : 0;
             const gstAmt = taxable > 0 && gstP > 0 ? ((taxable * gstP) / 100) : 0;
