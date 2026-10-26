@@ -340,7 +340,10 @@ export function SalaryVoucherPage() {
       ledger_id: "" as any,
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
+      pay_type: "Daily",
       days_worked: 0,
+      total_hours: 0,
+      hourly_rate: 0,
       basic_salary: 0,
       per_day_salary: 0,
       payable_amount: 0,
@@ -354,6 +357,9 @@ export function SalaryVoucherPage() {
   const watchLedgerId = watch("ledger_id");
   const watchMonth = Number(watch("month") || (new Date().getMonth() + 1));
   const watchYear = Number(watch("year") || new Date().getFullYear());
+  const watchPayType = watch("pay_type");
+  const watchTotalHours = watch("total_hours");
+  const watchHourlyRate = watch("hourly_rate");
   const watchDaysWorked = watch("days_worked");
   const watchPerDaySalary = watch("per_day_salary");
   const watchAllowances = watch("allowances");
@@ -373,14 +379,28 @@ export function SalaryVoucherPage() {
   // When attendanceStats updates for a new entry, auto-populate working days, per-day salary, and payable
   useEffect(() => {
     if (attendanceStats && open && !editing) {
+      const isHourly = Boolean(
+        attendanceStats.is_hourly ||
+        attendanceStats.staff_category === "Labour" ||
+        Number(attendanceStats.hourly_rate || 0) > 0
+      );
       const workingDays = Number(attendanceStats.working_days ?? 0);
+      const totalHours = Number(attendanceStats.total_hours ?? 0);
+      const hourlyRate = Number(attendanceStats.hourly_rate ?? 0);
       const perDay = Number(attendanceStats.per_day_salary ?? 0);
       const basic = Number(attendanceStats.basic_salary ?? 0);
-      const payableCalc = Math.round((workingDays * perDay) * 100) / 100;
+
+      const payableCalc = isHourly
+        ? Math.round((totalHours * hourlyRate) * 100) / 100
+        : Math.round((workingDays * perDay) * 100) / 100;
+
       const al = Number(getValues("allowances") || 0);
       const ded = Number(getValues("deductions") || 0);
       const netCalc = Math.round((payableCalc + al - ded) * 100) / 100;
 
+      setValue("pay_type", isHourly ? "Hourly" : "Daily");
+      setValue("total_hours", totalHours);
+      setValue("hourly_rate", hourlyRate);
       setValue("days_worked", workingDays);
       setValue("per_day_salary", perDay);
       setValue("basic_salary", basic);
@@ -389,12 +409,17 @@ export function SalaryVoucherPage() {
     }
   }, [attendanceStats, open, editing, setValue, getValues]);
 
-  // Reactive calculation: Payable = Working Days * Per Day Salary
+  // Reactive calculation: Payable
   const payable = useMemo(() => {
+    if (watchPayType === "Hourly") {
+      const th = Number(watchTotalHours || 0);
+      const hr = Number(watchHourlyRate || 0);
+      return Math.round((th * hr) * 100) / 100;
+    }
     const dw = Number(watchDaysWorked || 0);
     const pds = Number(watchPerDaySalary || 0);
     return Math.round((dw * pds) * 100) / 100;
-  }, [watchDaysWorked, watchPerDaySalary]);
+  }, [watchPayType, watchTotalHours, watchHourlyRate, watchDaysWorked, watchPerDaySalary]);
 
   // Reactive calculation: Net Salary = Payable + Allowances - Deductions
   const netSalary = useMemo(() => {
@@ -413,7 +438,10 @@ export function SalaryVoucherPage() {
     mutationFn: (data: any) => {
       const payload = {
         ...data,
+        pay_type: data.pay_type || (watchPayType === "Hourly" ? "Hourly" : "Daily"),
         days_worked: Number(data.days_worked || 0),
+        total_hours: Number(data.total_hours || 0),
+        hourly_rate: Number(data.hourly_rate || 0),
         per_day_salary: Number(data.per_day_salary || 0),
         payable_amount: Number(payable || 0),
         basic_salary: Number(data.basic_salary || 0),
@@ -456,16 +484,20 @@ export function SalaryVoucherPage() {
 
   const handleEditRow = (row: any) => {
     setEditing(row);
+    const isHourly = row.pay_type === "Hourly" || (Number(row.hourly_rate) > 0 && !Number(row.per_day_salary));
     reset({
       voucher_no: row.voucher_no || "",
       voucher_date: row.voucher_date || today,
       ledger_id: row.ledger_id || "",
       month: row.month || (new Date().getMonth() + 1),
       year: row.year || new Date().getFullYear(),
+      pay_type: isHourly ? "Hourly" : "Daily",
       days_worked: Number(row.days_worked || 0),
+      total_hours: Number(row.total_hours || 0),
+      hourly_rate: Number(row.hourly_rate || 0),
       basic_salary: Number(row.basic_salary || 0),
       per_day_salary: Number(row.per_day_salary || (Number(row.days_worked) ? (row.payable_amount || row.basic_salary) / row.days_worked : 0)),
-      payable_amount: Number(row.payable_amount || (Number(row.days_worked || 0) * Number(row.per_day_salary || 0))),
+      payable_amount: Number(row.payable_amount || 0),
       allowances: Number(row.allowances || 0),
       deductions: Number(row.deductions || 0),
       net_salary: Number(row.net_salary || 0),
@@ -502,18 +534,32 @@ export function SalaryVoucherPage() {
     },
     {
       field: "days_worked",
-      headerName: "Working Days",
-      width: 115,
+      headerName: "Duration / Days",
+      width: 140,
       type: "numericColumn",
-      cellRenderer: (p) => (
-        <Chip
-          label={`${p.value || 0} days`}
-          size="small"
-          color="primary"
-          variant="outlined"
-          sx={{ fontWeight: 700, fontSize: "0.75rem" }}
-        />
-      )
+      cellRenderer: (p) => {
+        const isHourly = p.data?.pay_type === "Hourly" || (Number(p.data?.hourly_rate) > 0 && !Number(p.data?.per_day_salary));
+        if (isHourly) {
+          return (
+            <Chip
+              label={`${p.data?.total_hours || 0} hrs`}
+              size="small"
+              color="warning"
+              variant="outlined"
+              sx={{ fontWeight: 700, fontSize: "0.75rem" }}
+            />
+          );
+        }
+        return (
+          <Chip
+            label={`${p.value || 0} days`}
+            size="small"
+            color="primary"
+            variant="outlined"
+            sx={{ fontWeight: 700, fontSize: "0.75rem" }}
+          />
+        );
+      }
     },
     {
       field: "payable_amount",
@@ -595,6 +641,11 @@ export function SalaryVoucherPage() {
     const deductions = row.deductions || 0;
     const netSalary = row.net_salary || 0;
 
+    const isHourly = row.pay_type === "Hourly" || (Number(row.hourly_rate) > 0 && !Number(row.per_day_salary));
+    const descStr = isHourly
+      ? `Working Hours (${row.total_hours || 0} Hours × ₹${formatAmount(row.hourly_rate || 0)}/hr)`
+      : `Working Days (${workingDays} Days × ₹${formatAmount(perDaySalary)})`;
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -641,7 +692,7 @@ export function SalaryVoucherPage() {
             </thead>
             <tbody>
               <tr>
-                <td>Working Days (${workingDays} Days × ₹${formatAmount(perDaySalary)})</td>
+                <td>${descStr}</td>
                 <td style="text-align: right;">₹${formatAmount(payableAmount)}</td>
               </tr>
               <tr>
@@ -715,7 +766,10 @@ export function SalaryVoucherPage() {
             month: new Date().getMonth() + 1,
             year: new Date().getFullYear(),
             voucher_date: today,
+            pay_type: "Daily",
             days_worked: 0,
+            total_hours: 0,
+            hourly_rate: 0,
             basic_salary: 0,
             per_day_salary: 0,
             payable_amount: 0,
@@ -821,17 +875,26 @@ export function SalaryVoucherPage() {
                       {isStatsLoading ? (
                         <Chip icon={<CircularProgress size={12} color="inherit" />} label="Fetching attendance..." size="small" variant="outlined" />
                       ) : attendanceStats ? (
-                        <Chip
-                          size="small"
-                          label={`Calculated Working Days: ${attendanceStats.working_days} Days`}
-                          color="success"
-                          sx={{ fontWeight: 800 }}
-                        />
+                        <Box sx={{ display: "flex", gap: 0.8, alignItems: "center" }}>
+                          <Chip
+                            size="small"
+                            label={watchPayType === "Hourly" ? `Total Hours: ${attendanceStats.total_hours} hrs` : `Working Days: ${attendanceStats.working_days} Days`}
+                            color={watchPayType === "Hourly" ? "warning" : "success"}
+                            sx={{ fontWeight: 800 }}
+                          />
+                          <Chip
+                            size="small"
+                            label={watchPayType === "Hourly" ? "Hour-Wise Pay" : "Daily/Monthly Salary"}
+                            variant="outlined"
+                            color={watchPayType === "Hourly" ? "warning" : "primary"}
+                            sx={{ fontWeight: 700 }}
+                          />
+                        </Box>
                       ) : null}
                     </Box>
 
                     <Grid container spacing={1}>
-                      <Grid size={{ xs: 6, sm: 3 }}>
+                      <Grid size={{ xs: 6, sm: 2.4 }}>
                         <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#bbf7d0" }}>
                           <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534", fontWeight: 700 }}>PRESENT</Typography>
                           <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>
@@ -840,7 +903,7 @@ export function SalaryVoucherPage() {
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Full Day (1.0)</Typography>
                         </Box>
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 3 }}>
+                      <Grid size={{ xs: 6, sm: 2.4 }}>
                         <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.1)" : "#fffbeb", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(245, 158, 11, 0.3)" : "#fde68a" }}>
                           <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#92400e", fontWeight: 700 }}>HALF DAY</Typography>
                           <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }}>
@@ -849,7 +912,7 @@ export function SalaryVoucherPage() {
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Half Day (0.5)</Typography>
                         </Box>
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 3 }}>
+                      <Grid size={{ xs: 6, sm: 2.4 }}>
                         <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.1)" : "#fef2f2", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(239, 68, 68, 0.3)" : "#fecaca" }}>
                           <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#991b1b", fontWeight: 700 }}>ABSENT</Typography>
                           <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }}>
@@ -858,13 +921,22 @@ export function SalaryVoucherPage() {
                           <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Unpaid</Typography>
                         </Box>
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 3 }}>
+                      <Grid size={{ xs: 6, sm: 2.4 }}>
                         <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(59, 130, 246, 0.1)" : "#eff6ff", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(59, 130, 246, 0.3)" : "#bfdbfe" }}>
                           <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1e40af", fontWeight: 700 }}>WORKING DAYS</Typography>
                           <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }}>
                             {attendanceStats?.working_days ?? 0}
                           </Typography>
-                          <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Present + (0.5×Half)</Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Present + 0.5×Half</Typography>
+                        </Box>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 2.4 }}>
+                        <Box sx={{ p: 1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(249, 115, 22, 0.1)" : "#fff7ed", borderRadius: "6px", textAlign: "center", border: "1px solid", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(249, 115, 22, 0.3)" : "#fed7aa" }}>
+                          <Typography variant="caption" sx={{ color: (theme) => theme.palette.mode === "dark" ? "#fb923c" : "#c2410c", fontWeight: 700 }}>TOTAL HOURS</Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "#fb923c" : "#ea580c" }}>
+                            {attendanceStats?.total_hours ?? 0}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.68rem" }}>Logged Hours</Typography>
                         </Box>
                       </Grid>
                     </Grid>
@@ -897,56 +969,120 @@ export function SalaryVoucherPage() {
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Calculate sx={{ color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }} />
                     <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>
-                      Formula: Working Days ({watchDaysWorked || 0}) × Per Day Salary (₹{watchPerDaySalary || 0}) = Payable Amount: ₹{formatAmount(payable)}
+                      {watchPayType === "Hourly"
+                        ? `Formula: Working Hours (${watchTotalHours || 0} hrs) × Hourly Rate (₹${watchHourlyRate || 0}) = Payable Amount: ₹${formatAmount(payable)}`
+                        : `Formula: Working Days (${watchDaysWorked || 0}) × Per Day Salary (₹${watchPerDaySalary || 0}) = Payable Amount: ₹${formatAmount(payable)}`
+                      }
                     </Typography>
                   </Box>
                   <Chip
                     label={`Payable: ₹${formatAmount(payable)}`}
-                    color="success"
+                    color={watchPayType === "Hourly" ? "warning" : "success"}
                     sx={{ fontWeight: 800, fontSize: "0.85rem" }}
                   />
                 </Box>
               </Grid>
 
-              {/* Working Days & Per Day Salary Inputs */}
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  {...register("days_worked")}
-                  label="Working Days (from Attendance) *"
-                  type="number"
-                  fullWidth
-                  required
-                  slotProps={{
-                    inputLabel: { shrink: true },
-                    htmlInput: { step: "0.5", min: "0" }
-                  }}
-                  helperText="Present days + 0.5 × Half days"
+              {/* Wage Type, Duration & Rate Inputs */}
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <Controller
+                  name="pay_type"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      select
+                      size="small"
+                      label="Wage Type *"
+                      fullWidth
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    >
+                      <MenuItem value="Daily">Daily / Monthly (Days Worked)</MenuItem>
+                      <MenuItem value="Hourly">Hour-Wise Pay (Hours Worked)</MenuItem>
+                    </TextField>
+                  )}
                 />
               </Grid>
 
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  {...register("per_day_salary")}
-                  label="Per Day Salary (₹) *"
-                  type="number"
-                  fullWidth
-                  required
-                  slotProps={{
-                    inputLabel: { shrink: true },
-                    htmlInput: { step: "0.01", min: "0" }
-                  }}
-                  helperText={
-                    watchBasicSalary && attendanceStats?.days_in_month
-                      ? `Monthly ₹${watchBasicSalary} ÷ ${attendanceStats.days_in_month}d = ₹${(Number(watchBasicSalary) / attendanceStats.days_in_month).toFixed(2)}/d`
-                      : "Daily wage rate for calculation"
-                  }
-                />
-              </Grid>
+              {watchPayType === "Hourly" ? (
+                <>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      {...register("total_hours")}
+                      label="Working Hours (Attendance) *"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      required
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { step: "0.25", min: "0" }
+                      }}
+                      helperText={`Total hours worked in ${MONTH_NAMES[watchMonth - 1]}`}
+                    />
+                  </Grid>
 
-              <Grid size={{ xs: 12, sm: 4 }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      {...register("hourly_rate")}
+                      label="Hourly Rate (₹ / Hour) *"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      required
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { step: "0.01", min: "0" }
+                      }}
+                      helperText="Hourly wage rate"
+                    />
+                  </Grid>
+                </>
+              ) : (
+                <>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      {...register("days_worked")}
+                      label="Working Days (Attendance) *"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      required
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { step: "0.5", min: "0" }
+                      }}
+                      helperText="Present days + 0.5 × Half days"
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      {...register("per_day_salary")}
+                      label="Per Day Salary (₹) *"
+                      type="number"
+                      size="small"
+                      fullWidth
+                      required
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        htmlInput: { step: "0.01", min: "0" }
+                      }}
+                      helperText={
+                        watchBasicSalary && attendanceStats?.days_in_month
+                          ? `Monthly ₹${watchBasicSalary} ÷ ${attendanceStats.days_in_month}d = ₹${(Number(watchBasicSalary) / attendanceStats.days_in_month).toFixed(2)}/d`
+                          : "Daily wage rate for calculation"
+                      }
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid size={{ xs: 12, sm: 3 }}>
                 <TextField
                   label="Payable Amount (₹) *"
                   type="number"
+                  size="small"
                   fullWidth
                   value={payable}
                   disabled
@@ -954,7 +1090,7 @@ export function SalaryVoucherPage() {
                     inputLabel: { shrink: true },
                     htmlInput: { style: { fontWeight: 800, color: "#166534" } }
                   }}
-                  helperText="Working Days × Per Day Salary"
+                  helperText={watchPayType === "Hourly" ? "Working Hours × Hourly Rate" : "Working Days × Per Day Salary"}
                 />
               </Grid>
 
@@ -1078,22 +1214,45 @@ export function SalaryVoucherPage() {
                 Attendance & Salary Calculation:
               </Typography>
               <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
-                  <Typography variant="body2">Working Days (from Attendance):</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{viewVoucher.days_worked} Days</Typography>
-                </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
-                  <Typography variant="body2">Per Day Salary Rate:</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>₹{formatAmount(viewVoucher.per_day_salary || 0)}</Typography>
-                </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.75, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", px: 1, borderRadius: "4px", mt: 0.5 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
-                    Payable Amount (Working Days × Rate):
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
-                    ₹{formatAmount(viewVoucher.payable_amount || (Number(viewVoucher.days_worked || 0) * Number(viewVoucher.per_day_salary || 0)))}
-                  </Typography>
-                </Box>
+                {viewVoucher.pay_type === "Hourly" || (Number(viewVoucher.hourly_rate) > 0 && !Number(viewVoucher.per_day_salary)) ? (
+                  <>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
+                      <Typography variant="body2">Working Hours (from Attendance):</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{viewVoucher.total_hours || 0} Hours</Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
+                      <Typography variant="body2">Hourly Rate:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>₹{formatAmount(viewVoucher.hourly_rate || 0)} / hr</Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.75, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", px: 1, borderRadius: "4px", mt: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
+                        Payable Amount (Working Hours × Rate):
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
+                        ₹{formatAmount(viewVoucher.payable_amount || (Number(viewVoucher.total_hours || 0) * Number(viewVoucher.hourly_rate || 0)))}
+                      </Typography>
+                    </Box>
+                  </>
+                ) : (
+                  <>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
+                      <Typography variant="body2">Working Days (from Attendance):</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{viewVoucher.days_worked} Days</Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
+                      <Typography variant="body2">Per Day Salary Rate:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>₹{formatAmount(viewVoucher.per_day_salary || 0)}</Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.75, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4", px: 1, borderRadius: "4px", mt: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
+                        Payable Amount (Working Days × Rate):
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 800, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#166534" }}>
+                        ₹{formatAmount(viewVoucher.payable_amount || (Number(viewVoucher.days_worked || 0) * Number(viewVoucher.per_day_salary || 0)))}
+                      </Typography>
+                    </Box>
+                  </>
+                )}
                 <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px dashed", borderColor: "divider", mt: 1 }}>
                   <Typography variant="body2">Allowances / Incentives (+):</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>₹{formatAmount(viewVoucher.allowances || 0)}</Typography>

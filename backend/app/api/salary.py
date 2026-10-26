@@ -19,7 +19,10 @@ class SalaryVoucherIn(BaseModel):
     ledger_id: int
     month: int
     year: int
+    pay_type: Optional[str] = "Daily"
     days_worked: float = 0
+    total_hours: float = 0
+    hourly_rate: float = 0
     basic_salary: float = 0
     per_day_salary: float = 0
     payable_amount: float = 0
@@ -58,13 +61,15 @@ async def get_staff_attendance_stats(
     # Ensure columns exist
     try:
         await db.execute(text("ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS per_day_salary NUMERIC(15,2) DEFAULT 0"))
+        await db.execute(text("ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(15,2) DEFAULT 0"))
+        await db.execute(text("ALTER TABLE master.ledgers ADD COLUMN IF NOT EXISTS staff_category VARCHAR(20) DEFAULT 'Staff'"))
         await db.commit()
     except Exception:
         await db.rollback()
 
     # Query staff ledger details
     st_res = await db.execute(
-        text("SELECT id, name, ledger_code, basic_salary, COALESCE(per_day_salary, 0) AS per_day_salary, hourly_rate, staff_category FROM master.ledgers WHERE id = :lid"),
+        text("SELECT id, name, ledger_code, basic_salary, COALESCE(per_day_salary, 0) AS per_day_salary, COALESCE(hourly_rate, 0) AS hourly_rate, staff_category FROM master.ledgers WHERE id = :lid"),
         {"lid": ledger_id}
     )
     staff = st_res.mappings().first()
@@ -79,7 +84,7 @@ async def get_staff_attendance_stats(
     # Find all related ledger IDs for this staff member (e.g. Master record, Salary ledger, Advance ledger)
     rel_res = await db.execute(
         text("""
-            SELECT id, name, basic_salary, per_day_salary, hourly_rate 
+            SELECT id, name, basic_salary, per_day_salary, hourly_rate, staff_category 
             FROM master.ledgers 
             WHERE id = :lid 
                OR TRIM(name) = :bname 
@@ -126,24 +131,37 @@ async def get_staff_attendance_stats(
     # Working days = Present + (0.5 * Half Day)
     working_days = round(present_days + (0.5 * half_days), 1)
 
-    # Resolve per_day_salary and basic_salary across all related ledger records
-    ledger_per_day = max([float(r["per_day_salary"] or 0) for r in rel_rows] + [float(staff["per_day_salary"] or 0), 0.0])
-    basic_salary = max([float(r["basic_salary"] or 0) for r in rel_rows] + [float(staff["basic_salary"] or 0), 0.0])
+    # Resolve per_day_salary, basic_salary, hourly_rate, and staff_category across all related ledger records
+    ledger_per_day = max([float(r.get("per_day_salary") or 0) for r in rel_rows] + [float(staff.get("per_day_salary") or 0), 0.0])
+    basic_salary = max([float(r.get("basic_salary") or 0) for r in rel_rows] + [float(staff.get("basic_salary") or 0), 0.0])
+    hourly_rate = max([float(r.get("hourly_rate") or 0) for r in rel_rows] + [float(staff.get("hourly_rate") or 0), 0.0])
 
-    if ledger_per_day > 0:
-        per_day_salary = round(ledger_per_day, 2)
-    elif basic_salary > 0 and days_in_month > 0:
-        per_day_salary = round(basic_salary / days_in_month, 2)
-    else:
+    staff_category = staff.get("staff_category") or "Staff"
+    for r in rel_rows:
+        if r.get("staff_category") == "Labour":
+            staff_category = "Labour"
+
+    is_hourly = staff_category == "Labour" or (hourly_rate > 0 and ledger_per_day == 0 and basic_salary == 0)
+
+    if is_hourly:
+        payable_amount = round(total_hours * hourly_rate, 2)
         per_day_salary = 0.0
-
-    # Payable amount = working days * per day salary
-    payable_amount = round(working_days * per_day_salary, 2)
+    else:
+        if ledger_per_day > 0:
+            per_day_salary = round(ledger_per_day, 2)
+        elif basic_salary > 0 and days_in_month > 0:
+            per_day_salary = round(basic_salary / days_in_month, 2)
+        else:
+            per_day_salary = 0.0
+        payable_amount = round(working_days * per_day_salary, 2)
 
     return {
         "ledger_id": ledger_id,
         "staff_name": staff["name"],
         "staff_code": staff["ledger_code"],
+        "staff_category": staff_category,
+        "is_hourly": is_hourly,
+        "pay_type": "Hourly" if is_hourly else "Daily",
         "month": month,
         "year": year,
         "days_in_month": days_in_month,
@@ -156,8 +174,21 @@ async def get_staff_attendance_stats(
         "total_ot_hours": total_ot_hours,
         "basic_salary": basic_salary,
         "per_day_salary": per_day_salary,
+        "hourly_rate": hourly_rate,
         "payable_amount": payable_amount
     }
+
+
+async def ensure_salary_voucher_columns(db: DBSession, schema: str):
+    try:
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS per_day_salary NUMERIC(15,2) DEFAULT 0"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS payable_amount NUMERIC(15,2) DEFAULT 0"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS total_hours NUMERIC(15,2) DEFAULT 0"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(15,2) DEFAULT 0"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS pay_type VARCHAR(20) DEFAULT 'Daily'"))
+        await db.commit()
+    except Exception:
+        await db.rollback()
 
 
 @router.get("/salary")
@@ -166,12 +197,7 @@ async def list_salary_vouchers(
     ledger_id: Optional[int] = None, month: Optional[int] = None, year: Optional[int] = None
 ):
     schema = s(fy)
-    try:
-        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS per_day_salary NUMERIC(15,2) DEFAULT 0"))
-        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS payable_amount NUMERIC(15,2) DEFAULT 0"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
+    await ensure_salary_voucher_columns(db, schema)
 
     conds = ["1=1"]
     params: dict = {}
@@ -202,12 +228,7 @@ async def create_salary_voucher(
     body: SalaryVoucherIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
-    try:
-        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS per_day_salary NUMERIC(15,2) DEFAULT 0"))
-        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS payable_amount NUMERIC(15,2) DEFAULT 0"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
+    await ensure_salary_voucher_columns(db, schema)
 
     vno = body.voucher_no
     from app.services.sequences import generate_and_increment_sequence
@@ -222,19 +243,25 @@ async def create_salary_voucher(
             break
         vno = await generate_and_increment_sequence(db, "salary_voucher")
 
-    payable = body.payable_amount if body.payable_amount else round(body.days_worked * body.per_day_salary, 2)
+    pay_type = body.pay_type or ("Hourly" if body.hourly_rate > 0 and body.total_hours > 0 and body.per_day_salary == 0 else "Daily")
+    if pay_type == "Hourly":
+        payable = body.payable_amount if body.payable_amount else round(body.total_hours * body.hourly_rate, 2)
+    else:
+        payable = body.payable_amount if body.payable_amount else round(body.days_worked * body.per_day_salary, 2)
+
     net_sal = body.net_salary if body.net_salary else round(payable + body.allowances - body.deductions, 2)
 
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.salary_vouchers "
-            f"(voucher_no, voucher_date, ledger_id, month, year, days_worked, basic_salary, "
+            f"(voucher_no, voucher_date, ledger_id, month, year, pay_type, days_worked, total_hours, hourly_rate, basic_salary, "
             f"per_day_salary, payable_amount, allowances, deductions, net_salary, narration, created_by) "
-            f"VALUES (:vno, CAST(:vdate AS DATE), :lid, :m, :y, :dw, :bs, :pds, :pa, :al, :ded, :ns, :narr, :cby) RETURNING id"
+            f"VALUES (:vno, CAST(:vdate AS DATE), :lid, :m, :y, :pt, :dw, :th, :hr, :bs, :pds, :pa, :al, :ded, :ns, :narr, :cby) RETURNING id"
         ),
         {
             "vno": vno, "vdate": body.voucher_date, "lid": body.ledger_id,
-            "m": body.month, "y": body.year, "dw": body.days_worked,
+            "m": body.month, "y": body.year, "pt": pay_type, "dw": body.days_worked,
+            "th": body.total_hours, "hr": body.hourly_rate,
             "bs": body.basic_salary, "pds": body.per_day_salary, "pa": payable,
             "al": body.allowances, "ded": body.deductions,
             "ns": net_sal, "narr": body.narration, "cby": current_user.id
@@ -249,28 +276,30 @@ async def update_salary_voucher(
     vid: int, body: SalaryVoucherIn, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
-    try:
-        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS per_day_salary NUMERIC(15,2) DEFAULT 0"))
-        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS payable_amount NUMERIC(15,2) DEFAULT 0"))
-        await db.commit()
-    except Exception:
-        await db.rollback()
+    await ensure_salary_voucher_columns(db, schema)
 
-    payable = body.payable_amount if body.payable_amount else round(body.days_worked * body.per_day_salary, 2)
+    pay_type = body.pay_type or ("Hourly" if body.hourly_rate > 0 and body.total_hours > 0 and body.per_day_salary == 0 else "Daily")
+    if pay_type == "Hourly":
+        payable = body.payable_amount if body.payable_amount else round(body.total_hours * body.hourly_rate, 2)
+    else:
+        payable = body.payable_amount if body.payable_amount else round(body.days_worked * body.per_day_salary, 2)
+
     net_sal = body.net_salary if body.net_salary else round(payable + body.allowances - body.deductions, 2)
 
     await db.execute(
         text(
             f"UPDATE {schema}.salary_vouchers "
             f"SET voucher_date = CAST(:vdate AS DATE), ledger_id = :lid, "
-            f"month = :m, year = :y, days_worked = :dw, basic_salary = :bs, "
+            f"month = :m, year = :y, pay_type = :pt, days_worked = :dw, "
+            f"total_hours = :th, hourly_rate = :hr, basic_salary = :bs, "
             f"per_day_salary = :pds, payable_amount = :pa, allowances = :al, "
             f"deductions = :ded, net_salary = :ns, narration = :narr, updated_at = NOW() "
             f"WHERE id = :id"
         ),
         {
             "vdate": body.voucher_date, "lid": body.ledger_id,
-            "m": body.month, "y": body.year, "dw": body.days_worked,
+            "m": body.month, "y": body.year, "pt": pay_type, "dw": body.days_worked,
+            "th": body.total_hours, "hr": body.hourly_rate,
             "bs": body.basic_salary, "pds": body.per_day_salary, "pa": payable,
             "al": body.allowances, "ded": body.deductions,
             "ns": net_sal, "narr": body.narration, "id": vid

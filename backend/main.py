@@ -258,6 +258,11 @@ async def lifespan(app: FastAPI):
                         f"ADD COLUMN IF NOT EXISTS register_ids JSONB DEFAULT '[]'::jsonb"
                     )
                 )
+                for col in ("pay_type VARCHAR(20) DEFAULT 'Daily'", "total_hours NUMERIC(15,2) DEFAULT 0", "hourly_rate NUMERIC(15,2) DEFAULT 0"):
+                    try:
+                        await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.salary_vouchers ADD COLUMN IF NOT EXISTS {col}"))
+                    except Exception:
+                        pass
             print(f"[OK] Schema fy_{fy['year_str']} tables migrated")
         except Exception as e:
             print(f"[WARNING] Could not create/migrate schema for {fy['year_str']}: {e}")
