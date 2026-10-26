@@ -126,7 +126,7 @@ function VoucherModule({
         <head>
           <title>${title} - ${row.voucher_no}</title>
           <style>
-            @page { size: A5 landscape; margin: 10mm; }
+            @page { size: A4 portrait; margin: 10mm; }
             ${COMMON_PRINT_CSS}
             table.items-table th, table.items-table td {
               border: 1px solid #cbd5e1;
@@ -652,7 +652,7 @@ export function SalaryVoucherPage() {
         <head>
           <title>Salary Slip - ${row.voucher_no || staffName}</title>
           <style>
-            @page { size: A5 landscape; margin: 10mm; }
+            @page { size: A4 portrait; margin: 10mm; }
             ${COMMON_PRINT_CSS}
           </style>
         </head>
