@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Grid, Typography, Chip, MenuItem, Table, TableHead,
   TableBody, TableFooter, TableRow, TableCell, TableContainer,
   Paper, LinearProgress, Tooltip, IconButton, InputAdornment,
-  Divider, Card, CardContent
+  Divider, Collapse,
 } from "@mui/material";
 import Refresh from "@mui/icons-material/Refresh";
 import Search from "@mui/icons-material/Search";
@@ -14,10 +14,11 @@ import Visibility from "@mui/icons-material/Visibility";
 import Edit from "@mui/icons-material/Edit";
 import Payment from "@mui/icons-material/Payment";
 import Clear from "@mui/icons-material/Clear";
-import Receipt from "@mui/icons-material/Receipt";
-import CheckCircle from "@mui/icons-material/CheckCircle";
-import PendingActions from "@mui/icons-material/PendingActions";
 import ArrowForward from "@mui/icons-material/ArrowForward";
+import KeyboardArrowDown from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
+import UnfoldMore from "@mui/icons-material/UnfoldMore";
+import UnfoldLess from "@mui/icons-material/UnfoldLess";
 import { useNavigate } from "react-router-dom";
 
 import api from "../../api/client";
@@ -48,7 +49,7 @@ const statusChip = (status: string) => {
       label={status || "Paid"}
       size="small"
       color={isPaid ? "success" : isPartial ? "warning" : "default"}
-      sx={{ fontWeight: 700, fontSize: "0.75rem", height: 22 }}
+      sx={{ fontWeight: 700, fontSize: "0.72rem", height: 20 }}
     />
   );
 };
@@ -72,8 +73,22 @@ const modeChip = (mode: string) => {
   );
 };
 
+export interface PaymentGroup {
+  groupId: string;
+  voucherNo: string;
+  supplierName: string;
+  paymentDate: string;
+  paymentMode: string;
+  paymentNotes: string;
+  totalBillAmount: number;
+  totalPaidAmount: number;
+  totalBalance: number;
+  status: "Paid" | "Partial";
+  bills: any[];
+}
+
 // ──── Print Individual Payment Voucher ────
-function handlePrintPaymentVoucher(bill: any, companyData: any) {
+function handlePrintPaymentVoucher(group: PaymentGroup, companyData: any) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
 
@@ -95,20 +110,32 @@ function handlePrintPaymentVoucher(bill: any, companyData: any) {
   const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
   const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
-  const supplierName = bill.ledger_name || "Supplier / Payee";
-  const paidAmount = Number(bill.paid_amount || 0);
-  const billTotal = Number(bill.amount || 0);
-  const balance = Math.max(0, round2(billTotal - paidAmount));
-  const amountWords = toWords(paidAmount);
-  const payDate = bill.payment_date || bill.movement_date || "-";
-  const payMode = bill.payment_mode || "Bank Transfer";
-  const voucherNo = `PAY-${bill.movement_no}`;
+  const amountWords = toWords(group.totalPaidAmount);
+
+  let billsRowsHtml = "";
+  group.bills.forEach((b, idx) => {
+    const bTotal = Number(b.amount || 0);
+    const bPaid = Number(b.paid_amount || 0);
+    const bBal = Math.max(0, round2(bTotal - bPaid));
+    billsRowsHtml += `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td style="font-weight: 600;">${b.movement_no}</td>
+        <td style="text-align: center;">${b.movement_date || "—"}</td>
+        <td>${b.ref_no || "—"}</td>
+        <td>${b.stock_item_name || "Tools / Consumables Purchase"}</td>
+        <td style="text-align: right;">₹${formatAmount(bTotal)}</td>
+        <td style="text-align: right; font-weight: 700; color: #0f5132;">₹${formatAmount(bPaid)}</td>
+        <td style="text-align: right; color: ${bBal > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(bBal)}</td>
+      </tr>
+    `;
+  });
 
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Purchase Payment Voucher - ${voucherNo}</title>
+        <title>Purchase Payment Voucher - ${group.voucherNo}</title>
         <style>
           @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 15mm; }
           ${COMMON_PRINT_CSS}
@@ -151,71 +178,71 @@ function handlePrintPaymentVoucher(bill: any, companyData: any) {
 
         <div class="title-section" style="margin-top: 15px;">
           <h2 style="color: #0f5132; letter-spacing: 1px;">PURCHASE PAYMENT VOUCHER</h2>
-          <div class="doc-no">Voucher No: <strong>${voucherNo}</strong></div>
-          <div class="doc-date">Date: <strong>${payDate}</strong></div>
+          <div class="doc-no">Voucher No: <strong>${group.voucherNo}</strong></div>
+          <div class="doc-date">Date: <strong>${group.paymentDate}</strong></div>
         </div>
 
         <div class="voucher-box">
           <div class="voucher-grid">
             <div>
               <div class="voucher-label">Paid To (Supplier / Payee)</div>
-              <div class="voucher-value" style="font-size: 15px; color: #0f5132;">${supplierName}</div>
+              <div class="voucher-value" style="font-size: 15px; color: #0f5132;">${group.supplierName}</div>
             </div>
             <div>
               <div class="voucher-label">Payment Mode</div>
-              <div class="voucher-value">${payMode}</div>
+              <div class="voucher-value">${group.paymentMode}</div>
             </div>
             <div>
-              <div class="voucher-label">Against Purchase Bill No.</div>
-              <div class="voucher-value">${bill.movement_no} ${bill.ref_no ? `(Supplier Inv: ${bill.ref_no})` : ""}</div>
+              <div class="voucher-label">Total Bills Settled</div>
+              <div class="voucher-value">${group.bills.length} Bill${group.bills.length > 1 ? "s" : ""}</div>
             </div>
             <div>
-              <div class="voucher-label">Bill Date</div>
-              <div class="voucher-value">${bill.movement_date || "—"}</div>
+              <div class="voucher-label">Payment Notes / Ref</div>
+              <div class="voucher-value">${group.paymentNotes || "—"}</div>
             </div>
           </div>
         </div>
 
-        <table class="items-table" style="margin-top: 20px;">
+        <h3 style="margin-top: 20px; margin-bottom: 8px; font-size: 14px; color: #0f5132;">BILLS PAID UNDER THIS PAYMENT</h3>
+        <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important;">
             <tr>
-              <th style="width: 50px; text-align: center;">S.NO</th>
-              <th>PARTICULARS / DESCRIPTION</th>
-              <th style="width: 130px; text-align: right;">BILL AMOUNT</th>
-              <th style="width: 140px; text-align: right;">AMOUNT PAID</th>
-              <th style="width: 130px; text-align: right;">REMAINING BALANCE</th>
+              <th style="width: 40px; text-align: center;">S.NO</th>
+              <th style="width: 100px;">BILL NO</th>
+              <th style="width: 90px; text-align: center;">BILL DATE</th>
+              <th style="width: 100px;">INV REF</th>
+              <th>PARTICULARS</th>
+              <th style="width: 110px; text-align: right;">BILL AMOUNT</th>
+              <th style="width: 120px; text-align: right;">PAID (₹)</th>
+              <th style="width: 110px; text-align: right;">BALANCE</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td style="text-align: center;">1</td>
-              <td>
-                <strong>Payment towards Purchase Bill ${bill.movement_no}</strong>
-                ${bill.payment_notes ? `<div style="font-size: 11px; color: #555; margin-top: 3px;">Ref / Notes: ${bill.payment_notes}</div>` : ""}
-                ${bill.stock_item_name ? `<div style="font-size: 11px; color: #666;">Item: ${bill.stock_item_name}</div>` : ""}
-              </td>
-              <td style="text-align: right;">₹${formatAmount(billTotal)}</td>
-              <td style="text-align: right; font-weight: 700; color: #0f5132; font-size: 14px;">₹${formatAmount(paidAmount)}</td>
-              <td style="text-align: right; color: ${balance > 0 ? '#dc3545' : '#198754'}; font-weight: 600;">
-                ₹${formatAmount(balance)}
-              </td>
-            </tr>
+            ${billsRowsHtml}
           </tbody>
+          <tfoot style="font-weight: 700; background-color: #f4f9f6;">
+            <tr>
+              <td colspan="5" style="text-align: right;">Total Amount:</td>
+              <td style="text-align: right;">₹${formatAmount(group.totalBillAmount)}</td>
+              <td style="text-align: right; color: #0f5132; font-size: 13px;">₹${formatAmount(group.totalPaidAmount)}</td>
+              <td style="text-align: right; color: ${group.totalBalance > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(group.totalBalance)}</td>
+            </tr>
+          </tfoot>
         </table>
 
         <div class="totals-section">
           <div class="calculation-box">
             <div class="calculation-row">
-              <span>Total Bill Value:</span>
-              <span>₹${formatAmount(billTotal)}</span>
+              <span>Total Bills Value:</span>
+              <span>₹${formatAmount(group.totalBillAmount)}</span>
             </div>
             <div class="calculation-row grand-total" style="background-color: #e8f5e9 !important;">
               <span>Total Paid Amount:</span>
-              <span style="color: #0f5132;">₹${formatAmount(paidAmount)}</span>
+              <span style="color: #0f5132;">₹${formatAmount(group.totalPaidAmount)}</span>
             </div>
             <div class="calculation-row">
               <span>Remaining Pending Balance:</span>
-              <span>₹${formatAmount(balance)}</span>
+              <span>₹${formatAmount(group.totalBalance)}</span>
             </div>
           </div>
         </div>
@@ -252,7 +279,7 @@ function handlePrintPaymentVoucher(bill: any, companyData: any) {
 }
 
 // ──── Print Full Payments Register ────
-function handlePrintPaymentsRegister(payments: any[], companyData: any, summary: any) {
+function handlePrintPaymentsRegister(groups: PaymentGroup[], companyData: any, summary: any) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
 
@@ -275,24 +302,23 @@ function handlePrintPaymentsRegister(payments: any[], companyData: any, summary:
   const cTax = compData?.gstin ? `GSTIN: ${compData.gstin}` : "";
 
   let rowsHtml = "";
-  payments.forEach((p, idx) => {
-    const billTotal = Number(p.amount || 0);
-    const paidAmt = Number(p.paid_amount || 0);
-    const bal = Math.max(0, round2(billTotal - paidAmt));
+  let idx = 1;
 
+  groups.forEach((g) => {
+    // Master Group row
+    const billsList = g.bills.map((b) => `${b.movement_no} (₹${formatAmount(b.paid_amount)})`).join(", ");
     rowsHtml += `
-      <tr>
-        <td style="text-align: center;">${idx + 1}</td>
-        <td style="text-align: center;">${p.payment_date || p.movement_date || "-"}</td>
-        <td style="font-weight: 600;">PAY-${p.movement_no}</td>
-        <td>${p.movement_no}</td>
-        <td>${p.ref_no || "—"}</td>
-        <td style="font-weight: 600;">${p.ledger_name || "—"}</td>
-        <td style="text-align: center;">${p.payment_mode || "Direct"}</td>
-        <td style="text-align: right;">₹${formatAmount(billTotal)}</td>
-        <td style="text-align: right; font-weight: 700; color: #0f5132;">₹${formatAmount(paidAmt)}</td>
-        <td style="text-align: right; color: ${bal > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(bal)}</td>
-        <td style="text-align: center;">${p.payment_status || "Paid"}</td>
+      <tr style="background-color: #f8faf9; font-weight: 600;">
+        <td style="text-align: center;">${idx++}</td>
+        <td style="text-align: center;">${g.paymentDate}</td>
+        <td style="font-weight: 700; color: #0f5132;">${g.voucherNo}</td>
+        <td style="font-weight: 700;">${g.supplierName}</td>
+        <td style="text-align: center;">${g.paymentMode}</td>
+        <td>${billsList}</td>
+        <td style="text-align: right;">₹${formatAmount(g.totalBillAmount)}</td>
+        <td style="text-align: right; font-weight: 700; color: #0f5132;">₹${formatAmount(g.totalPaidAmount)}</td>
+        <td style="text-align: right; color: ${g.totalBalance > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(g.totalBalance)}</td>
+        <td style="text-align: center;">${g.status}</td>
       </tr>
     `;
   });
@@ -320,25 +346,24 @@ function handlePrintPaymentsRegister(payments: any[], companyData: any, summary:
         </div>
 
         <div class="title-section" style="margin-top: 15px;">
-          <h2>PURCHASE PAYMENTS REGISTER</h2>
-          <div class="doc-no">Total Records: ${payments.length}</div>
+          <h2>PURCHASE PAYMENTS REGISTER (BILL-WISE BREAKDOWN)</h2>
+          <div class="doc-no">Total Payment Records: ${groups.length}</div>
           <div class="doc-date">Generated: ${new Date().toLocaleDateString("en-IN")}</div>
         </div>
 
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important;">
             <tr>
-              <th style="width: 40px; text-align: center;">S.NO</th>
-              <th style="width: 90px; text-align: center;">DATE</th>
-              <th style="width: 120px;">VOUCHER NO</th>
-              <th style="width: 110px;">BILL NO</th>
-              <th style="width: 100px;">INV REF</th>
-              <th>SUPPLIER NAME</th>
-              <th style="width: 100px; text-align: center;">MODE</th>
-              <th style="width: 110px; text-align: right;">BILL TOTAL</th>
-              <th style="width: 115px; text-align: right;">PAID (₹)</th>
-              <th style="width: 110px; text-align: right;">BALANCE</th>
-              <th style="width: 80px; text-align: center;">STATUS</th>
+              <th style="width: 35px; text-align: center;">#</th>
+              <th style="width: 85px; text-align: center;">DATE</th>
+              <th style="width: 130px;">VOUCHER NO</th>
+              <th style="width: 140px;">SUPPLIER NAME</th>
+              <th style="width: 95px; text-align: center;">MODE</th>
+              <th>BILLS PAID (BILL NO & AMOUNT)</th>
+              <th style="width: 105px; text-align: right;">BILLS TOTAL</th>
+              <th style="width: 110px; text-align: right;">PAID (₹)</th>
+              <th style="width: 100px; text-align: right;">BALANCE</th>
+              <th style="width: 75px; text-align: center;">STATUS</th>
             </tr>
           </thead>
           <tbody>
@@ -346,7 +371,7 @@ function handlePrintPaymentsRegister(payments: any[], companyData: any, summary:
           </tbody>
           <tfoot style="font-weight: 700; background-color: #f4f9f6;">
             <tr>
-              <td colspan="7" style="text-align: right;">Register Grand Totals:</td>
+              <td colspan="6" style="text-align: right;">Register Grand Totals:</td>
               <td style="text-align: right;">₹${formatAmount(summary.totalBillAmount)}</td>
               <td style="text-align: right; color: #0f5132; font-size: 13px;">₹${formatAmount(summary.totalPaidAmount)}</td>
               <td style="text-align: right; color: #dc3545;">₹${formatAmount(summary.totalBalance)}</td>
@@ -374,58 +399,91 @@ function handlePrintPaymentsRegister(payments: any[], companyData: any, summary:
   printWindow.document.close();
 }
 
-// ──── Edit / Correct Paid Amount Dialog ────
-interface EditPaidAmountDialogProps {
+// ──── Multi-Bill Payment Allocation Dialog ────
+interface EditPaymentAllocationDialogProps {
   open: boolean;
   onClose: () => void;
-  bill: any | null;
+  group: PaymentGroup | null;
   onSuccess?: () => void;
 }
 
-function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmountDialogProps) {
+function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPaymentAllocationDialogProps) {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
 
-  const [paidAmountStr, setPaidAmountStr] = useState<string>("");
   const [paymentDate, setPaymentDate] = useState<string>("");
   const [paymentMode, setPaymentMode] = useState<string>("Bank Transfer");
   const [paymentNotes, setPaymentNotes] = useState<string>("");
+  const [allocations, setAllocations] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    if (bill && open) {
-      setPaidAmountStr(String(Number(bill.paid_amount || 0)));
-      setPaymentDate(bill.payment_date || bill.movement_date || new Date().toISOString().split("T")[0]);
-      setPaymentMode(bill.payment_mode || "Bank Transfer");
-      setPaymentNotes(bill.payment_notes || "");
+    if (group && open) {
+      setPaymentDate(group.paymentDate || new Date().toISOString().split("T")[0]);
+      setPaymentMode(group.paymentMode || "Bank Transfer");
+      setPaymentNotes(group.paymentNotes || "");
+
+      const allocMap: Record<number, string> = {};
+      group.bills.forEach((b) => {
+        allocMap[b.id] = String(round2(Number(b.paid_amount || 0)));
+      });
+      setAllocations(allocMap);
     }
-  }, [bill, open]);
+  }, [group, open]);
 
-  const billTotal = Number(bill?.amount || 0);
-  const newPaidAmount = round2(Number(paidAmountStr) || 0);
-  const newPending = round2(Math.max(0, billTotal - newPaidAmount));
-  const newStatus =
-    newPaidAmount <= 0.001
-      ? "Unpaid"
-      : billTotal - newPaidAmount <= 0.01
-      ? "Paid"
-      : "Partial";
+  const totalAllocated = useMemo(() => {
+    return round2(
+      Object.values(allocations).reduce((sum, v) => sum + (Number(v) || 0), 0)
+    );
+  }, [allocations]);
 
-  const editMutation = useMutation({
+  const handleBillPaidChange = (billId: number, valStr: string, maxBill: number) => {
+    const num = Number(valStr);
+    if (valStr !== "" && !isNaN(num)) {
+      if (num > maxBill) {
+        valStr = String(maxBill);
+      } else if (num < 0) {
+        valStr = "0";
+      }
+    }
+    setAllocations((prev) => ({ ...prev, [billId]: valStr }));
+  };
+
+  const handleSetFull = (billId: number, billTotal: number) => {
+    setAllocations((prev) => ({ ...prev, [billId]: String(billTotal) }));
+  };
+
+  const handleResetZero = (billId: number) => {
+    setAllocations((prev) => ({ ...prev, [billId]: "0" }));
+  };
+
+  const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!bill) return;
-      if (newPaidAmount < 0) {
-        throw new Error("Paid amount cannot be negative.");
-      }
-      if (newPaidAmount > billTotal + 0.01) {
-        throw new Error(`Paid amount cannot exceed total bill amount (${RUPEE}${formatAmount(billTotal)}).`);
-      }
+      if (!group) return;
 
-      await api.patch(`/stock/inventory/movements/${bill.id}/payment?fy=${activeFY}`, {
-        paid_amount: newPaidAmount,
-        payment_status: newStatus,
-        payment_date: newPaidAmount > 0 ? paymentDate || null : null,
-        payment_mode: newPaidAmount > 0 ? paymentMode || null : null,
+      const allocList = group.bills.map((b) => {
+        const valStr = allocations[b.id] !== undefined ? allocations[b.id] : String(b.paid_amount || 0);
+        const newPaid = round2(Number(valStr) || 0);
+        const bTotal = Number(b.amount || 0);
+        const newStatus =
+          newPaid <= 0.001
+            ? "Unpaid"
+            : bTotal - newPaid <= 0.01
+            ? "Paid"
+            : "Partial";
+
+        return {
+          movement_id: b.id,
+          allocated_amount: newPaid,
+          paid_amount: newPaid,
+          payment_status: newStatus,
+        };
+      });
+
+      await api.post(`/stock/inventory/movements/batch-payment?fy=${activeFY}`, {
+        payment_date: paymentDate || null,
+        payment_mode: paymentMode || null,
         payment_notes: paymentNotes || null,
+        allocations: allocList,
       });
     },
     onSuccess: () => {
@@ -435,100 +493,23 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
       onClose();
     },
     onError: (err: any) => {
-      alert(err.response?.data?.detail || err.message || "Failed to update payment details.");
+      alert(err.response?.data?.detail || err.message || "Failed to update payment allocations.");
     },
   });
 
-  if (!bill) return null;
+  if (!group) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 1, fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Edit / Correct Purchase Payment</span>
-        <Chip label={bill.movement_no} color="primary" variant="outlined" size="small" sx={{ fontWeight: 700 }} />
+        <span>Edit Bill-Wise Payment Allocation</span>
+        <Chip label={group.supplierName} color="primary" variant="outlined" size="small" sx={{ fontWeight: 700 }} />
       </DialogTitle>
       <Divider />
-      <DialogContent sx={{ pt: 2.5 }}>
-        {/* Bill Info Card */}
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            mb: 2.5,
-            borderRadius: 2,
-            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f8faf9"),
-          }}
-        >
-          <Grid container spacing={1.5}>
-            <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">Supplier / Party</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>{bill.ledger_name || "—"}</Typography>
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">Bill Date</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>{bill.movement_date || "—"}</Typography>
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">Total Bill Amount</Typography>
-              <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                {RUPEE}{formatAmount(billTotal)}
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <Typography variant="caption" color="text.secondary">Current Recorded Paid</Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 700, color: Number(bill.paid_amount || 0) > 0 ? "success.main" : "text.secondary" }}
-              >
-                {RUPEE}{formatAmount(Number(bill.paid_amount || 0))}
-              </Typography>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Quick Correction Shortcuts */}
-        <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap", alignItems: "center" }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary", mr: 0.5 }}>
-            Quick Shortcuts:
-          </Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            color="error"
-            onClick={() => setPaidAmountStr("0")}
-            sx={{ textTransform: "none", fontSize: 11.5, py: 0.3, px: 1.2, borderRadius: "6px" }}
-          >
-            Reset to ₹0 (Unpaid)
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            color="success"
-            onClick={() => setPaidAmountStr(String(billTotal))}
-            sx={{ textTransform: "none", fontSize: 11.5, py: 0.3, px: 1.2, borderRadius: "6px" }}
-          >
-            Full Payment ({RUPEE}{formatAmount(billTotal)})
-          </Button>
-        </Box>
-
-        {/* Form Inputs */}
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label="Paid Amount (₹) *"
-              type="number"
-              fullWidth
-              size="small"
-              value={paidAmountStr}
-              onChange={(e) => setPaidAmountStr(e.target.value)}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { step: "0.01", min: 0, max: billTotal },
-              }}
-              helperText={`Max: ${RUPEE}${formatAmount(billTotal)}`}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+      <DialogContent sx={{ pt: 2 }}>
+        {/* Global Payment Header Details */}
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <TextField
               label="Payment Date *"
               type="date"
@@ -536,11 +517,10 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
               size="small"
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
-              disabled={newPaidAmount <= 0}
               slotProps={{ inputLabel: { shrink: true } }}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <TextField
               select
               label="Payment Mode *"
@@ -548,7 +528,6 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
               size="small"
               value={paymentMode}
               onChange={(e) => setPaymentMode(e.target.value)}
-              disabled={newPaidAmount <= 0}
               slotProps={{ inputLabel: { shrink: true } }}
             >
               {PAYMENT_MODE_OPTIONS.map((m) => (
@@ -556,9 +535,9 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
               ))}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <TextField
-              label="Payment Notes / Narration"
+              label="Payment Notes / Transaction Ref"
               fullWidth
               size="small"
               placeholder="e.g. Bank Ref / Cheque No"
@@ -569,30 +548,130 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
           </Grid>
         </Grid>
 
-        {/* Live Calculation Preview */}
+        {/* Bill-Wise Allocation Table */}
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "text.primary" }}>
+          Which Bill Which Amount is Paid:
+        </Typography>
+        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden", mb: 2 }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#f8faf9" }}>
+                <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 110 }}>Bill No</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 100 }}>Bill Date</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Bill Amount</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 160 }}>Paid Amount (₹) *</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 110 }}>Balance</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 90 }}>Status</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 120 }}>Quick Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {group.bills.map((bill, i) => {
+                const bTotal = Number(bill.amount || 0);
+                const curPaidStr = allocations[bill.id] !== undefined ? allocations[bill.id] : String(bill.paid_amount || 0);
+                const curPaidNum = round2(Number(curPaidStr) || 0);
+                const pending = Math.max(0, round2(bTotal - curPaidNum));
+                const resultingStatus =
+                  curPaidNum <= 0.001
+                    ? "Unpaid"
+                    : bTotal - curPaidNum <= 0.01
+                    ? "Paid"
+                    : "Partial";
+
+                return (
+                  <TableRow key={bill.id} hover>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: "primary.main" }}>{bill.movement_no}</TableCell>
+                    <TableCell>{bill.movement_date || "—"}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>{RUPEE}{formatAmount(bTotal)}</TableCell>
+                    <TableCell align="right">
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={curPaidStr}
+                        onChange={(e) => handleBillPaidChange(bill.id, e.target.value, bTotal)}
+                        slotProps={{
+                          htmlInput: {
+                            step: "0.01",
+                            min: 0,
+                            max: bTotal,
+                            style: { textAlign: "right", fontWeight: 700, color: curPaidNum > 0 ? "#198754" : "inherit" },
+                          },
+                        }}
+                        sx={{ width: 130 }}
+                      />
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: pending > 0.01 ? "#dc3545" : "success.main" }}>
+                      {RUPEE}{formatAmount(pending)}
+                    </TableCell>
+                    <TableCell align="center">
+                      {statusChip(resultingStatus)}
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box sx={{ display: "flex", gap: 0.5, justifyContent: "center" }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="success"
+                          onClick={() => handleSetFull(bill.id, bTotal)}
+                          sx={{ textTransform: "none", fontSize: 10, px: 0.8, py: 0.2, minWidth: 42 }}
+                        >
+                          Full
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() => handleResetZero(bill.id)}
+                          sx={{ textTransform: "none", fontSize: 10, px: 0.8, py: 0.2, minWidth: 42 }}
+                        >
+                          ₹0
+                        </Button>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+            <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
+              <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
+                <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Total Bills:</TableCell>
+                <TableCell align="right" sx={{ fontSize: 12.5 }}>{RUPEE}{formatAmount(group.totalBillAmount)}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 13.5, color: "success.main" }}>
+                  {RUPEE}{formatAmount(totalAllocated)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontSize: 12.5, color: (group.totalBillAmount - totalAllocated) > 0.01 ? "#dc3545" : "success.main" }}>
+                  {RUPEE}{formatAmount(Math.max(0, round2(group.totalBillAmount - totalAllocated)))}
+                </TableCell>
+                <TableCell colSpan={2} />
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </Paper>
+
+        {/* Total Payment Amount Summary Strip */}
         <Box
           sx={{
-            mt: 2.5,
             p: 1.5,
             borderRadius: 2,
-            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "#f0fdf4"),
+            bgcolor: (t) => t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.1)" : "#f0fdf4",
             border: "1px solid",
-            borderColor: (t) => (t.palette.mode === "dark" ? "divider" : "#bbf7d0"),
+            borderColor: (t) => t.palette.mode === "dark" ? "divider" : "#bbf7d0",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
           }}
         >
           <Box>
-            <Typography variant="caption" color="text.secondary">Remaining Balance</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: newPending > 0.01 ? "#dc3545" : "success.main" }}>
-              {RUPEE}{formatAmount(newPending)}
+            <Typography variant="caption" color="text.secondary">Total Allocated Payment</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main" }}>
+              {RUPEE}{formatAmount(totalAllocated)}
             </Typography>
           </Box>
-          <Box sx={{ textAlign: "right" }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>Updated Status</Typography>
-            {statusChip(newStatus)}
-          </Box>
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
+            Updating will adjust paid balances across {group.bills.length} bill{group.bills.length > 1 ? "s" : ""}.
+          </Typography>
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -600,42 +679,31 @@ function EditPaidAmountDialog({ open, onClose, bill, onSuccess }: EditPaidAmount
           Cancel
         </Button>
         <Button
-          onClick={() => editMutation.mutate()}
+          onClick={() => saveMutation.mutate()}
           variant="contained"
           size="small"
           color="primary"
-          disabled={editMutation.isPending || newPaidAmount < 0 || newPaidAmount > billTotal + 0.01}
+          disabled={saveMutation.isPending}
           startIcon={<Edit fontSize="small" />}
         >
-          {editMutation.isPending ? "Saving..." : "Update Payment"}
+          {saveMutation.isPending ? "Updating..." : `Save Payment (${RUPEE}${formatAmount(totalAllocated)})`}
         </Button>
       </DialogActions>
     </Dialog>
   );
 }
 
-// ──── View Payment & Bill Details Dialog ────
+// ──── View Payment Details Dialog ────
 interface ViewPaymentDetailsDialogProps {
   open: boolean;
   onClose: () => void;
-  bill: any | null;
-  onEdit?: (bill: any) => void;
-  onPrint?: (bill: any) => void;
+  group: PaymentGroup | null;
+  onEdit?: (group: PaymentGroup) => void;
+  onPrint?: (group: PaymentGroup) => void;
 }
 
-function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: ViewPaymentDetailsDialogProps) {
-  if (!bill) return null;
-
-  const billTotal = Number(bill.amount || 0);
-  const paidAmt = Number(bill.paid_amount || 0);
-  const balance = Math.max(0, round2(billTotal - paidAmt));
-
-  let itemsList: any[] = [];
-  if (typeof bill.items === "string") {
-    try { itemsList = JSON.parse(bill.items); } catch (e) {}
-  } else if (Array.isArray(bill.items)) {
-    itemsList = bill.items;
-  }
+function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: ViewPaymentDetailsDialogProps) {
+  if (!group) return null;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -643,20 +711,20 @@ function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: View
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Payment color="primary" />
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Payment & Bill Details — {bill.movement_no}
+            Payment Details — {group.voucherNo}
           </Typography>
         </Box>
-        {statusChip(bill.payment_status)}
+        {statusChip(group.status)}
       </DialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2.5 }}>
-        {/* Main Info Grid */}
+        {/* Info Grid */}
         <Grid container spacing={2} sx={{ mb: 2.5 }}>
           <Grid size={{ xs: 12, sm: 4 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">Supplier Name</Typography>
+              <Typography variant="caption" color="text.secondary">Supplier / Party</Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
-                {bill.ledger_name || "—"}
+                {group.supplierName}
               </Typography>
             </Paper>
           </Grid>
@@ -664,7 +732,7 @@ function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: View
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">Payment Voucher No</Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "primary.main" }}>
-                PAY-{bill.movement_no}
+                {group.voucherNo}
               </Typography>
             </Paper>
           </Grid>
@@ -672,29 +740,29 @@ function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: View
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">Payment Date</Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {bill.payment_date || bill.movement_date || "—"}
+                {group.paymentDate}
               </Typography>
             </Paper>
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
               <Typography variant="caption" color="text.secondary">Payment Mode</Typography>
-              <Box sx={{ mt: 0.5 }}>{modeChip(bill.payment_mode || "Direct Payment")}</Box>
+              <Box sx={{ mt: 0.5 }}>{modeChip(group.paymentMode)}</Box>
             </Paper>
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">Supplier Invoice Ref</Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {bill.ref_no || "—"}
+              <Typography variant="caption" color="text.secondary">Bills Settled</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                {group.bills.length} Bill{group.bills.length > 1 ? "s" : ""}
               </Typography>
             </Paper>
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">Purchase Bill Date</Typography>
+              <Typography variant="caption" color="text.secondary">Notes / Narration</Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {bill.movement_date || "—"}
+                {group.paymentNotes || "—"}
               </Typography>
             </Paper>
           </Grid>
@@ -713,74 +781,64 @@ function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: View
         >
           <Grid container spacing={2} sx={{ alignItems: "center" }}>
             <Grid size={{ xs: 4 }} sx={{ textAlign: "center" }}>
-              <Typography variant="caption" color="text.secondary">Total Bill Amount</Typography>
+              <Typography variant="caption" color="text.secondary">Total Invoiced Amount</Typography>
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {RUPEE}{formatAmount(billTotal)}
+                {RUPEE}{formatAmount(group.totalBillAmount)}
               </Typography>
             </Grid>
             <Grid size={{ xs: 4 }} sx={{ textAlign: "center", borderLeft: "1px solid", borderRight: "1px solid", borderColor: "divider" }}>
-              <Typography variant="caption" color="text.secondary">Amount Paid</Typography>
+              <Typography variant="caption" color="text.secondary">Total Amount Paid</Typography>
               <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main" }}>
-                {RUPEE}{formatAmount(paidAmt)}
+                {RUPEE}{formatAmount(group.totalPaidAmount)}
               </Typography>
             </Grid>
             <Grid size={{ xs: 4 }} sx={{ textAlign: "center" }}>
               <Typography variant="caption" color="text.secondary">Remaining Balance</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: balance > 0.01 ? "#dc3545" : "success.main" }}>
-                {RUPEE}{formatAmount(balance)}
+              <Typography variant="h6" sx={{ fontWeight: 800, color: group.totalBalance > 0.01 ? "#dc3545" : "success.main" }}>
+                {RUPEE}{formatAmount(group.totalBalance)}
               </Typography>
             </Grid>
           </Grid>
         </Paper>
 
-        {/* Payment Notes */}
-        {bill.payment_notes && (
-          <Paper variant="outlined" sx={{ p: 1.5, mb: 2.5, borderRadius: 2, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "#fff8e1" }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>Payment Notes / Transaction Ref:</Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, fontStyle: "italic" }}>
-              "{bill.payment_notes}"
-            </Typography>
-          </Paper>
-        )}
-
-        {/* Purchased Items List */}
+        {/* Bill-Wise Breakdown Table */}
         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-          Purchased Items in this Bill:
+          Bills Paid and Amounts:
         </Typography>
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
           <Table size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "#f8faf9" }}>
                 <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Item Description</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Quantity</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Rate (₹)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>GST %</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Amount (₹)</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Bill No</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Bill Date</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Inv Ref</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Bill Total (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Amount Paid (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Balance (₹)</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {itemsList.length > 0 ? (
-                itemsList.map((item: any, i: number) => (
-                  <TableRow key={i} hover>
+              {group.bills.map((b, i) => {
+                const bTotal = Number(b.amount || 0);
+                const bPaid = Number(b.paid_amount || 0);
+                const bBal = Math.max(0, round2(bTotal - bPaid));
+                return (
+                  <TableRow key={b.id} hover>
                     <TableCell>{i + 1}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{item.stock_item_name || item.name || bill.stock_item_name || "Stock Item"}</TableCell>
-                    <TableCell align="right">{item.quantity || "—"}</TableCell>
-                    <TableCell align="right">{item.rate ? `₹${formatAmount(item.rate)}` : "—"}</TableCell>
-                    <TableCell align="right">{item.gst_percent ? `${item.gst_percent}%` : "—"}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>₹{formatAmount(item.amount || (Number(item.quantity || 0) * Number(item.rate || 0)))}</TableCell>
+                    <TableCell sx={{ fontWeight: 700, color: "primary.main" }}>{b.movement_no}</TableCell>
+                    <TableCell>{b.movement_date || "—"}</TableCell>
+                    <TableCell>{b.ref_no || "—"}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>{RUPEE}{formatAmount(bTotal)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: "success.main" }}>{RUPEE}{formatAmount(bPaid)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: bBal > 0.01 ? "#dc3545" : "success.main" }}>
+                      {RUPEE}{formatAmount(bBal)}
+                    </TableCell>
+                    <TableCell align="center">{statusChip(b.payment_status)}</TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell>1</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{bill.stock_item_name || "Tools / Consumables Purchase"}</TableCell>
-                  <TableCell align="right">{bill.quantity || "—"}</TableCell>
-                  <TableCell align="right">{bill.rate ? `₹${formatAmount(bill.rate)}` : "—"}</TableCell>
-                  <TableCell align="right">—</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>₹{formatAmount(bill.amount)}</TableCell>
-                </TableRow>
-              )}
+                );
+              })}
             </TableBody>
           </Table>
         </Paper>
@@ -792,9 +850,9 @@ function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: View
               variant="outlined"
               size="small"
               startIcon={<Print />}
-              onClick={() => onPrint(bill)}
+              onClick={() => onPrint(group)}
             >
-              Print Payment Voucher
+              Print Voucher
             </Button>
           )}
           {onEdit && (
@@ -805,10 +863,10 @@ function ViewPaymentDetailsDialog({ open, onClose, bill, onEdit, onPrint }: View
               startIcon={<Edit />}
               onClick={() => {
                 onClose();
-                onEdit(bill);
+                onEdit(group);
               }}
             >
-              Edit Payment
+              Edit Allocation
             </Button>
           )}
         </Box>
@@ -826,11 +884,14 @@ export default function PurchasePaymentsPage() {
   const navigate = useNavigate();
 
   // Dialog States
-  const [editingBill, setEditingBill] = useState<any | null>(null);
+  const [editingGroup, setEditingGroup] = useState<PaymentGroup | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const [viewingBill, setViewingBill] = useState<any | null>(null);
+  const [viewingGroup, setViewingGroup] = useState<PaymentGroup | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
+
+  // Expandable row state: map of groupId -> boolean
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   // Filter States
   const [search, setSearch] = useState("");
@@ -856,55 +917,134 @@ export default function PurchasePaymentsPage() {
     return movements.filter((m: any) => Number(m.paid_amount || 0) > 0);
   }, [movements]);
 
+  // Group paid movements into unified Payment Groups (by supplier, date, mode, notes)
+  const paymentGroups = useMemo<PaymentGroup[]>(() => {
+    const groupsMap: Record<string, any[]> = {};
+
+    paidMovements.forEach((m: any) => {
+      const sName = m.ledger_name || "Unknown Supplier";
+      const pDate = m.payment_date || m.movement_date || "—";
+      const pMode = m.payment_mode || "Direct Payment";
+      const pNotes = (m.payment_notes || "").trim();
+
+      // Compound key for grouping bills paid in the same transaction
+      const groupKey = `${sName}__${pDate}__${pMode}__${pNotes}`;
+      if (!groupsMap[groupKey]) {
+        groupsMap[groupKey] = [];
+      }
+      groupsMap[groupKey].push(m);
+    });
+
+    return Object.entries(groupsMap).map(([groupId, bills]) => {
+      const first = bills[0];
+      const supplierName = first.ledger_name || "Unknown Supplier";
+      const paymentDate = first.payment_date || first.movement_date || "—";
+      const paymentMode = first.payment_mode || "Direct Payment";
+      const paymentNotes = (first.payment_notes || "").trim();
+
+      let totalBillAmount = 0;
+      let totalPaidAmount = 0;
+
+      bills.forEach((b: any) => {
+        totalBillAmount += Number(b.amount || 0);
+        totalPaidAmount += Number(b.paid_amount || 0);
+      });
+
+      totalBillAmount = round2(totalBillAmount);
+      totalPaidAmount = round2(totalPaidAmount);
+      const totalBalance = Math.max(0, round2(totalBillAmount - totalPaidAmount));
+      const status: "Paid" | "Partial" = totalBalance <= 0.01 ? "Paid" : "Partial";
+
+      const voucherNo = bills.length === 1
+        ? `PAY-${first.movement_no}`
+        : `PAY-${first.movement_no}+${bills.length - 1}`;
+
+      return {
+        groupId,
+        voucherNo,
+        supplierName,
+        paymentDate,
+        paymentMode,
+        paymentNotes,
+        totalBillAmount,
+        totalPaidAmount,
+        totalBalance,
+        status,
+        bills,
+      };
+    }).sort((a, b) => (a.paymentDate < b.paymentDate ? 1 : -1));
+  }, [paidMovements]);
+
+  // Expand / collapse all rows
+  const handleToggleExpandAll = () => {
+    const allExpanded = paymentGroups.length > 0 && paymentGroups.every((g) => expandedGroups[g.groupId]);
+    if (allExpanded) {
+      setExpandedGroups({});
+    } else {
+      const nextMap: Record<string, boolean> = {};
+      paymentGroups.forEach((g) => {
+        nextMap[g.groupId] = true;
+      });
+      setExpandedGroups(nextMap);
+    }
+  };
+
+  const handleToggleRow = (groupId: string) => {
+    setExpandedGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  };
+
   // Unique suppliers list for filter dropdown
   const uniqueSuppliers = useMemo(() => {
     const set = new Set<string>();
-    paidMovements.forEach((m: any) => {
-      if (m.ledger_name) set.add(m.ledger_name);
-    });
+    paymentGroups.forEach((g) => set.add(g.supplierName));
     return Array.from(set).sort();
-  }, [paidMovements]);
+  }, [paymentGroups]);
 
-  // Filtered payments list
-  const filteredPayments = useMemo(() => {
-    return paidMovements.filter((p: any) => {
+  // Filtered payment groups
+  const filteredGroups = useMemo(() => {
+    return paymentGroups.filter((g) => {
       // Search text filter
       if (search) {
         const q = search.toLowerCase();
         const matches =
-          (p.movement_no && String(p.movement_no).toLowerCase().includes(q)) ||
-          (p.ledger_name && String(p.ledger_name).toLowerCase().includes(q)) ||
-          (p.ref_no && String(p.ref_no).toLowerCase().includes(q)) ||
-          (p.payment_mode && String(p.payment_mode).toLowerCase().includes(q)) ||
-          (p.payment_notes && String(p.payment_notes).toLowerCase().includes(q)) ||
-          (p.stock_item_name && String(p.stock_item_name).toLowerCase().includes(q));
+          g.voucherNo.toLowerCase().includes(q) ||
+          g.supplierName.toLowerCase().includes(q) ||
+          g.paymentMode.toLowerCase().includes(q) ||
+          g.paymentNotes.toLowerCase().includes(q) ||
+          g.bills.some(
+            (b) =>
+              (b.movement_no && String(b.movement_no).toLowerCase().includes(q)) ||
+              (b.ref_no && String(b.ref_no).toLowerCase().includes(q)) ||
+              (b.stock_item_name && String(b.stock_item_name).toLowerCase().includes(q))
+          );
         if (!matches) return false;
       }
 
       // Supplier filter
-      if (supplierFilter !== "ALL" && p.ledger_name !== supplierFilter) {
+      if (supplierFilter !== "ALL" && g.supplierName !== supplierFilter) {
         return false;
       }
 
       // Mode filter
-      if (modeFilter !== "ALL" && p.payment_mode !== modeFilter) {
+      if (modeFilter !== "ALL" && g.paymentMode !== modeFilter) {
         return false;
       }
 
       // Status filter
-      if (statusFilter !== "ALL") {
-        const s = p.payment_status || "Paid";
-        if (s !== statusFilter) return false;
+      if (statusFilter !== "ALL" && g.status !== statusFilter) {
+        return false;
       }
 
       // Date range filter
-      const pDate = p.payment_date || p.movement_date;
-      if (fromDate && pDate && pDate < fromDate) return false;
-      if (toDate && pDate && pDate > toDate) return false;
+      if (fromDate && g.paymentDate && g.paymentDate < fromDate) return false;
+      if (toDate && g.paymentDate && g.paymentDate > toDate) return false;
 
       return true;
     });
-  }, [paidMovements, search, supplierFilter, modeFilter, statusFilter, fromDate, toDate]);
+  }, [paymentGroups, search, supplierFilter, modeFilter, statusFilter, fromDate, toDate]);
 
   // Summary Metrics
   const summary = useMemo(() => {
@@ -913,17 +1053,15 @@ export default function PurchasePaymentsPage() {
     let totalBalance = 0;
     let settledCount = 0;
     let partialCount = 0;
+    let totalBillsCount = 0;
 
-    filteredPayments.forEach((p: any) => {
-      const billTot = Number(p.amount || 0);
-      const paid = Number(p.paid_amount || 0);
-      const bal = Math.max(0, round2(billTot - paid));
+    filteredGroups.forEach((g) => {
+      totalPaidAmount += g.totalPaidAmount;
+      totalBillAmount += g.totalBillAmount;
+      totalBalance += g.totalBalance;
+      totalBillsCount += g.bills.length;
 
-      totalPaidAmount += paid;
-      totalBillAmount += billTot;
-      totalBalance += bal;
-
-      if (bal <= 0.01 || p.payment_status === "Paid") {
+      if (g.status === "Paid") {
         settledCount += 1;
       } else {
         partialCount += 1;
@@ -931,22 +1069,23 @@ export default function PurchasePaymentsPage() {
     });
 
     return {
-      totalPaidAmount,
-      totalBillAmount,
-      totalBalance,
+      totalPaidAmount: round2(totalPaidAmount),
+      totalBillAmount: round2(totalBillAmount),
+      totalBalance: round2(totalBalance),
       settledCount,
       partialCount,
-      totalCount: filteredPayments.length,
+      totalGroupsCount: filteredGroups.length,
+      totalBillsCount,
     };
-  }, [filteredPayments]);
+  }, [filteredGroups]);
 
-  const handleOpenEdit = (bill: any) => {
-    setEditingBill(bill);
+  const handleOpenEdit = (group: PaymentGroup) => {
+    setEditingGroup(group);
     setEditDialogOpen(true);
   };
 
-  const handleOpenView = (bill: any) => {
-    setViewingBill(bill);
+  const handleOpenView = (group: PaymentGroup) => {
+    setViewingGroup(group);
     setViewDialogOpen(true);
   };
 
@@ -967,11 +1106,15 @@ export default function PurchasePaymentsPage() {
     Boolean(fromDate) ||
     Boolean(toDate);
 
+  const areAllExpanded =
+    filteredGroups.length > 0 &&
+    filteredGroups.every((g) => expandedGroups[g.groupId]);
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <PageHeader
         title="Purchase Payments"
-        subtitle="Register of paid purchase bills and supplier payment records"
+        subtitle="Register of paid purchase bills with bill-wise payment breakdown"
         breadcrumbs={[{ label: "Purchase" }, { label: "Purchase Payments" }]}
         actions={
           <Box sx={{ display: "flex", gap: 1 }}>
@@ -979,8 +1122,8 @@ export default function PurchasePaymentsPage() {
               variant="outlined"
               size="small"
               startIcon={<Print />}
-              onClick={() => handlePrintPaymentsRegister(filteredPayments, companyData, summary)}
-              disabled={filteredPayments.length === 0}
+              onClick={() => handlePrintPaymentsRegister(filteredGroups, companyData, summary)}
+              disabled={filteredGroups.length === 0}
             >
               Print Payments Register
             </Button>
@@ -1009,25 +1152,25 @@ export default function PurchasePaymentsPage() {
 
         <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "primary.main", color: "#fff", minWidth: 140 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Payment Records
+            Payment Transactions
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
-            {summary.totalCount}
+            {summary.totalGroupsCount}
           </Typography>
         </Box>
 
         <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "#0f5132", color: "#fff", minWidth: 140 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Fully Settled Bills
+            Total Bills Settled
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
-            {summary.settledCount}
+            {summary.totalBillsCount}
           </Typography>
         </Box>
 
         <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "warning.dark", color: "#fff", minWidth: 140 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Partially Paid Bills
+            Partially Paid
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
             {summary.partialCount}
@@ -1146,33 +1289,45 @@ export default function PurchasePaymentsPage() {
               </Tooltip>
             </Grid>
           )}
+
+          <Grid size={{ xs: "auto" }} sx={{ ml: "auto" }}>
+            <Button
+              size="small"
+              variant="text"
+              startIcon={areAllExpanded ? <UnfoldLess fontSize="small" /> : <UnfoldMore fontSize="small" />}
+              onClick={handleToggleExpandAll}
+              sx={{ textTransform: "none", fontSize: 12 }}
+            >
+              {areAllExpanded ? "Collapse All" : "Expand All"}
+            </Button>
+          </Grid>
         </Grid>
       </Paper>
 
-      {/* Main Payment Records Table */}
+      {/* Main Master-Detail Payment Records Table */}
       <Paper variant="outlined" sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: 2 }}>
         {isLoading && <LinearProgress />}
         <TableContainer sx={{ flex: 1, overflow: "auto" }}>
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow sx={{ "& > th": { fontWeight: 700, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#f8faf9" } }}>
-                <TableCell sx={{ width: 45, textAlign: "center" }}>#</TableCell>
-                <TableCell sx={{ width: 110 }}>Payment Date</TableCell>
+                <TableCell sx={{ width: 44, textAlign: "center" }} />
+                <TableCell sx={{ width: 40, textAlign: "center" }}>#</TableCell>
+                <TableCell sx={{ width: 105 }}>Payment Date</TableCell>
                 <TableCell sx={{ width: 130 }}>Voucher No</TableCell>
-                <TableCell sx={{ width: 120 }}>Purchase Bill No</TableCell>
-                <TableCell sx={{ width: 110 }}>Inv Ref No</TableCell>
                 <TableCell>Supplier / Party</TableCell>
                 <TableCell sx={{ width: 110, textAlign: "center" }}>Mode</TableCell>
-                <TableCell align="right" sx={{ width: 120 }}>Bill Total</TableCell>
-                <TableCell align="right" sx={{ width: 130 }}>Paid Amount</TableCell>
-                <TableCell align="right" sx={{ width: 120 }}>Remaining</TableCell>
-                <TableCell align="center" sx={{ width: 90 }}>Status</TableCell>
-                <TableCell sx={{ width: 150 }}>Notes / Narration</TableCell>
+                <TableCell sx={{ width: 140 }}>Bills Settled</TableCell>
+                <TableCell align="right" sx={{ width: 120 }}>Bills Total</TableCell>
+                <TableCell align="right" sx={{ width: 130 }}>Total Paid</TableCell>
+                <TableCell align="right" sx={{ width: 110 }}>Balance</TableCell>
+                <TableCell align="center" sx={{ width: 85 }}>Status</TableCell>
+                <TableCell sx={{ width: 140 }}>Notes / Ref</TableCell>
                 <TableCell align="center" sx={{ width: 110 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPayments.length === 0 ? (
+              {filteredGroups.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
@@ -1212,98 +1367,187 @@ export default function PurchasePaymentsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredPayments.map((p: any, idx: number) => {
-                  const billTotal = Number(p.amount || 0);
-                  const paidAmt = Number(p.paid_amount || 0);
-                  const balance = Math.max(0, round2(billTotal - paidAmt));
-                  const payDate = p.payment_date || p.movement_date || "—";
+                filteredGroups.map((group, idx) => {
+                  const isExpanded = Boolean(expandedGroups[group.groupId]);
 
                   return (
-                    <TableRow key={p.id} hover sx={{ "&:hover": { bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "rgba(22, 196, 127, 0.04)" } }}>
-                      <TableCell align="center" sx={{ fontSize: 12, color: "text.secondary" }}>
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
-                        {payDate}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12, fontWeight: 700, color: "primary.main", whiteSpace: "nowrap" }}>
-                        PAY-{p.movement_no}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
-                        {p.movement_no}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12, color: p.ref_no ? "text.primary" : "text.secondary", whiteSpace: "nowrap" }}>
-                        {p.ref_no || "—"}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12.5, fontWeight: 700 }}>
-                        {p.ledger_name || "—"}
-                      </TableCell>
-                      <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
-                        {modeChip(p.payment_mode || "Direct")}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
-                        {RUPEE}{formatAmount(billTotal)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontSize: 13, fontWeight: 800, color: "success.main" }}>
-                        {RUPEE}{formatAmount(paidAmt)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: balance > 0.01 ? "#dc3545" : "success.main" }}>
-                        {balance > 0.01 ? `${RUPEE}${formatAmount(balance)}` : "₹0.00"}
-                      </TableCell>
-                      <TableCell align="center">
-                        {statusChip(p.payment_status || (balance <= 0.01 ? "Paid" : "Partial"))}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 11.5, color: "text.secondary", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <Tooltip title={p.payment_notes || ""}>
-                          <span>{p.payment_notes || "—"}</span>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
-                        <Box sx={{ display: "inline-flex", gap: 0.5 }}>
-                          <Tooltip title="View Details">
-                            <IconButton
-                              size="small"
-                              color="info"
-                              onClick={() => handleOpenView(p)}
-                              sx={{ p: 0.4 }}
-                            >
-                              <Visibility sx={{ fontSize: 17 }} />
-                            </IconButton>
+                    <Fragment key={group.groupId}>
+                      {/* Master Payment Row */}
+                      <TableRow
+                        hover
+                        sx={{
+                          cursor: "pointer",
+                          bgcolor: isExpanded
+                            ? (t) => t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "rgba(22, 196, 127, 0.04)"
+                            : "inherit",
+                          "& > td": { py: 1.1 },
+                        }}
+                        onClick={() => handleToggleRow(group.groupId)}
+                      >
+                        <TableCell align="center" padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleToggleRow(group.groupId)}
+                            sx={{ p: 0.3 }}
+                          >
+                            {isExpanded ? <KeyboardArrowDown /> : <KeyboardArrowRight />}
+                          </IconButton>
+                        </TableCell>
+                        <TableCell align="center" sx={{ fontSize: 12, color: "text.secondary" }}>
+                          {idx + 1}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {group.paymentDate}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 12, fontWeight: 700, color: "primary.main", whiteSpace: "nowrap" }}>
+                          {group.voucherNo}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                          {group.supplierName}
+                        </TableCell>
+                        <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
+                          {modeChip(group.paymentMode)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                          <Chip
+                            label={`${group.bills.length} Bill${group.bills.length > 1 ? "s" : ""}`}
+                            size="small"
+                            color="info"
+                            variant="outlined"
+                            sx={{ fontWeight: 700, height: 21, fontSize: "0.72rem" }}
+                          />
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
+                          {RUPEE}{formatAmount(group.totalBillAmount)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontSize: 13, fontWeight: 800, color: "success.main" }}>
+                          {RUPEE}{formatAmount(group.totalPaidAmount)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: group.totalBalance > 0.01 ? "#dc3545" : "success.main" }}>
+                          {group.totalBalance > 0.01 ? `${RUPEE}${formatAmount(group.totalBalance)}` : "₹0.00"}
+                        </TableCell>
+                        <TableCell align="center">
+                          {statusChip(group.status)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 11.5, color: "text.secondary", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <Tooltip title={group.paymentNotes || ""}>
+                            <span>{group.paymentNotes || "—"}</span>
                           </Tooltip>
+                        </TableCell>
+                        <TableCell align="center" sx={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                          <Box sx={{ display: "inline-flex", gap: 0.5 }}>
+                            <Tooltip title="View Bill-Wise Details">
+                              <IconButton
+                                size="small"
+                                color="info"
+                                onClick={() => handleOpenView(group)}
+                                sx={{ p: 0.4 }}
+                              >
+                                <Visibility sx={{ fontSize: 17 }} />
+                              </IconButton>
+                            </Tooltip>
 
-                          <Tooltip title="Edit / Correct Payment">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleOpenEdit(p)}
-                              sx={{ p: 0.4 }}
-                            >
-                              <Edit sx={{ fontSize: 17 }} />
-                            </IconButton>
-                          </Tooltip>
+                            <Tooltip title="Edit Bill-Wise Payment Allocation">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleOpenEdit(group)}
+                                sx={{ p: 0.4 }}
+                              >
+                                <Edit sx={{ fontSize: 17 }} />
+                              </IconButton>
+                            </Tooltip>
 
-                          <Tooltip title="Print Payment Voucher">
-                            <IconButton
-                              size="small"
-                              color="success"
-                              onClick={() => handlePrintPaymentVoucher(p, companyData)}
-                              sx={{ p: 0.4 }}
-                            >
-                              <Print sx={{ fontSize: 17 }} />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
+                            <Tooltip title="Print Payment Voucher">
+                              <IconButton
+                                size="small"
+                                color="success"
+                                onClick={() => handlePrintPaymentVoucher(group, companyData)}
+                                sx={{ p: 0.4 }}
+                              >
+                                <Print sx={{ fontSize: 17 }} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Expandable Nested Breakdown: Which Bill Which Amount is Paid */}
+                      <TableRow sx={{ "& > td": { py: 0, borderBottom: isExpanded ? "1px solid" : "none", borderColor: "divider" } }}>
+                        <TableCell colSpan={13} sx={{ p: 0, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(0,0,0,0.18)" : "#fdfefe" }}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ py: 1.5, px: 3, pl: 6 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: "primary.main", textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 0.75 }}>
+                                Bills Paid under this Payment ({group.bills.length} Bill{group.bills.length > 1 ? "s" : ""}):
+                              </Typography>
+                              <Paper variant="outlined" sx={{ borderRadius: 1.5, overflow: "hidden", bgcolor: "background.paper" }}>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#f4f9f6" }}>
+                                      <TableCell sx={{ fontWeight: 700, width: 40, fontSize: 11.5 }}>#</TableCell>
+                                      <TableCell sx={{ fontWeight: 700, width: 120, fontSize: 11.5 }}>Purchase Bill No</TableCell>
+                                      <TableCell sx={{ fontWeight: 700, width: 100, fontSize: 11.5 }}>Bill Date</TableCell>
+                                      <TableCell sx={{ fontWeight: 700, width: 110, fontSize: 11.5 }}>Inv Ref No</TableCell>
+                                      <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Item / Particulars</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 700, width: 120, fontSize: 11.5 }}>Bill Total (₹)</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 700, width: 130, fontSize: 11.5, color: "success.main" }}>
+                                        Amount Paid (₹)
+                                      </TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 700, width: 110, fontSize: 11.5 }}>Balance (₹)</TableCell>
+                                      <TableCell align="center" sx={{ fontWeight: 700, width: 90, fontSize: 11.5 }}>Bill Status</TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {group.bills.map((bill: any, bIdx: number) => {
+                                      const bTotal = Number(bill.amount || 0);
+                                      const bPaid = Number(bill.paid_amount || 0);
+                                      const bBal = Math.max(0, round2(bTotal - bPaid));
+
+                                      return (
+                                        <TableRow key={bill.id} hover sx={{ "& > td": { py: 0.6 } }}>
+                                          <TableCell sx={{ fontSize: 11.5, color: "text.secondary" }}>{bIdx + 1}</TableCell>
+                                          <TableCell sx={{ fontSize: 12, fontWeight: 700, color: "primary.main" }}>
+                                            {bill.movement_no}
+                                          </TableCell>
+                                          <TableCell sx={{ fontSize: 11.5 }}>{bill.movement_date || "—"}</TableCell>
+                                          <TableCell sx={{ fontSize: 11.5, color: bill.ref_no ? "text.primary" : "text.secondary" }}>
+                                            {bill.ref_no || "—"}
+                                          </TableCell>
+                                          <TableCell sx={{ fontSize: 11.5, color: "text.secondary" }}>
+                                            {bill.stock_item_name || "Tools / Consumables Purchase"}
+                                          </TableCell>
+                                          <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
+                                            {RUPEE}{formatAmount(bTotal)}
+                                          </TableCell>
+                                          <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 800, color: "success.main" }}>
+                                            {RUPEE}{formatAmount(bPaid)}
+                                          </TableCell>
+                                          <TableCell align="right" sx={{ fontSize: 11.5, fontWeight: 600, color: bBal > 0.01 ? "#dc3545" : "success.main" }}>
+                                            {bBal > 0.01 ? `${RUPEE}${formatAmount(bBal)}` : "₹0.00"}
+                                          </TableCell>
+                                          <TableCell align="center">
+                                            {statusChip(bill.payment_status || (bBal <= 0.01 ? "Paid" : "Partial"))}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </Paper>
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    </Fragment>
                   );
                 })
               )}
             </TableBody>
-            {filteredPayments.length > 0 && (
+            {filteredGroups.length > 0 && (
               <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "#f4f9f6" }}>
                 <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
                   <TableCell colSpan={7} align="right" sx={{ fontSize: 12 }}>
-                    Totals ({filteredPayments.length} payments):
+                    Totals ({filteredGroups.length} transactions, {summary.totalBillsCount} bills):
                   </TableCell>
                   <TableCell align="right" sx={{ fontSize: 12.5, color: "text.secondary" }}>
                     {RUPEE}{formatAmount(summary.totalBillAmount)}
@@ -1322,14 +1566,14 @@ export default function PurchasePaymentsPage() {
         </TableContainer>
       </Paper>
 
-      {/* Edit Payment Dialog */}
-      <EditPaidAmountDialog
+      {/* Multi-Bill Payment Allocation Dialog */}
+      <EditPaymentAllocationDialog
         open={editDialogOpen}
         onClose={() => {
           setEditDialogOpen(false);
-          setEditingBill(null);
+          setEditingGroup(null);
         }}
-        bill={editingBill}
+        group={editingGroup}
       />
 
       {/* View Details Dialog */}
@@ -1337,11 +1581,11 @@ export default function PurchasePaymentsPage() {
         open={viewDialogOpen}
         onClose={() => {
           setViewDialogOpen(false);
-          setViewingBill(null);
+          setViewingGroup(null);
         }}
-        bill={viewingBill}
-        onEdit={(b) => handleOpenEdit(b)}
-        onPrint={(b) => handlePrintPaymentVoucher(b, companyData)}
+        group={viewingGroup}
+        onEdit={(g) => handleOpenEdit(g)}
+        onPrint={(g) => handlePrintPaymentVoucher(g, companyData)}
       />
     </Box>
   );
