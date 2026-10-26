@@ -1031,7 +1031,7 @@ async def list_purchase_payments(
     to_date: Optional[str] = None,
     payment_mode: Optional[str] = None,
 ):
-    """Return flat list of all active purchase payment lines row-by-row (excluding deleted or unpaid bills)."""
+    """Return list of purchase payment vouchers (grouped by payment voucher with allocated bill lines)."""
     s = _schema(fy)
     await ensure_purchase_payment_tables(db, s)
     conds = ["1=1"]
@@ -1050,7 +1050,7 @@ async def list_purchase_payments(
     sql = f"""
         SELECT 
             l.id AS line_id,
-            l.allocated_amount AS paid_amount,
+            l.allocated_amount AS line_paid_amount,
             p.id AS payment_id,
             p.payment_no,
             p.payment_date,
@@ -1079,7 +1079,51 @@ async def list_purchase_payments(
         ORDER BY p.payment_date DESC, p.id DESC, l.id ASC
     """
     res = await db.execute(text(sql), params)
-    return [dict(r) for r in res.mappings().all()]
+    raw_rows = [dict(r) for r in res.mappings().all()]
+
+    # Group lines by payment_id into voucher records
+    payments_map = {}
+    for r in raw_rows:
+        pid = r["payment_id"]
+        if pid not in payments_map:
+            payments_map[pid] = {
+                "payment_id": pid,
+                "payment_no": r["payment_no"],
+                "payment_date": str(r["payment_date"]),
+                "payment_mode": r["payment_mode"],
+                "amount": float(r["payment_bulk_amount"] or 0),
+                "paid_amount": float(r["payment_bulk_amount"] or 0),
+                "payment_notes": r["payment_notes"] or "",
+                "ledger_id": r["ledger_id"],
+                "supplier_name": r["supplier_name"],
+                "ref_no": r["ref_no"] or "",
+                "lines": [],
+            }
+        payments_map[pid]["lines"].append({
+            "line_id": r["line_id"],
+            "movement_id": r["movement_id"],
+            "movement_no": r["movement_no"],
+            "movement_date": str(r["movement_date"]),
+            "ref_no": r["ref_no"] or "",
+            "bill_amount": float(r["bill_amount"] or 0),
+            "allocated_amount": float(r["line_paid_amount"] or 0),
+            "bill_total_paid": float(r["bill_total_paid"] or 0),
+            "bill_status": r["bill_status"],
+            "bill_remaining_balance": float(r["bill_remaining_balance"] or 0),
+        })
+
+    vouchers = []
+    for pid, pdata in payments_map.items():
+        line_sum = round(sum(l["allocated_amount"] for l in pdata["lines"]), 2)
+        if pdata["amount"] <= 0:
+            pdata["amount"] = line_sum
+            pdata["paid_amount"] = line_sum
+        pdata["movement_no"] = ", ".join(l["movement_no"] for l in pdata["lines"])
+        pdata["bills_summary"] = ", ".join(f"{l['movement_no']} (₹{l['allocated_amount']:,.2f})" for l in pdata["lines"])
+        pdata["bills_count"] = len(pdata["lines"])
+        vouchers.append(pdata)
+
+    return vouchers
 
 
 @router.post("/inventory/movements/batch-payment")
@@ -1169,11 +1213,18 @@ async def batch_update_movement_payment(
     return {"message": "Payment recorded successfully", "payment_no": payment_no, "payment_id": payment_id}
 
 
+class PaymentLineAllocationUpdate(BaseModel):
+    line_id: int | None = None
+    movement_id: int
+    allocated_amount: float
+
+
 class PurchasePaymentUpdateIn(BaseModel):
     payment_date: str | None = None
     payment_mode: str | None = None
     notes: str | None = None
     paid_amount: float | None = None
+    allocations: list[PaymentLineAllocationUpdate] | None = None
 
 
 @router.put("/inventory/purchase-payments/{payment_id}")
@@ -1198,15 +1249,50 @@ async def update_purchase_payment(
     pmode = body.payment_mode or pay["payment_mode"]
     pnotes = body.notes if body.notes is not None else pay["notes"]
 
-    # Fetch lines
+    # Fetch existing lines
     lres = await db.execute(text(f"SELECT * FROM {s}.purchase_payment_lines WHERE payment_id = :pid"), {"pid": payment_id})
     lines = [dict(r) for r in lres.mappings().all()]
+    affected_mids = set(l["movement_id"] for l in lines)
 
-    if body.paid_amount is not None and body.paid_amount <= 0:
+    if body.allocations is not None:
+        total_allocated = 0.0
+        for alloc in body.allocations:
+            alloc_amt = max(0.0, round(float(alloc.allocated_amount or 0), 2))
+            affected_mids.add(alloc.movement_id)
+            if alloc_amt > 0:
+                total_allocated += alloc_amt
+                if alloc.line_id:
+                    await db.execute(text(f"""
+                        UPDATE {s}.purchase_payment_lines 
+                        SET allocated_amount = :amt 
+                        WHERE id = :lid AND payment_id = :pid
+                    """), {"amt": alloc_amt, "lid": alloc.line_id, "pid": payment_id})
+                else:
+                    await db.execute(text(f"""
+                        INSERT INTO {s}.purchase_payment_lines (payment_id, movement_id, allocated_amount)
+                        VALUES (:pid, :mid, :amt)
+                    """), {"pid": payment_id, "mid": alloc.movement_id, "amt": alloc_amt})
+            else:
+                if alloc.line_id:
+                    await db.execute(text(f"""
+                        DELETE FROM {s}.purchase_payment_lines 
+                        WHERE id = :lid AND payment_id = :pid
+                    """), {"lid": alloc.line_id, "pid": payment_id})
+                else:
+                    await db.execute(text(f"""
+                        DELETE FROM {s}.purchase_payment_lines 
+                        WHERE payment_id = :pid AND movement_id = :mid
+                    """), {"pid": payment_id, "mid": alloc.movement_id})
+
+        if total_allocated <= 0:
+            await delete_purchase_payment(payment_id, current_user, db, fy)
+            return {"message": "Payment cleared successfully"}
+
+        new_total_amt = round(total_allocated, 2)
+    elif body.paid_amount is not None and body.paid_amount <= 0:
         await delete_purchase_payment(payment_id, current_user, db, fy)
         return {"message": "Payment cleared successfully"}
-
-    if body.paid_amount is not None and len(lines) == 1:
+    elif body.paid_amount is not None and len(lines) == 1:
         new_alloc = round(body.paid_amount, 2)
         await db.execute(text(f"UPDATE {s}.purchase_payment_lines SET allocated_amount = :amt WHERE id = :lid"), {
             "amt": new_alloc,
@@ -1229,8 +1315,7 @@ async def update_purchase_payment(
     })
 
     # Re-sync all affected movements
-    for line in lines:
-        mid = line["movement_id"]
+    for mid in affected_mids:
         tot_res = await db.execute(text(f"SELECT COALESCE(SUM(allocated_amount), 0) FROM {s}.purchase_payment_lines WHERE movement_id = :mid"), {"mid": mid})
         tot_paid = round(float(tot_res.scalar() or 0), 2)
         b_res = await db.execute(text(f"SELECT amount FROM {s}.stock_item_movements WHERE id = :mid"), {"mid": mid})
