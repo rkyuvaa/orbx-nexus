@@ -5,7 +5,7 @@ import {
   TextField, Grid, Typography, Chip, MenuItem, Table, TableHead,
   TableBody, TableFooter, TableRow, TableCell, TableContainer,
   Paper, LinearProgress, Tooltip, IconButton, InputAdornment,
-  Divider,
+  Divider, TableSortLabel,
 } from "@mui/material";
 import Refresh from "@mui/icons-material/Refresh";
 import Search from "@mui/icons-material/Search";
@@ -304,7 +304,6 @@ function handlePrintPaymentsRegister(rows: PurchasePaymentRow[], companyData: an
           ₹${formatAmount(r.bill_remaining_balance)}
         </td>
         <td style="text-align: center;">${r.bill_status}</td>
-        <td>${r.payment_notes || "—"}</td>
       </tr>
     `;
   });
@@ -340,17 +339,16 @@ function handlePrintPaymentsRegister(rows: PurchasePaymentRow[], companyData: an
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important;">
             <tr>
-              <th style="width: 35px; text-align: center;">#</th>
-              <th style="width: 85px; text-align: center;">DATE</th>
-              <th style="width: 120px;">VOUCHER NO</th>
+              <th style="width: 40px; text-align: center;">#</th>
+              <th style="width: 95px; text-align: center;">DATE</th>
+              <th style="width: 130px;">VOUCHER NO</th>
               <th>SUPPLIER / PARTY</th>
-              <th style="width: 90px; text-align: center;">MODE</th>
-              <th style="width: 110px;">BILL NO</th>
-              <th style="width: 105px; text-align: right;">BILL TOTAL</th>
-              <th style="width: 115px; text-align: right;">PAID (₹)</th>
-              <th style="width: 100px; text-align: right;">BALANCE</th>
-              <th style="width: 75px; text-align: center;">STATUS</th>
-              <th>NOTES</th>
+              <th style="width: 100px; text-align: center;">MODE</th>
+              <th style="width: 120px;">BILL NO</th>
+              <th style="width: 115px; text-align: right;">BILL TOTAL</th>
+              <th style="width: 125px; text-align: right;">PAID (₹)</th>
+              <th style="width: 115px; text-align: right;">BALANCE</th>
+              <th style="width: 85px; text-align: center;">STATUS</th>
             </tr>
           </thead>
           <tbody>
@@ -361,7 +359,7 @@ function handlePrintPaymentsRegister(rows: PurchasePaymentRow[], companyData: an
               <td colspan="7" style="text-align: right;">Totals:</td>
               <td style="text-align: right; color: #0f5132; font-size: 13px;">₹${formatAmount(summary.totalPaidAmount)}</td>
               <td style="text-align: right; color: #dc3545;">₹${formatAmount(summary.totalBalance)}</td>
-              <td colspan="2"></td>
+              <td style="text-align: center;"></td>
             </tr>
           </tfoot>
         </table>
@@ -605,6 +603,7 @@ export default function PurchasePaymentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const { data: companyData } = useQuery({
     queryKey: ["company"],
@@ -626,9 +625,9 @@ export default function PurchasePaymentsPage() {
     return Array.from(set).sort();
   }, [payments]);
 
-  // Filtered rows
+  // Filtered rows (sorted by payment date, newest at top by default)
   const filteredRows = useMemo(() => {
-    return payments.filter((p) => {
+    const list = payments.filter((p) => {
       if (search) {
         const q = search.toLowerCase();
         const matches =
@@ -649,7 +648,19 @@ export default function PurchasePaymentsPage() {
 
       return true;
     });
-  }, [payments, search, supplierFilter, modeFilter, statusFilter, fromDate, toDate]);
+
+    return list.sort((a, b) => {
+      const dateA = a.payment_date || "";
+      const dateB = b.payment_date || "";
+      if (dateA !== dateB) {
+        return sortOrder === "desc" ? (dateA < dateB ? 1 : -1) : (dateA > dateB ? 1 : -1);
+      }
+      if (sortOrder === "desc") {
+        return (b.payment_id || 0) - (a.payment_id || 0) || (b.line_id || 0) - (a.line_id || 0);
+      }
+      return (a.payment_id || 0) - (b.payment_id || 0) || (a.line_id || 0) - (b.line_id || 0);
+    });
+  }, [payments, search, supplierFilter, modeFilter, statusFilter, fromDate, toDate, sortOrder]);
 
   // Summary Metrics
   const summary = useMemo(() => {
@@ -906,7 +917,16 @@ export default function PurchasePaymentsPage() {
             <TableHead>
               <TableRow sx={{ "& > th": { fontWeight: 700, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#f8faf9" } }}>
                 <TableCell sx={{ width: 40, textAlign: "center" }}>#</TableCell>
-                <TableCell sx={{ width: 105 }}>Payment Date</TableCell>
+                <TableCell sx={{ width: 130 }}>
+                  <TableSortLabel
+                    active
+                    direction={sortOrder}
+                    onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                    sx={{ fontWeight: 700 }}
+                  >
+                    Payment Date
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell sx={{ width: 130 }}>Voucher No</TableCell>
                 <TableCell sx={{ minWidth: 150 }}>Supplier / Party</TableCell>
                 <TableCell sx={{ width: 100, textAlign: "center" }}>Mode</TableCell>
@@ -915,14 +935,13 @@ export default function PurchasePaymentsPage() {
                 <TableCell align="right" sx={{ width: 135, color: "success.main" }}>Amount Paid (₹)</TableCell>
                 <TableCell align="right" sx={{ width: 110 }}>Balance</TableCell>
                 <TableCell align="center" sx={{ width: 85 }}>Status</TableCell>
-                <TableCell sx={{ minWidth: 120 }}>Notes / Narration</TableCell>
                 <TableCell align="center" sx={{ width: 110 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
+                  <TableCell colSpan={11} align="center" sx={{ py: 6 }}>
                     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
                       <Payment sx={{ fontSize: 48, color: "text.disabled" }} />
                       <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "text.secondary" }}>
@@ -997,12 +1016,6 @@ export default function PurchasePaymentsPage() {
                     <TableCell align="center">
                       {statusChip(row.bill_status)}
                     </TableCell>
-                    {/* Notes */}
-                    <TableCell sx={{ fontSize: 11.5, color: "text.secondary", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      <Tooltip title={row.payment_notes || ""}>
-                        <span>{row.payment_notes || "—"}</span>
-                      </Tooltip>
-                    </TableCell>
                     {/* Actions */}
                     <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
                       <Box sx={{ display: "inline-flex", gap: 0.5 }}>
@@ -1056,7 +1069,7 @@ export default function PurchasePaymentsPage() {
                   <TableCell align="right" sx={{ fontSize: 12.5, color: summary.totalBalance > 0 ? "#dc3545" : "success.main" }}>
                     {RUPEE}{formatAmount(summary.totalBalance)}
                   </TableCell>
-                  <TableCell colSpan={3} />
+                  <TableCell colSpan={2} />
                 </TableRow>
               </TableFooter>
             )}
