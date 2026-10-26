@@ -597,6 +597,8 @@ async def list_inventory_movements(
     stock_item_id: Optional[int] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    paid_only: Optional[bool] = None,
+    payment_status: Optional[str] = None,
 ):
     s = _schema(fy)
     conds = ["1=1"]
@@ -604,6 +606,11 @@ async def list_inventory_movements(
     if movement_type:
         conds.append("m.movement_type = :mtype")
         params["mtype"] = movement_type
+    if paid_only:
+        conds.append("COALESCE(m.paid_amount, 0) > 0")
+    if payment_status:
+        conds.append("m.payment_status = :pstatus")
+        params["pstatus"] = payment_status
     if stock_item_id:
         conds.append("m.stock_item_id = :siid")
         params["siid"] = stock_item_id

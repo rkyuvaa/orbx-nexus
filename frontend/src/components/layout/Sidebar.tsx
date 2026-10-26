@@ -111,6 +111,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Tools Purchase", path: "/purchase/tools-consumables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Purchase Payables", path: "/purchase/payables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Purchase Payments", path: "/purchase/payments", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
   },
   {

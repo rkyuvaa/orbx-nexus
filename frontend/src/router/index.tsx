@@ -39,6 +39,7 @@ import StockItemsPage from "../pages/inventory/StockItemsPage";
 import { InventoryInwardPage, InventoryOutwardPage } from "../pages/inventory/InventoryMovementPages";
 import LocationsPage from "../pages/inventory/LocationsPage";
 import PurchasePayablesPage from "../pages/accounts/PurchasePayablesPage";
+import PurchasePaymentsPage from "../pages/purchase/PurchasePaymentsPage";
 import { useAuthStore } from "../store";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -84,6 +85,7 @@ export const router = createBrowserRouter([
       // Purchase
       { path: "purchase/tools-consumables", element: <InventoryInwardPage /> },
       { path: "purchase/payables", element: <PurchasePayablesPage /> },
+      { path: "purchase/payments", element: <PurchasePaymentsPage /> },
 
       // Process Info
       { path: "process/products", element: <ProductRegisterPage /> },
