@@ -238,6 +238,26 @@ CREATE TABLE IF NOT EXISTS {schema}.job_work_bill_payments (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS {schema}.purchase_payments (
+    id SERIAL PRIMARY KEY,
+    payment_no VARCHAR(50) NOT NULL,
+    payment_date DATE NOT NULL,
+    ledger_id INTEGER,
+    payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
+    amount NUMERIC(15,2) DEFAULT 0,
+    notes TEXT,
+    created_by INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS {schema}.purchase_payment_lines (
+    id SERIAL PRIMARY KEY,
+    payment_id INTEGER NOT NULL REFERENCES {schema}.purchase_payments(id) ON DELETE CASCADE,
+    movement_id INTEGER NOT NULL REFERENCES {schema}.stock_item_movements(id) ON DELETE CASCADE,
+    allocated_amount NUMERIC(15,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS {schema}.salary_vouchers (
     id SERIAL PRIMARY KEY,
     voucher_no VARCHAR(50) UNIQUE NOT NULL,
@@ -439,6 +459,24 @@ async def ensure_year_schema(year_str: str, engine: AsyncEngine):
             created_by    INTEGER,
             created_at    TIMESTAMP DEFAULT NOW(),
             updated_at    TIMESTAMP DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS {schema}.purchase_payments (
+            id SERIAL PRIMARY KEY,
+            payment_no VARCHAR(50) NOT NULL,
+            payment_date DATE NOT NULL,
+            ledger_id INTEGER,
+            payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
+            amount NUMERIC(15,2) DEFAULT 0,
+            notes TEXT,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS {schema}.purchase_payment_lines (
+            id SERIAL PRIMARY KEY,
+            payment_id INTEGER NOT NULL REFERENCES {schema}.purchase_payments(id) ON DELETE CASCADE,
+            movement_id INTEGER NOT NULL REFERENCES {schema}.stock_item_movements(id) ON DELETE CASCADE,
+            allocated_amount NUMERIC(15,2) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
         );
         """
         await conn.execute(text(alter_ddl))

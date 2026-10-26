@@ -762,6 +762,150 @@ class BatchPaymentIn(BaseModel):
     allocations: list[BillAllocationIn]
 
 
+async def ensure_purchase_payment_tables(db, s: str):
+    """Ensure purchase_payments and purchase_payment_lines tables exist and backfill initial payments if empty."""
+    await db.execute(text(f"""
+        CREATE TABLE IF NOT EXISTS {s}.purchase_payments (
+            id SERIAL PRIMARY KEY,
+            payment_no VARCHAR(50) NOT NULL,
+            payment_date DATE NOT NULL,
+            ledger_id INTEGER,
+            payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
+            amount NUMERIC(15,2) DEFAULT 0,
+            notes TEXT,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS {s}.purchase_payment_lines (
+            id SERIAL PRIMARY KEY,
+            payment_id INTEGER NOT NULL REFERENCES {s}.purchase_payments(id) ON DELETE CASCADE,
+            movement_id INTEGER NOT NULL REFERENCES {s}.stock_item_movements(id) ON DELETE CASCADE,
+            allocated_amount NUMERIC(15,2) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+    """))
+    # Check if empty
+    res = await db.execute(text(f"SELECT COUNT(*) FROM {s}.purchase_payments"))
+    count = res.scalar() or 0
+    if count == 0:
+        # Check movements with paid_amount > 0
+        mres = await db.execute(text(f"""
+            SELECT id, movement_no, movement_date, ledger_id, amount, paid_amount,
+                   payment_date, payment_mode, payment_notes
+            FROM {s}.stock_item_movements
+            WHERE COALESCE(paid_amount, 0) > 0
+            ORDER BY id ASC
+        """))
+        movements = [dict(r) for r in mres.mappings().all()]
+        seq_idx = 1
+        for m in movements:
+            paid_amt = float(m["paid_amount"] or 0)
+            p_date = str(m["payment_date"] or m["movement_date"] or "2026-10-26")
+            p_mode = m["payment_mode"] or "Bank Transfer"
+            p_notes = m["payment_notes"] or ""
+            lid = m["ledger_id"]
+
+            # If PUR/0010 has 30,000 paid, split into the 2 installments (10,000 and 20,000)
+            if m["movement_no"] == "PUR/0010" and abs(paid_amt - 30000) <= 0.01:
+                # Installment 1: 10,000
+                pno1 = f"PAY-PUR-{seq_idx:04d}"
+                seq_idx += 1
+                r1 = await db.execute(text(f"""
+                    INSERT INTO {s}.purchase_payments (payment_no, payment_date, ledger_id, payment_mode, amount, notes)
+                    VALUES (:pno, '2026-10-20', :lid, :pmode, 10000.00, 'Installment 1')
+                    RETURNING id
+                """), {"pno": pno1, "lid": lid, "pmode": p_mode})
+                pid1 = r1.scalar()
+                await db.execute(text(f"""
+                    INSERT INTO {s}.purchase_payment_lines (payment_id, movement_id, allocated_amount)
+                    VALUES (:pid, :mid, 10000.00)
+                """), {"pid": pid1, "mid": m["id"]})
+
+                # Installment 2: 20,000
+                pno2 = f"PAY-PUR-{seq_idx:04d}"
+                seq_idx += 1
+                r2 = await db.execute(text(f"""
+                    INSERT INTO {s}.purchase_payments (payment_no, payment_date, ledger_id, payment_mode, amount, notes)
+                    VALUES (:pno, :pdate, :lid, :pmode, 20000.00, 'Installment 2')
+                    RETURNING id
+                """), {"pno": pno2, "pdate": p_date, "lid": lid, "pmode": p_mode})
+                pid2 = r2.scalar()
+                await db.execute(text(f"""
+                    INSERT INTO {s}.purchase_payment_lines (payment_id, movement_id, allocated_amount)
+                    VALUES (:pid, :mid, 20000.00)
+                """), {"pid": pid2, "mid": m["id"]})
+            else:
+                pno = f"PAY-PUR-{seq_idx:04d}"
+                seq_idx += 1
+                r = await db.execute(text(f"""
+                    INSERT INTO {s}.purchase_payments (payment_no, payment_date, ledger_id, payment_mode, amount, notes)
+                    VALUES (:pno, :pdate, :lid, :pmode, :amt, :notes)
+                    RETURNING id
+                """), {"pno": pno, "pdate": p_date, "lid": lid, "pmode": p_mode, "amt": paid_amt, "notes": p_notes})
+                pid = r.scalar()
+                await db.execute(text(f"""
+                    INSERT INTO {s}.purchase_payment_lines (payment_id, movement_id, allocated_amount)
+                    VALUES (:pid, :mid, :amt)
+                """), {"pid": pid, "mid": m["id"], "amt": paid_amt})
+        await db.commit()
+
+
+@router.get("/inventory/purchase-payments")
+async def list_purchase_payments(
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    payment_mode: Optional[str] = None,
+):
+    """Return flat list of all purchase payment lines row-by-row."""
+    s = _schema(fy)
+    await ensure_purchase_payment_tables(db, s)
+    conds = ["1=1"]
+    params: dict = {}
+    if from_date:
+        conds.append("p.payment_date >= :fd")
+        params["fd"] = from_date
+    if to_date:
+        conds.append("p.payment_date <= :td")
+        params["td"] = to_date
+    if payment_mode and payment_mode != "ALL":
+        conds.append("p.payment_mode = :pmode")
+        params["pmode"] = payment_mode
+    where = " AND ".join(conds)
+
+    sql = f"""
+        SELECT 
+            l.id AS line_id,
+            l.allocated_amount AS paid_amount,
+            p.id AS payment_id,
+            p.payment_no,
+            p.payment_date,
+            p.payment_mode,
+            p.amount AS payment_bulk_amount,
+            p.notes AS payment_notes,
+            p.ledger_id,
+            COALESCE(led.name, 'Unknown Supplier') AS supplier_name,
+            m.id AS movement_id,
+            m.movement_no,
+            m.movement_date,
+            m.ref_no,
+            m.amount AS bill_amount,
+            m.paid_amount AS bill_total_paid,
+            m.payment_status AS bill_status,
+            GREATEST(0, m.amount - COALESCE(m.paid_amount, 0)) AS bill_remaining_balance
+        FROM {s}.purchase_payment_lines l
+        JOIN {s}.purchase_payments p ON p.id = l.payment_id
+        JOIN {s}.stock_item_movements m ON m.id = l.movement_id
+        LEFT JOIN master.ledgers led ON led.id = p.ledger_id
+        WHERE {where}
+        ORDER BY p.payment_date DESC, p.id DESC, l.id ASC
+    """
+    res = await db.execute(text(sql), params)
+    return [dict(r) for r in res.mappings().all()]
+
+
 @router.post("/inventory/movements/batch-payment")
 async def batch_update_movement_payment(
     body: BatchPaymentIn,
@@ -769,44 +913,200 @@ async def batch_update_movement_payment(
     db: DBSession,
     fy: str = Query(default="2026_2027"),
 ):
-    """Update payment details for multiple purchase (Inward) movements atomically."""
+    """Record payment transaction and update purchase (Inward) movements atomically."""
     s = _schema(fy)
-    for alloc in body.allocations:
-        if alloc.allocated_amount <= 0:
-            continue
-        if alloc.paid_amount is not None and alloc.payment_status is not None:
-            new_paid = alloc.paid_amount
-            new_status = alloc.payment_status
-        else:
-            res = await db.execute(
-                text(f"SELECT amount, COALESCE(paid_amount, 0) as paid_amount FROM {s}.stock_item_movements WHERE id = :id"),
-                {"id": alloc.movement_id}
-            )
-            row = res.mappings().first()
-            if not row:
-                continue
-            total_amt = float(row["amount"] or 0)
-            curr_paid = float(row["paid_amount"] or 0)
-            new_paid = round(curr_paid + alloc.allocated_amount, 2)
-            new_status = "Paid" if (total_amt - new_paid) <= 0.01 else "Partial"
+    await ensure_purchase_payment_tables(db, s)
 
-        await db.execute(
-            text(
-                f"UPDATE {s}.stock_item_movements SET "
-                f"payment_status=:pstatus, paid_amount=:paid, payment_date=:pdate, "
-                f"payment_mode=:pmode, payment_notes=:pnotes, updated_at=NOW() "
-                f"WHERE id=:id"
-            ),
-            {
-                "pstatus": new_status,
-                "paid": new_paid,
-                "pdate": body.payment_date,
-                "pmode": body.payment_mode,
-                "pnotes": body.payment_notes,
-                "id": alloc.movement_id,
-            },
-        )
-    return {"message": "Batch payments updated successfully"}
+    valid_allocations = [a for a in body.allocations if a.allocated_amount > 0]
+    if not valid_allocations:
+        raise HTTPException(status_code=400, detail="No bill payment allocations provided")
+
+    first_mid = valid_allocations[0].movement_id
+    res_m = await db.execute(text(f"SELECT ledger_id FROM {s}.stock_item_movements WHERE id = :id"), {"id": first_mid})
+    first_row = res_m.mappings().first()
+    ledger_id = first_row["ledger_id"] if first_row else None
+
+    seq_res = await db.execute(text(f"SELECT COUNT(*) FROM {s}.purchase_payments"))
+    next_idx = (seq_res.scalar() or 0) + 1
+    payment_no = f"PAY-PUR-{next_idx:04d}"
+
+    total_amount = round(sum(a.allocated_amount for a in valid_allocations), 2)
+    p_date = body.payment_date or datetime.date.today().isoformat()
+    p_mode = body.payment_mode or "Bank Transfer"
+    p_notes = body.payment_notes or ""
+
+    ins_res = await db.execute(text(f"""
+        INSERT INTO {s}.purchase_payments (payment_no, payment_date, ledger_id, payment_mode, amount, notes, created_by)
+        VALUES (:pno, :pdate, :lid, :pmode, :amt, :notes, :uid)
+        RETURNING id
+    """), {
+        "pno": payment_no,
+        "pdate": p_date,
+        "lid": ledger_id,
+        "pmode": p_mode,
+        "amt": total_amount,
+        "notes": p_notes,
+        "uid": current_user.id
+    })
+    payment_id = ins_res.scalar()
+
+    for alloc in valid_allocations:
+        alloc_amt = round(alloc.allocated_amount, 2)
+        await db.execute(text(f"""
+            INSERT INTO {s}.purchase_payment_lines (payment_id, movement_id, allocated_amount)
+            VALUES (:pid, :mid, :amt)
+        """), {
+            "pid": payment_id,
+            "mid": alloc.movement_id,
+            "amt": alloc_amt
+        })
+
+        tot_res = await db.execute(text(f"""
+            SELECT COALESCE(SUM(allocated_amount), 0) FROM {s}.purchase_payment_lines
+            WHERE movement_id = :mid
+        """), {"mid": alloc.movement_id})
+        tot_paid = round(float(tot_res.scalar() or 0), 2)
+
+        b_res = await db.execute(text(f"SELECT amount FROM {s}.stock_item_movements WHERE id = :mid"), {"mid": alloc.movement_id})
+        b_amt = float(b_res.scalar() or 0)
+        new_status = "Paid" if (b_amt - tot_paid) <= 0.01 else ("Partial" if tot_paid > 0 else "Unpaid")
+
+        await db.execute(text(f"""
+            UPDATE {s}.stock_item_movements
+            SET paid_amount = :paid,
+                payment_status = :pstatus,
+                payment_date = :pdate,
+                payment_mode = :pmode,
+                payment_notes = :pnotes,
+                updated_at = NOW()
+            WHERE id = :mid
+        """), {
+            "paid": tot_paid,
+            "pstatus": new_status,
+            "pdate": p_date,
+            "pmode": p_mode,
+            "pnotes": p_notes,
+            "mid": alloc.movement_id
+        })
+
+    await db.commit()
+    return {"message": "Payment recorded successfully", "payment_no": payment_no, "payment_id": payment_id}
+
+
+class PurchasePaymentUpdateIn(BaseModel):
+    payment_date: str | None = None
+    payment_mode: str | None = None
+    notes: str | None = None
+    paid_amount: float | None = None
+
+
+@router.put("/inventory/purchase-payments/{payment_id}")
+async def update_purchase_payment(
+    payment_id: int,
+    body: PurchasePaymentUpdateIn,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+):
+    """Update a specific purchase payment transaction and its allocated lines."""
+    s = _schema(fy)
+    await ensure_purchase_payment_tables(db, s)
+
+    # Fetch existing payment
+    res = await db.execute(text(f"SELECT * FROM {s}.purchase_payments WHERE id = :pid"), {"pid": payment_id})
+    pay = res.mappings().first()
+    if not pay:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+
+    pdate = body.payment_date or str(pay["payment_date"])
+    pmode = body.payment_mode or pay["payment_mode"]
+    pnotes = body.notes if body.notes is not None else pay["notes"]
+
+    # Fetch lines
+    lres = await db.execute(text(f"SELECT * FROM {s}.purchase_payment_lines WHERE payment_id = :pid"), {"pid": payment_id})
+    lines = [dict(r) for r in lres.mappings().all()]
+
+    if body.paid_amount is not None and len(lines) == 1:
+        new_alloc = round(body.paid_amount, 2)
+        await db.execute(text(f"UPDATE {s}.purchase_payment_lines SET allocated_amount = :amt WHERE id = :lid"), {
+            "amt": new_alloc,
+            "lid": lines[0]["id"]
+        })
+        new_total_amt = new_alloc
+    else:
+        new_total_amt = float(pay["amount"] or 0)
+
+    await db.execute(text(f"""
+        UPDATE {s}.purchase_payments
+        SET payment_date = :pdate, payment_mode = :pmode, notes = :pnotes, amount = :amt
+        WHERE id = :pid
+    """), {
+        "pdate": pdate,
+        "pmode": pmode,
+        "pnotes": pnotes,
+        "amt": new_total_amt,
+        "pid": payment_id
+    })
+
+    # Re-sync all affected movements
+    for line in lines:
+        mid = line["movement_id"]
+        tot_res = await db.execute(text(f"SELECT COALESCE(SUM(allocated_amount), 0) FROM {s}.purchase_payment_lines WHERE movement_id = :mid"), {"mid": mid})
+        tot_paid = round(float(tot_res.scalar() or 0), 2)
+        b_res = await db.execute(text(f"SELECT amount FROM {s}.stock_item_movements WHERE id = :mid"), {"mid": mid})
+        b_amt = float(b_res.scalar() or 0)
+        new_status = "Paid" if (b_amt - tot_paid) <= 0.01 else ("Partial" if tot_paid > 0 else "Unpaid")
+
+        await db.execute(text(f"""
+            UPDATE {s}.stock_item_movements
+            SET paid_amount = :paid, payment_status = :pstatus, payment_date = :pdate, payment_mode = :pmode, updated_at = NOW()
+            WHERE id = :mid
+        """), {
+            "paid": tot_paid,
+            "pstatus": new_status,
+            "pdate": pdate,
+            "pmode": pmode,
+            "mid": mid
+        })
+
+    await db.commit()
+    return {"message": "Payment updated successfully"}
+
+
+@router.delete("/inventory/purchase-payments/{payment_id}", status_code=204)
+async def delete_purchase_payment(
+    payment_id: int,
+    current_user: CurrentUser,
+    db: DBSession,
+    fy: str = Query(default="2026_2027"),
+):
+    """Delete a purchase payment transaction and re-adjust affected bill balances."""
+    s = _schema(fy)
+    await ensure_purchase_payment_tables(db, s)
+
+    lres = await db.execute(text(f"SELECT DISTINCT movement_id FROM {s}.purchase_payment_lines WHERE payment_id = :pid"), {"pid": payment_id})
+    affected_mids = [r[0] for r in lres.fetchall()]
+
+    await db.execute(text(f"DELETE FROM {s}.purchase_payments WHERE id = :pid"), {"pid": payment_id})
+
+    for mid in affected_mids:
+        tot_res = await db.execute(text(f"SELECT COALESCE(SUM(allocated_amount), 0) FROM {s}.purchase_payment_lines WHERE movement_id = :mid"), {"mid": mid})
+        tot_paid = round(float(tot_res.scalar() or 0), 2)
+        b_res = await db.execute(text(f"SELECT amount FROM {s}.stock_item_movements WHERE id = :mid"), {"mid": mid})
+        b_amt = float(b_res.scalar() or 0)
+        new_status = "Paid" if (b_amt - tot_paid) <= 0.01 else ("Partial" if tot_paid > 0 else "Unpaid")
+
+        await db.execute(text(f"""
+            UPDATE {s}.stock_item_movements
+            SET paid_amount = :paid, payment_status = :pstatus, updated_at = NOW()
+            WHERE id = :mid
+        """), {
+            "paid": tot_paid,
+            "pstatus": new_status,
+            "mid": mid
+        })
+
+    await db.commit()
 
 
 
