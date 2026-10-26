@@ -63,6 +63,24 @@ export const GLOBAL_PRINT_FOOTER_CSS = `
       padding: 0 4px;
       box-sizing: border-box;
       z-index: 999999;
+      height: 18px;
+      line-height: 18px;
+    }
+    table.items-table tfoot.orbx-print-spacer,
+    tfoot.orbx-print-spacer {
+      display: table-footer-group !important;
+      page-break-inside: avoid !important;
+    }
+    table.items-table tfoot.orbx-print-spacer tr,
+    table.items-table tfoot.orbx-print-spacer tr td,
+    tfoot.orbx-print-spacer tr,
+    tfoot.orbx-print-spacer tr td {
+      height: 25px !important;
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      visibility: hidden !important;
     }
     .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
       display: none !important;
@@ -150,6 +168,24 @@ export const COMMON_PRINT_CSS = `
       padding: 0 4px;
       box-sizing: border-box;
       z-index: 999999;
+      height: 18px;
+      line-height: 18px;
+    }
+    table.items-table tfoot.orbx-print-spacer,
+    tfoot.orbx-print-spacer {
+      display: table-footer-group !important;
+      page-break-inside: avoid !important;
+    }
+    table.items-table tfoot.orbx-print-spacer tr,
+    table.items-table tfoot.orbx-print-spacer tr td,
+    tfoot.orbx-print-spacer tr,
+    tfoot.orbx-print-spacer tr td {
+      height: 25px !important;
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      visibility: hidden !important;
     }
     .footer-info, .orbx-screen-footer, .no-print-footer, .footer {
       display: none !important;
@@ -325,6 +361,23 @@ export const PRINT_TRIGGER_SCRIPT = `
         document.body.appendChild(footer);
       }
 
+      // 2. Ensure all printable tables have an invisible spacer tfoot so table rows never collide with the fixed page footer
+      var tables = document.querySelectorAll('table.items-table, table.ledger-table');
+      for (var ti = 0; ti < tables.length; ti++) {
+        var tbl = tables[ti];
+        if (!tbl.querySelector('tfoot.orbx-print-spacer')) {
+          var spacerTfoot = document.createElement('tfoot');
+          spacerTfoot.className = 'orbx-print-spacer';
+          var spacerTr = document.createElement('tr');
+          var spacerTd = document.createElement('td');
+          spacerTd.colSpan = 100;
+          spacerTd.style.cssText = 'height: 25px !important; border: none !important; background: transparent !important; padding: 0 !important; margin: 0 !important; visibility: hidden !important;';
+          spacerTr.appendChild(spacerTd);
+          spacerTfoot.appendChild(spacerTr);
+          tbl.appendChild(spacerTfoot);
+        }
+      }
+
       // 2. Feature-detect CSS @page margin boxes (supported in Chromium 131+)
       var supportsMarginBoxes = false;
       try {
@@ -436,6 +489,20 @@ export const PRINT_TRIGGER_SCRIPT = `
           '    padding: 0 4px !important;',
           '    box-sizing: border-box !important;',
           '    z-index: 999999 !important;',
+          '    height: 18px !important;',
+          '    line-height: 18px !important;',
+          '  }',
+          '  table.items-table tfoot.orbx-print-spacer, tfoot.orbx-print-spacer {',
+          '    display: table-footer-group !important;',
+          '    page-break-inside: avoid !important;',
+          '  }',
+          '  table.items-table tfoot.orbx-print-spacer tr, table.items-table tfoot.orbx-print-spacer tr td, tfoot.orbx-print-spacer tr, tfoot.orbx-print-spacer tr td {',
+          '    height: 25px !important;',
+          '    border: none !important;',
+          '    background: transparent !important;',
+          '    padding: 0 !important;',
+          '    margin: 0 !important;',
+          '    visibility: hidden !important;',
           '  }',
           '  .footer-info, .orbx-screen-footer, .no-print-footer, .footer { display: none !important; }',
           '}',

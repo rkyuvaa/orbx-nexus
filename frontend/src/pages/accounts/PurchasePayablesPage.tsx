@@ -213,7 +213,7 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any, directPay
       <head>
         <title>Print Supplier Ledger - ${supplierName}</title>
         <style>
-          @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 12mm; }
+          @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 10mm 10mm 14mm 10mm; }
           ${COMMON_PRINT_CSS}
         </style>
       </head>
@@ -251,6 +251,11 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any, directPay
           <tbody>
             ${statementHtml}
           </tbody>
+          <tfoot class="orbx-print-spacer" style="display: table-footer-group !important;">
+            <tr>
+              <td colspan="8" style="height: 25px !important; border: none !important; background: transparent !important; padding: 0 !important; margin: 0 !important; visibility: hidden !important;"></td>
+            </tr>
+          </tfoot>
         </table>
 
         <div class="totals-section">
