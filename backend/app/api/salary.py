@@ -19,6 +19,9 @@ class SalaryVoucherIn(BaseModel):
     ledger_id: int
     month: int
     year: int
+    pay_period_type: Optional[str] = "Monthly"
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
     pay_type: Optional[str] = "Daily"
     days_worked: float = 0
     total_hours: float = 0
@@ -48,15 +51,29 @@ async def get_staff_attendance_stats(
     ledger_id: int = Query(...),
     month: int = Query(...),
     year: int = Query(...),
+    from_date: Optional[str] = Query(default=None),
+    to_date: Optional[str] = Query(default=None),
+    pay_period_type: Optional[str] = Query(default="Monthly"),
     fy: str = Query(default="2026_2027")
 ):
     schema = s(fy)
 
-    # Days in month
+    # Days in month / period
     try:
         _, days_in_month = calendar.monthrange(year, month)
     except Exception:
         days_in_month = 30
+
+    is_weekly = pay_period_type == "Weekly" or bool(from_date and to_date)
+    days_in_period = days_in_month
+    if from_date and to_date:
+        try:
+            from datetime import datetime
+            fd_obj = datetime.strptime(str(from_date)[:10], "%Y-%m-%d").date()
+            td_obj = datetime.strptime(str(to_date)[:10], "%Y-%m-%d").date()
+            days_in_period = max(1, (td_obj - fd_obj).days + 1)
+        except Exception:
+            days_in_period = 7 if is_weekly else days_in_month
 
     # Ensure columns exist
     try:
@@ -103,7 +120,14 @@ async def get_staff_attendance_stats(
     rel_rows = rel_res.mappings().all()
     all_lids = list({r["id"] for r in rel_rows} | {ledger_id})
 
-    # Query biometric entries for this staff in specified month/year across all linked ledger IDs
+    # Query biometric entries for this staff in specified date range or month/year across all linked ledger IDs
+    if from_date and to_date:
+        date_cond = "AND entry_date >= CAST(:fdate AS DATE) AND entry_date <= CAST(:tdate AS DATE)"
+        date_params = {"fdate": str(from_date)[:10], "tdate": str(to_date)[:10]}
+    else:
+        date_cond = "AND EXTRACT(MONTH FROM entry_date) = :m AND EXTRACT(YEAR FROM entry_date) = :y"
+        date_params = {"m": month, "y": year}
+
     att_res = await db.execute(
         text(
             f"SELECT "
@@ -114,10 +138,9 @@ async def get_staff_attendance_stats(
             f"COALESCE(SUM(hours_worked), 0) AS total_hours, "
             f"COALESCE(SUM(ot_hours), 0) AS total_ot_hours "
             f"FROM {schema}.biometric_entries "
-            f"WHERE ledger_id = ANY(:lids) "
-            f"AND EXTRACT(MONTH FROM entry_date) = :m AND EXTRACT(YEAR FROM entry_date) = :y"
+            f"WHERE ledger_id = ANY(:lids) {date_cond}"
         ),
-        {"lids": all_lids, "m": month, "y": year}
+        {"lids": all_lids, **date_params}
     )
     att = att_res.mappings().first()
 
@@ -162,6 +185,10 @@ async def get_staff_attendance_stats(
         "staff_category": staff_category,
         "is_hourly": is_hourly,
         "pay_type": "Hourly" if is_hourly else "Daily",
+        "pay_period_type": "Weekly" if is_weekly else "Monthly",
+        "from_date": from_date,
+        "to_date": to_date,
+        "days_in_period": days_in_period,
         "month": month,
         "year": year,
         "days_in_month": days_in_month,
@@ -186,6 +213,9 @@ async def ensure_salary_voucher_columns(db: DBSession, schema: str):
         await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS total_hours NUMERIC(15,2) DEFAULT 0"))
         await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(15,2) DEFAULT 0"))
         await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS pay_type VARCHAR(20) DEFAULT 'Daily'"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS pay_period_type VARCHAR(20) DEFAULT 'Monthly'"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS from_date DATE"))
+        await db.execute(text(f"ALTER TABLE {schema}.salary_vouchers ADD COLUMN IF NOT EXISTS to_date DATE"))
         await db.commit()
     except Exception:
         await db.rollback()
@@ -254,13 +284,16 @@ async def create_salary_voucher(
     result = await db.execute(
         text(
             f"INSERT INTO {schema}.salary_vouchers "
-            f"(voucher_no, voucher_date, ledger_id, month, year, pay_type, days_worked, total_hours, hourly_rate, basic_salary, "
+            f"(voucher_no, voucher_date, ledger_id, month, year, pay_period_type, from_date, to_date, pay_type, days_worked, total_hours, hourly_rate, basic_salary, "
             f"per_day_salary, payable_amount, allowances, deductions, net_salary, narration, created_by) "
-            f"VALUES (:vno, CAST(:vdate AS DATE), :lid, :m, :y, :pt, :dw, :th, :hr, :bs, :pds, :pa, :al, :ded, :ns, :narr, :cby) RETURNING id"
+            f"VALUES (:vno, CAST(:vdate AS DATE), :lid, :m, :y, :ppt, CAST(:fdate AS DATE), CAST(:tdate AS DATE), :pt, :dw, :th, :hr, :bs, :pds, :pa, :al, :ded, :ns, :narr, :cby) RETURNING id"
         ),
         {
             "vno": vno, "vdate": body.voucher_date, "lid": body.ledger_id,
-            "m": body.month, "y": body.year, "pt": pay_type, "dw": body.days_worked,
+            "m": body.month, "y": body.year,
+            "ppt": body.pay_period_type or "Monthly",
+            "fdate": body.from_date, "tdate": body.to_date,
+            "pt": pay_type, "dw": body.days_worked,
             "th": body.total_hours, "hr": body.hourly_rate,
             "bs": body.basic_salary, "pds": body.per_day_salary, "pa": payable,
             "al": body.allowances, "ded": body.deductions,
@@ -290,7 +323,9 @@ async def update_salary_voucher(
         text(
             f"UPDATE {schema}.salary_vouchers "
             f"SET voucher_date = CAST(:vdate AS DATE), ledger_id = :lid, "
-            f"month = :m, year = :y, pay_type = :pt, days_worked = :dw, "
+            f"month = :m, year = :y, pay_period_type = :ppt, "
+            f"from_date = CAST(:fdate AS DATE), to_date = CAST(:tdate AS DATE), "
+            f"pay_type = :pt, days_worked = :dw, "
             f"total_hours = :th, hourly_rate = :hr, basic_salary = :bs, "
             f"per_day_salary = :pds, payable_amount = :pa, allowances = :al, "
             f"deductions = :ded, net_salary = :ns, narration = :narr, updated_at = NOW() "
@@ -298,7 +333,10 @@ async def update_salary_voucher(
         ),
         {
             "vdate": body.voucher_date, "lid": body.ledger_id,
-            "m": body.month, "y": body.year, "pt": pay_type, "dw": body.days_worked,
+            "m": body.month, "y": body.year,
+            "ppt": body.pay_period_type or "Monthly",
+            "fdate": body.from_date, "tdate": body.to_date,
+            "pt": pay_type, "dw": body.days_worked,
             "th": body.total_hours, "hr": body.hourly_rate,
             "bs": body.basic_salary, "pds": body.per_day_salary, "pa": payable,
             "al": body.allowances, "ded": body.deductions,

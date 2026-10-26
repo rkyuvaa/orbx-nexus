@@ -161,10 +161,15 @@ async def lifespan(app: FastAPI):
                     grace_minutes INTEGER DEFAULT 15,
                     week_off_days VARCHAR(50) DEFAULT '0',
                     working_days_per_month INTEGER DEFAULT 26,
+                    payout_day VARCHAR(20) DEFAULT 'Saturday',
                     created_at TIMESTAMP DEFAULT NOW(),
                     updated_at TIMESTAMP DEFAULT NOW()
                 );
             """))
+            try:
+                await conn.execute(text("ALTER TABLE master.payroll_config ADD COLUMN IF NOT EXISTS payout_day VARCHAR(20) DEFAULT 'Saturday'"))
+            except Exception:
+                pass
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS master.payroll_holidays (
                     id SERIAL PRIMARY KEY,
@@ -258,7 +263,14 @@ async def lifespan(app: FastAPI):
                         f"ADD COLUMN IF NOT EXISTS register_ids JSONB DEFAULT '[]'::jsonb"
                     )
                 )
-                for col in ("pay_type VARCHAR(20) DEFAULT 'Daily'", "total_hours NUMERIC(15,2) DEFAULT 0", "hourly_rate NUMERIC(15,2) DEFAULT 0"):
+                for col in (
+                    "pay_type VARCHAR(20) DEFAULT 'Daily'",
+                    "total_hours NUMERIC(15,2) DEFAULT 0",
+                    "hourly_rate NUMERIC(15,2) DEFAULT 0",
+                    "pay_period_type VARCHAR(20) DEFAULT 'Monthly'",
+                    "from_date DATE",
+                    "to_date DATE"
+                ):
                     try:
                         await conn.execute(text(f"ALTER TABLE fy_{fy['year_str']}.salary_vouchers ADD COLUMN IF NOT EXISTS {col}"))
                     except Exception:

@@ -32,6 +32,9 @@ class PayrollConfigIn(BaseModel):
     # Working days per month (for per-day salary calc fallback)
     working_days_per_month: Optional[int] = 26
 
+    # Weekly payout day (e.g. Saturday, Sunday, Monday, ...)
+    payout_day: Optional[str] = "Saturday"
+
 
 class TestConnectionIn(BaseModel):
     device_ip: Optional[str] = ""
@@ -64,6 +67,7 @@ async def get_payroll_config(current_user: CurrentUser, db: DBSession):
             "grace_minutes": 15,
             "week_off_days": "0",
             "working_days_per_month": 26,
+            "payout_day": "Saturday",
         }
     data = dict(row)
     # Normalize formats for frontend
@@ -105,6 +109,7 @@ async def upsert_payroll_config(body: PayrollConfigIn, current_user: CurrentUser
                         grace_minutes = :grace_minutes,
                         week_off_days = :week_off_days,
                         working_days_per_month = :working_days_per_month,
+                        payout_day = :payout_day,
                         updated_at = NOW()
                     WHERE id = :id
                 """),
@@ -116,11 +121,11 @@ async def upsert_payroll_config(body: PayrollConfigIn, current_user: CurrentUser
                     INSERT INTO master.payroll_config
                         (device_name, device_ip, device_port, device_protocol, auto_sync,
                          shift_name, shift_start, shift_end, ot_after_hours, grace_minutes,
-                         week_off_days, working_days_per_month)
+                         week_off_days, working_days_per_month, payout_day)
                     VALUES
                         (:device_name, :device_ip, :device_port, :device_protocol, :auto_sync,
                          :shift_name, :shift_start, :shift_end, :ot_after_hours, :grace_minutes,
-                         :week_off_days, :working_days_per_month)
+                         :week_off_days, :working_days_per_month, :payout_day)
                 """),
                 data
             )
@@ -239,10 +244,16 @@ async def _ensure_tables(db: DBSession):
                 grace_minutes INTEGER DEFAULT 15,
                 week_off_days VARCHAR(50) DEFAULT '0',
                 working_days_per_month INTEGER DEFAULT 26,
+                payout_day VARCHAR(20) DEFAULT 'Saturday',
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
+        try:
+            await db.execute(text("ALTER TABLE master.payroll_config ADD COLUMN IF NOT EXISTS payout_day VARCHAR(20) DEFAULT 'Saturday'"))
+            await db.commit()
+        except Exception:
+            await db.rollback()
         await db.execute(text("""
             CREATE TABLE IF NOT EXISTS master.payroll_holidays (
                 id SERIAL PRIMARY KEY,

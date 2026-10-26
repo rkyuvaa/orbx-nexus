@@ -10,6 +10,7 @@ import Delete from "@mui/icons-material/Delete";
 import Print from "@mui/icons-material/Print";
 import Calculate from "@mui/icons-material/Calculate";
 import EventAvailable from "@mui/icons-material/EventAvailable";
+import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
@@ -303,6 +304,55 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function getWeeklyPayCycle(referenceDateStr?: string, payoutDayName: string = "Saturday") {
+  const d = referenceDateStr ? new Date(referenceDateStr) : new Date();
+  if (isNaN(d.getTime())) return { from_date: "", to_date: "", payout_date: "" };
+
+  const targetDayIdx = DAY_NAMES.indexOf(payoutDayName) >= 0 ? DAY_NAMES.indexOf(payoutDayName) : 6;
+  const currentDayIdx = d.getDay();
+
+  // Find the anchor payout date (most relevant payout date <= referenceDate, or referenceDate if it is on payoutDay)
+  let diff = currentDayIdx - targetDayIdx;
+  if (diff < 0) diff += 7;
+
+  const payoutDate = new Date(d);
+  payoutDate.setDate(d.getDate() - diff);
+
+  // to_date = payoutDate - 1 day (e.g. Friday if payout is Saturday)
+  const toDate = new Date(payoutDate);
+  toDate.setDate(payoutDate.getDate() - 1);
+
+  // from_date = payoutDate - 7 days (e.g. previous Saturday)
+  const fromDate = new Date(payoutDate);
+  fromDate.setDate(payoutDate.getDate() - 7);
+
+  const formatDateYMD = (dt: Date) => {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const day = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  return {
+    from_date: formatDateYMD(fromDate),
+    to_date: formatDateYMD(toDate),
+    payout_date: formatDateYMD(payoutDate)
+  };
+}
+
+function formatDisplayDate(dateStr?: string) {
+  if (!dateStr) return "";
+  try {
+    const parts = String(dateStr).split("T")[0].split("-");
+    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
 export function SalaryVoucherPage() {
   const { activeFY } = useAuthStore();
   const qc = useQueryClient();
@@ -314,6 +364,12 @@ export function SalaryVoucherPage() {
     queryKey: ["salary-vouchers", activeFY],
     queryFn: async () => (await api.get(`/payroll/salary?fy=${activeFY}`)).data,
   });
+
+  const { data: payrollConfig } = useQuery({
+    queryKey: ["payroll-config"],
+    queryFn: async () => (await api.get("/payroll/config-settings/")).data,
+  });
+  const configuredPayoutDay = payrollConfig?.payout_day || "Saturday";
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", "Staff"],
@@ -338,6 +394,9 @@ export function SalaryVoucherPage() {
       voucher_no: "",
       voucher_date: today,
       ledger_id: "" as any,
+      pay_period_type: "Monthly",
+      from_date: "",
+      to_date: "",
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
       pay_type: "Daily",
@@ -355,6 +414,10 @@ export function SalaryVoucherPage() {
   });
 
   const watchLedgerId = watch("ledger_id");
+  const watchPayPeriodType = watch("pay_period_type") || "Monthly";
+  const watchFromDate = watch("from_date");
+  const watchToDate = watch("to_date");
+  const watchVoucherDate = watch("voucher_date");
   const watchMonth = Number(watch("month") || (new Date().getMonth() + 1));
   const watchYear = Number(watch("year") || new Date().getFullYear());
   const watchPayType = watch("pay_type");
@@ -366,14 +429,28 @@ export function SalaryVoucherPage() {
   const watchDeductions = watch("deductions");
   const watchBasicSalary = watch("basic_salary");
 
-  // Fetch real-time attendance stats from biometric entries for chosen staff & month/year
+  const isWeekly = watchPayPeriodType === "Weekly";
+
+  // Fetch real-time attendance stats from biometric entries for chosen staff & period
   const { data: attendanceStats, isFetching: isStatsLoading } = useQuery({
-    queryKey: ["staff-attendance-stats", activeFY, watchLedgerId, watchMonth, watchYear],
+    queryKey: [
+      "staff-attendance-stats", activeFY, watchLedgerId,
+      isWeekly ? "weekly" : "monthly",
+      isWeekly ? watchFromDate : watchMonth,
+      isWeekly ? watchToDate : watchYear
+    ],
     queryFn: async () => {
       if (!watchLedgerId) return null;
-      return (await api.get(`/payroll/staff-attendance-stats?fy=${activeFY}&ledger_id=${watchLedgerId}&month=${watchMonth}&year=${watchYear}`)).data;
+      let url = `/payroll/staff-attendance-stats?fy=${activeFY}&ledger_id=${watchLedgerId}&month=${watchMonth}&year=${watchYear}&pay_period_type=${watchPayPeriodType}`;
+      if (isWeekly && watchFromDate && watchToDate) {
+        url += `&from_date=${watchFromDate}&to_date=${watchToDate}`;
+      }
+      return (await api.get(url)).data;
     },
-    enabled: Boolean(open && watchLedgerId && watchMonth && watchYear),
+    enabled: Boolean(
+      open && watchLedgerId && 
+      (isWeekly ? (watchFromDate && watchToDate) : (watchMonth && watchYear))
+    ),
   });
 
   // When attendanceStats updates for a new entry, auto-populate working days, per-day salary, and payable
@@ -436,8 +513,12 @@ export function SalaryVoucherPage() {
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => {
+      const isWk = (data.pay_period_type || watchPayPeriodType) === "Weekly";
       const payload = {
         ...data,
+        pay_period_type: data.pay_period_type || (watchPayPeriodType === "Weekly" ? "Weekly" : "Monthly"),
+        from_date: isWk ? (data.from_date || watchFromDate || null) : null,
+        to_date: isWk ? (data.to_date || watchToDate || null) : null,
         pay_type: data.pay_type || (watchPayType === "Hourly" ? "Hourly" : "Daily"),
         days_worked: Number(data.days_worked || 0),
         total_hours: Number(data.total_hours || 0),
@@ -485,10 +566,14 @@ export function SalaryVoucherPage() {
   const handleEditRow = (row: any) => {
     setEditing(row);
     const isHourly = row.pay_type === "Hourly" || (Number(row.hourly_rate) > 0 && !Number(row.per_day_salary));
+    const isWk = row.pay_period_type === "Weekly" || Boolean(row.from_date && row.to_date);
     reset({
       voucher_no: row.voucher_no || "",
-      voucher_date: row.voucher_date || today,
+      voucher_date: row.voucher_date ? row.voucher_date.split("T")[0] : today,
       ledger_id: row.ledger_id || "",
+      pay_period_type: isWk ? "Weekly" : "Monthly",
+      from_date: row.from_date ? row.from_date.split("T")[0] : "",
+      to_date: row.to_date ? row.to_date.split("T")[0] : "",
       month: row.month || (new Date().getMonth() + 1),
       year: row.year || new Date().getFullYear(),
       pay_type: isHourly ? "Hourly" : "Daily",
@@ -508,7 +593,7 @@ export function SalaryVoucherPage() {
 
   const colDefs: ColDef[] = [
     { field: "voucher_no", headerName: "Voucher No.", width: 140, cellRenderer: (p) => <span style={{ fontWeight: 700 }}>{p.value}</span> },
-    { field: "voucher_date", headerName: "Date", width: 105 },
+    { field: "voucher_date", headerName: "Date", width: 105, valueFormatter: (p) => formatDisplayDate(p.value) },
     {
       field: "ledger_id",
       headerName: "Staff Member",
@@ -528,9 +613,22 @@ export function SalaryVoucherPage() {
     },
     {
       field: "month",
-      headerName: "Month / Year",
-      width: 120,
-      valueFormatter: (p) => `${MONTH_NAMES[(p.value || 1) - 1] || p.value} ${p.data?.year || ""}`
+      headerName: "Period / Cycle",
+      width: 145,
+      cellRenderer: (p) => {
+        if (p.data?.pay_period_type === "Weekly" || (p.data?.from_date && p.data?.to_date)) {
+          return (
+            <Chip
+              label={`W: ${formatDisplayDate(p.data.from_date)} - ${formatDisplayDate(p.data.to_date)}`}
+              size="small"
+              color="warning"
+              variant="outlined"
+              sx={{ fontWeight: 700, fontSize: "0.72rem" }}
+            />
+          );
+        }
+        return `${MONTH_NAMES[(p.value || 1) - 1] || p.value} ${p.data?.year || ""}`;
+      }
     },
     {
       field: "days_worked",
@@ -631,7 +729,13 @@ export function SalaryVoucherPage() {
     const { name: cName, address: cAddress, cityStatePin: cCityStatePin, phone: cPhone, email: cEmail, gstin: cTax } = resolveCompanyDetails(compData);
     const logoHtml = getCompanyLogoHtml(true, compData);
 
-    const periodStr = `${MONTH_NAMES[(row.month || 1) - 1]} ${row.year}`;
+    const isWeekly = row.pay_period_type === "Weekly" || Boolean(row.from_date && row.to_date);
+    const fromDate = row.from_date;
+    const toDate = row.to_date;
+    const periodStr = isWeekly && fromDate && toDate
+      ? `${formatDisplayDate(fromDate)} to ${formatDisplayDate(toDate)} (Weekly Pay)`
+      : `${MONTH_NAMES[(row.month || 1) - 1]} ${row.year}`;
+
     const staffName = row.staff_name || staffMap[row.ledger_id]?.name || `Staff #${row.ledger_id}`;
     const staffCode = row.staff_code ? ` (${row.staff_code})` : "";
     const workingDays = row.days_worked || 0;
@@ -676,10 +780,15 @@ export function SalaryVoucherPage() {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; border: 0.5px solid #198754; padding: 8px 10px; background-color: #f8fafc;">
             <div>
               <div style="font-size: 9.5px; color: #555;">Voucher No: <strong style="font-size: 11px; color: #000;">${row.voucher_no || "-"}</strong></div>
-              <div style="font-size: 9.5px; color: #555; margin-top: 3px;">Date: <strong style="font-size: 11px; color: #000;">${row.voucher_date || "-"}</strong></div>
+              <div style="font-size: 9.5px; color: #555; margin-top: 3px;">Date: <strong style="font-size: 11px; color: #000;">${formatDisplayDate(row.voucher_date)}</strong></div>
             </div>
             <div>
               <div style="font-size: 9.5px; color: #555;">Staff Name: <strong style="font-size: 11.5px; color: #0f5132;">${staffName}${staffCode}</strong></div>
+              ${fromDate && toDate ? `
+                <div style="font-size: 9.5px; color: #555; margin-top: 4px;">
+                  Work Period: <strong style="font-size: 10.5px; color: #0f5132;">From: ${formatDisplayDate(fromDate)} &nbsp; To: ${formatDisplayDate(toDate)}</strong>
+                </div>
+              ` : ""}
             </div>
           </div>
 
@@ -767,6 +876,9 @@ export function SalaryVoucherPage() {
             year: new Date().getFullYear(),
             voucher_date: today,
             pay_type: "Daily",
+            pay_period_type: "Monthly",
+            from_date: "",
+            to_date: "",
             days_worked: 0,
             total_hours: 0,
             hourly_rate: 0,
@@ -796,7 +908,21 @@ export function SalaryVoucherPage() {
                 <TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField {...register("voucher_date")} label="Voucher Date *" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+                <TextField
+                  {...register("voucher_date")}
+                  label="Voucher Date *"
+                  type="date"
+                  fullWidth
+                  slotProps={{ inputLabel: { shrink: true } }}
+                  onChange={(e) => {
+                    setValue("voucher_date", e.target.value);
+                    if (watchPayPeriodType === "Weekly") {
+                      const cycle = getWeeklyPayCycle(e.target.value, configuredPayoutDay);
+                      setValue("from_date", cycle.from_date);
+                      setValue("to_date", cycle.to_date);
+                    }
+                  }}
+                />
               </Grid>
 
               {/* Staff Member Selector */}
@@ -812,6 +938,19 @@ export function SalaryVoucherPage() {
                       value={staffMembers.find((l: any) => l.id === field.value) || ledgers.find((l: any) => l.id === field.value) || null}
                       onChange={(_, v) => {
                         field.onChange(v ? v.id : "");
+                        if (v && !editing) {
+                          const isLabour = v.staff_category === "Labour" || Number(v.hourly_rate || 0) > 0;
+                          if (isLabour) {
+                            setValue("pay_period_type", "Weekly");
+                            setValue("pay_type", "Hourly");
+                            const cycle = getWeeklyPayCycle(getValues("voucher_date") || today, configuredPayoutDay);
+                            setValue("from_date", cycle.from_date);
+                            setValue("to_date", cycle.to_date);
+                          } else {
+                            setValue("pay_period_type", "Monthly");
+                            setValue("pay_type", "Daily");
+                          }
+                        }
                       }}
                       renderInput={(params) => (
                         <TextField
@@ -826,33 +965,118 @@ export function SalaryVoucherPage() {
                 />
               </Grid>
 
-              {/* Month & Year Selection */}
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <TextField
-                  select
-                  {...register("month")}
-                  label="Payroll Month *"
-                  fullWidth
-                  value={watchMonth}
-                  onChange={(e) => setValue("month", Number(e.target.value))}
-                  slotProps={{ inputLabel: { shrink: true } }}
+              {/* Pay Period Frequency: Weekly vs Monthly */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    p: 1.1,
+                    borderRadius: "8px",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "#f8fafc",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 1
+                  }}
                 >
-                  {MONTH_NAMES.map((name, i) => (
-                    <MenuItem key={i + 1} value={i + 1}>{name}</MenuItem>
-                  ))}
-                </TextField>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <CalendarMonth fontSize="small" color="primary" />
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 700, fontSize: "0.8rem", lineHeight: 1.1 }}>
+                        Pay Period:
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+                        {watchPayPeriodType === "Weekly" ? `Weekly (${configuredPayoutDay})` : "Monthly"}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 0.8 }}>
+                    <Button
+                      size="small"
+                      variant={watchPayPeriodType === "Weekly" ? "contained" : "outlined"}
+                      color={watchPayPeriodType === "Weekly" ? "warning" : "inherit"}
+                      onClick={() => {
+                        setValue("pay_period_type", "Weekly");
+                        const cycle = getWeeklyPayCycle(watchVoucherDate || today, configuredPayoutDay);
+                        setValue("from_date", cycle.from_date);
+                        setValue("to_date", cycle.to_date);
+                      }}
+                      sx={{ fontWeight: 700, fontSize: "0.75rem", py: 0.3, px: 1.2, textTransform: "none", minWidth: 0 }}
+                    >
+                      Weekly Pay
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={watchPayPeriodType === "Monthly" ? "contained" : "outlined"}
+                      color={watchPayPeriodType === "Monthly" ? "primary" : "inherit"}
+                      onClick={() => setValue("pay_period_type", "Monthly")}
+                      sx={{ fontWeight: 700, fontSize: "0.75rem", py: 0.3, px: 1.2, textTransform: "none", minWidth: 0 }}
+                    >
+                      Monthly
+                    </Button>
+                  </Box>
+                </Box>
               </Grid>
-              <Grid size={{ xs: 6, sm: 3 }}>
-                <TextField
-                  {...register("year")}
-                  label="Payroll Year *"
-                  type="number"
-                  fullWidth
-                  value={watchYear}
-                  onChange={(e) => setValue("year", Number(e.target.value))}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-              </Grid>
+
+              {/* Period Date Pickers: From / To for Weekly, Month / Year for Monthly */}
+              {watchPayPeriodType === "Weekly" ? (
+                <>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      {...register("from_date")}
+                      label="Period From Date *"
+                      type="date"
+                      fullWidth
+                      value={watchFromDate || ""}
+                      onChange={(e) => setValue("from_date", e.target.value)}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      helperText={`Prev ${configuredPayoutDay}`}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      {...register("to_date")}
+                      label="Period To Date *"
+                      type="date"
+                      fullWidth
+                      value={watchToDate || ""}
+                      onChange={(e) => setValue("to_date", e.target.value)}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      helperText="Day before payout"
+                    />
+                  </Grid>
+                </>
+              ) : (
+                <>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      select
+                      {...register("month")}
+                      label="Payroll Month *"
+                      fullWidth
+                      value={watchMonth}
+                      onChange={(e) => setValue("month", Number(e.target.value))}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    >
+                      {MONTH_NAMES.map((name, i) => (
+                        <MenuItem key={i + 1} value={i + 1}>{name}</MenuItem>
+                      ))}
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      {...register("year")}
+                      label="Payroll Year *"
+                      type="number"
+                      fullWidth
+                      value={watchYear}
+                      onChange={(e) => setValue("year", Number(e.target.value))}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                </>
+              )}
 
               {/* Real-time Attendance Stats Banner */}
               {watchLedgerId && (
@@ -869,8 +1093,9 @@ export function SalaryVoucherPage() {
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5, flexWrap: "wrap", gap: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary", display: "flex", alignItems: "center", gap: 0.8 }}>
                         <EventAvailable fontSize="small" color="primary" />
-                        Attendance Record for {MONTH_NAMES[watchMonth - 1]} {watchYear}
-                        {attendanceStats && ` (${attendanceStats.days_in_month} Calendar Days)`}
+                        {isWeekly && watchFromDate && watchToDate
+                          ? `Attendance Record for ${formatDisplayDate(watchFromDate)} to ${formatDisplayDate(watchToDate)} (${attendanceStats?.days_in_period || 7} Days Weekly Cycle)`
+                          : `Attendance Record for ${MONTH_NAMES[watchMonth - 1]} ${watchYear} (${attendanceStats?.days_in_month || 30} Calendar Days)`}
                       </Typography>
                       {isStatsLoading ? (
                         <Chip icon={<CircularProgress size={12} color="inherit" />} label="Fetching attendance..." size="small" variant="outlined" />
@@ -1186,7 +1411,9 @@ export function SalaryVoucherPage() {
                   SALARY VOUCHER
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Period: {MONTH_NAMES[(viewVoucher.month || 1) - 1]} {viewVoucher.year}
+                  Period: {viewVoucher.pay_period_type === "Weekly" || (viewVoucher.from_date && viewVoucher.to_date)
+                    ? `${formatDisplayDate(viewVoucher.from_date)} to ${formatDisplayDate(viewVoucher.to_date)} (Weekly Pay)`
+                    : `${MONTH_NAMES[(viewVoucher.month || 1) - 1]} ${viewVoucher.year}`}
                 </Typography>
               </Box>
 
@@ -1198,7 +1425,7 @@ export function SalaryVoucherPage() {
                   </Grid>
                   <Grid size={6}>
                     <Typography variant="caption" color="text.secondary">Date:</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{viewVoucher.voucher_date}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{formatDisplayDate(viewVoucher.voucher_date)}</Typography>
                   </Grid>
                   <Grid size={12}>
                     <Typography variant="caption" color="text.secondary">Staff Name:</Typography>
@@ -1207,6 +1434,14 @@ export function SalaryVoucherPage() {
                       {viewVoucher.staff_code && ` (${viewVoucher.staff_code})`}
                     </Typography>
                   </Grid>
+                  {viewVoucher.from_date && viewVoucher.to_date && (
+                    <Grid size={12}>
+                      <Typography variant="caption" color="text.secondary">Work Period Dates:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#0f5132" }}>
+                        From: {formatDisplayDate(viewVoucher.from_date)} &nbsp; To: {formatDisplayDate(viewVoucher.to_date)} ({viewVoucher.pay_period_type || "Weekly"})
+                      </Typography>
+                    </Grid>
+                  )}
                 </Grid>
               </Paper>
 

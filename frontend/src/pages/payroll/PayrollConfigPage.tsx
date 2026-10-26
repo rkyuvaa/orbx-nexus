@@ -45,6 +45,7 @@ const DEFAULT_CONFIG = {
   grace_minutes: 15,
   week_off_days: "0",
   working_days_per_month: 26,
+  payout_day: "Saturday",
 };
 
 export default function PayrollConfigPage() {
@@ -117,6 +118,7 @@ export default function PayrollConfigPage() {
       if (payload.ot_after_hours === "" || payload.ot_after_hours == null) payload.ot_after_hours = 8.0;
       if (payload.grace_minutes === "" || payload.grace_minutes == null) payload.grace_minutes = 15;
       if (payload.working_days_per_month === "" || payload.working_days_per_month == null) payload.working_days_per_month = 26;
+      if (!payload.payout_day) payload.payout_day = "Saturday";
 
       const res = await api.put("/payroll/config-settings/", payload);
       return res.data;
@@ -248,7 +250,7 @@ export default function PayrollConfigPage() {
                 iconPosition="start"
                 label={
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                    Week Off Days
+                    Week Off & Payout
                     <Chip label={`${weekOffSet.size}`} size="small" color="warning" sx={{ fontSize: "0.7rem", height: 18 }} />
                   </Box>
                 }
@@ -426,9 +428,60 @@ export default function PayrollConfigPage() {
               </Box>
             )}
 
-            {/* ── Tab 2: Week Off Days ── */}
+            {/* ── Tab 2: Week Off & Payout Settings ── */}
             {activeTab === 2 && (
               <Box>
+                {/* ── Weekly Wage Payout Day ── */}
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2.5,
+                    mb: 3,
+                    borderRadius: "10px",
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(15, 81, 50, 0.08)" : "#f0fdf4",
+                    borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(22, 196, 127, 0.3)" : "#bbf7d0"
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                    <CalendarMonthIcon color="primary" fontSize="small" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
+                      Weekly Wage Payout Day
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Configure the company payment day for weekly wages. When generating weekly salary vouchers, the pay period automatically calculates from the <strong>previous payout day to the day before payout day</strong> (e.g., a Saturday payout calculates attendance and wages from <em>previous Saturday through Friday</em>).
+                  </Typography>
+                  <Grid container spacing={2} sx={{ alignItems: "center" }}>
+                    <Grid size={{ xs: 12, sm: 4 }}>
+                      <TextField
+                        select
+                        label="Weekly Payout Day *"
+                        value={cfg.payout_day ?? "Saturday"}
+                        onChange={set("payout_day")}
+                        fullWidth
+                        slotProps={{ inputLabel: { shrink: true } }}
+                      >
+                        {WEEK_DAYS.map((d) => (
+                          <MenuItem key={d.label} value={d.label}>
+                            {d.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 8 }}>
+                      <Alert severity="success" sx={{ py: 0.5, bgcolor: "transparent" }}>
+                        Weekly calculation cycle: <strong>Previous {cfg.payout_day ?? "Saturday"}</strong> to <strong>{
+                          (() => {
+                            const curIdx = WEEK_DAYS.findIndex((d) => d.label === (cfg.payout_day ?? "Saturday"));
+                            const prevDayIdx = (curIdx - 1 + 7) % 7;
+                            return WEEK_DAYS[prevDayIdx].label;
+                          })()
+                        }</strong> (7 calendar days).
+                      </Alert>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
                   Select the days that are weekly off. These will be excluded from attendance calculations.
                 </Typography>
