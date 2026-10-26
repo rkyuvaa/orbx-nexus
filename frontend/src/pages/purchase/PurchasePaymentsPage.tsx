@@ -120,13 +120,12 @@ function handlePrintPaymentVoucher(group: PaymentGroup, companyData: any) {
     billsRowsHtml += `
       <tr>
         <td style="text-align: center;">${idx + 1}</td>
-        <td style="font-weight: 600;">${b.movement_no}</td>
+        <td style="font-weight: 700; color: #0f5132;">${b.movement_no}</td>
         <td style="text-align: center;">${b.movement_date || "—"}</td>
-        <td>${b.ref_no || "—"}</td>
-        <td>${b.stock_item_name || "Tools / Consumables Purchase"}</td>
         <td style="text-align: right;">₹${formatAmount(bTotal)}</td>
         <td style="text-align: right; font-weight: 700; color: #0f5132;">₹${formatAmount(bPaid)}</td>
         <td style="text-align: right; color: ${bBal > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(bBal)}</td>
+        <td style="text-align: center;">${b.payment_status || (bBal <= 0.01 ? "Paid" : "Partial")}</td>
       </tr>
     `;
   });
@@ -185,7 +184,7 @@ function handlePrintPaymentVoucher(group: PaymentGroup, companyData: any) {
         <div class="voucher-box">
           <div class="voucher-grid">
             <div>
-              <div class="voucher-label">Paid To (Supplier / Payee)</div>
+              <div class="voucher-label">Paid To (Supplier / Party)</div>
               <div class="voucher-value" style="font-size: 15px; color: #0f5132;">${group.supplierName}</div>
             </div>
             <div>
@@ -193,28 +192,29 @@ function handlePrintPaymentVoucher(group: PaymentGroup, companyData: any) {
               <div class="voucher-value">${group.paymentMode}</div>
             </div>
             <div>
-              <div class="voucher-label">Total Bills Settled</div>
-              <div class="voucher-value">${group.bills.length} Bill${group.bills.length > 1 ? "s" : ""}</div>
+              <div class="voucher-label">Bulk Payment Amount</div>
+              <div class="voucher-value" style="font-size: 16px; color: #0f5132;">₹${formatAmount(group.totalPaidAmount)}</div>
             </div>
             <div>
-              <div class="voucher-label">Payment Notes / Ref</div>
+              <div class="voucher-label">Notes / Ref</div>
               <div class="voucher-value">${group.paymentNotes || "—"}</div>
             </div>
           </div>
         </div>
 
-        <h3 style="margin-top: 20px; margin-bottom: 8px; font-size: 14px; color: #0f5132;">BILLS PAID UNDER THIS PAYMENT</h3>
+        <h3 style="margin-top: 20px; margin-bottom: 8px; font-size: 13px; color: #0f5132; text-transform: uppercase;">
+          Amount Adjusted to Bills (${group.bills.length} Bill${group.bills.length > 1 ? "s" : ""}):
+        </h3>
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important;">
             <tr>
               <th style="width: 40px; text-align: center;">S.NO</th>
-              <th style="width: 100px;">BILL NO</th>
-              <th style="width: 90px; text-align: center;">BILL DATE</th>
-              <th style="width: 100px;">INV REF</th>
-              <th>PARTICULARS</th>
-              <th style="width: 110px; text-align: right;">BILL AMOUNT</th>
-              <th style="width: 120px; text-align: right;">PAID (₹)</th>
-              <th style="width: 110px; text-align: right;">BALANCE</th>
+              <th style="width: 130px;">BILL NO</th>
+              <th style="width: 100px; text-align: center;">BILL DATE</th>
+              <th style="width: 130px; text-align: right;">BILL AMOUNT</th>
+              <th style="width: 140px; text-align: right;">AMOUNT ADJUSTED (₹)</th>
+              <th style="width: 120px; text-align: right;">BALANCE</th>
+              <th style="width: 90px; text-align: center;">STATUS</th>
             </tr>
           </thead>
           <tbody>
@@ -222,10 +222,11 @@ function handlePrintPaymentVoucher(group: PaymentGroup, companyData: any) {
           </tbody>
           <tfoot style="font-weight: 700; background-color: #f4f9f6;">
             <tr>
-              <td colspan="5" style="text-align: right;">Total Amount:</td>
+              <td colspan="3" style="text-align: right;">Total:</td>
               <td style="text-align: right;">₹${formatAmount(group.totalBillAmount)}</td>
               <td style="text-align: right; color: #0f5132; font-size: 13px;">₹${formatAmount(group.totalPaidAmount)}</td>
               <td style="text-align: right; color: ${group.totalBalance > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(group.totalBalance)}</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
@@ -237,11 +238,11 @@ function handlePrintPaymentVoucher(group: PaymentGroup, companyData: any) {
               <span>₹${formatAmount(group.totalBillAmount)}</span>
             </div>
             <div class="calculation-row grand-total" style="background-color: #e8f5e9 !important;">
-              <span>Total Paid Amount:</span>
+              <span>Total Bulk Amount Paid:</span>
               <span style="color: #0f5132;">₹${formatAmount(group.totalPaidAmount)}</span>
             </div>
             <div class="calculation-row">
-              <span>Remaining Pending Balance:</span>
+              <span>Remaining Balance:</span>
               <span>₹${formatAmount(group.totalBalance)}</span>
             </div>
           </div>
@@ -305,18 +306,22 @@ function handlePrintPaymentsRegister(groups: PaymentGroup[], companyData: any, s
   let idx = 1;
 
   groups.forEach((g) => {
-    // Master Group row
-    const billsList = g.bills.map((b) => `${b.movement_no} (₹${formatAmount(b.paid_amount)})`).join(", ");
+    const adjustedList = g.bills
+      .map((b) => `<strong>${b.movement_no}</strong> = ₹${formatAmount(b.paid_amount)}`)
+      .join("<br/>");
+
     rowsHtml += `
-      <tr style="background-color: #f8faf9; font-weight: 600;">
+      <tr style="background-color: #f8faf9; font-size: 12px;">
         <td style="text-align: center;">${idx++}</td>
         <td style="text-align: center;">${g.paymentDate}</td>
         <td style="font-weight: 700; color: #0f5132;">${g.voucherNo}</td>
         <td style="font-weight: 700;">${g.supplierName}</td>
         <td style="text-align: center;">${g.paymentMode}</td>
-        <td>${billsList}</td>
+        <td style="text-align: right; font-weight: 700; font-size: 13px; color: #0f5132;">
+          ₹${formatAmount(g.totalPaidAmount)}
+        </td>
+        <td style="line-height: 1.5;">${adjustedList}</td>
         <td style="text-align: right;">₹${formatAmount(g.totalBillAmount)}</td>
-        <td style="text-align: right; font-weight: 700; color: #0f5132;">₹${formatAmount(g.totalPaidAmount)}</td>
         <td style="text-align: right; color: ${g.totalBalance > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(g.totalBalance)}</td>
         <td style="text-align: center;">${g.status}</td>
       </tr>
@@ -346,8 +351,8 @@ function handlePrintPaymentsRegister(groups: PaymentGroup[], companyData: any, s
         </div>
 
         <div class="title-section" style="margin-top: 15px;">
-          <h2>PURCHASE PAYMENTS REGISTER (BILL-WISE BREAKDOWN)</h2>
-          <div class="doc-no">Total Payment Records: ${groups.length}</div>
+          <h2>PURCHASE PAYMENTS REGISTER (BILL-WISE ADJUSTED AMOUNTS)</h2>
+          <div class="doc-no">Total Payments: ${groups.length}</div>
           <div class="doc-date">Generated: ${new Date().toLocaleDateString("en-IN")}</div>
         </div>
 
@@ -356,13 +361,13 @@ function handlePrintPaymentsRegister(groups: PaymentGroup[], companyData: any, s
             <tr>
               <th style="width: 35px; text-align: center;">#</th>
               <th style="width: 85px; text-align: center;">DATE</th>
-              <th style="width: 130px;">VOUCHER NO</th>
+              <th style="width: 120px;">VOUCHER NO</th>
               <th style="width: 140px;">SUPPLIER NAME</th>
-              <th style="width: 95px; text-align: center;">MODE</th>
-              <th>BILLS PAID (BILL NO & AMOUNT)</th>
+              <th style="width: 90px; text-align: center;">MODE</th>
+              <th style="width: 120px; text-align: right;">BULK PAID (₹)</th>
+              <th>AMOUNT ADJUSTED TO BILLS</th>
               <th style="width: 105px; text-align: right;">BILLS TOTAL</th>
-              <th style="width: 110px; text-align: right;">PAID (₹)</th>
-              <th style="width: 100px; text-align: right;">BALANCE</th>
+              <th style="width: 95px; text-align: right;">BALANCE</th>
               <th style="width: 75px; text-align: center;">STATUS</th>
             </tr>
           </thead>
@@ -371,9 +376,10 @@ function handlePrintPaymentsRegister(groups: PaymentGroup[], companyData: any, s
           </tbody>
           <tfoot style="font-weight: 700; background-color: #f4f9f6;">
             <tr>
-              <td colspan="6" style="text-align: right;">Register Grand Totals:</td>
-              <td style="text-align: right;">₹${formatAmount(summary.totalBillAmount)}</td>
+              <td colspan="5" style="text-align: right;">Grand Totals:</td>
               <td style="text-align: right; color: #0f5132; font-size: 13px;">₹${formatAmount(summary.totalPaidAmount)}</td>
+              <td></td>
+              <td style="text-align: right;">₹${formatAmount(summary.totalBillAmount)}</td>
               <td style="text-align: right; color: #dc3545;">₹${formatAmount(summary.totalBalance)}</td>
               <td></td>
             </tr>
@@ -502,7 +508,7 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 1, fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Edit Bill-Wise Payment Allocation</span>
+        <span>Edit Bill-Wise Payment Adjustment</span>
         <Chip label={group.supplierName} color="primary" variant="outlined" size="small" sx={{ fontWeight: 700 }} />
       </DialogTitle>
       <Divider />
@@ -548,22 +554,30 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
           </Grid>
         </Grid>
 
-        {/* Bill-Wise Allocation Table */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: "text.primary" }}>
-          Which Bill Which Amount is Paid:
-        </Typography>
+        {/* Bill-Wise Adjustment Table */}
+        <Box sx={{ mb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
+            Adjust Paid Amount to Bills:
+          </Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontStyle: "italic" }}>
+            Specify which amount is adjusted to each bill
+          </Typography>
+        </Box>
+
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden", mb: 2 }}>
           <Table size="small">
             <TableHead>
               <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#f8faf9" }}>
                 <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
-                <TableCell sx={{ fontWeight: 700, width: 110 }}>Bill No</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 120 }}>Bill No</TableCell>
                 <TableCell sx={{ fontWeight: 700, width: 100 }}>Bill Date</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Bill Amount</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 160 }}>Paid Amount (₹) *</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700, width: 110 }}>Balance</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Bill Amount (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 170, color: "success.main" }}>
+                  Amount Adjusted (₹) *
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 110 }}>Balance (₹)</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700, width: 90 }}>Status</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700, width: 120 }}>Quick Actions</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, width: 110 }}>Quick Set</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -599,7 +613,7 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
                             style: { textAlign: "right", fontWeight: 700, color: curPaidNum > 0 ? "#198754" : "inherit" },
                           },
                         }}
-                        sx={{ width: 130 }}
+                        sx={{ width: 140 }}
                       />
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, color: pending > 0.01 ? "#dc3545" : "success.main" }}>
@@ -615,7 +629,7 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
                           variant="outlined"
                           color="success"
                           onClick={() => handleSetFull(bill.id, bTotal)}
-                          sx={{ textTransform: "none", fontSize: 10, px: 0.8, py: 0.2, minWidth: 42 }}
+                          sx={{ textTransform: "none", fontSize: 10, px: 0.8, py: 0.2, minWidth: 40 }}
                         >
                           Full
                         </Button>
@@ -624,7 +638,7 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
                           variant="outlined"
                           color="error"
                           onClick={() => handleResetZero(bill.id)}
-                          sx={{ textTransform: "none", fontSize: 10, px: 0.8, py: 0.2, minWidth: 42 }}
+                          sx={{ textTransform: "none", fontSize: 10, px: 0.8, py: 0.2, minWidth: 40 }}
                         >
                           ₹0
                         </Button>
@@ -636,7 +650,7 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
             </TableBody>
             <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
               <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Total Bills:</TableCell>
+                <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Total:</TableCell>
                 <TableCell align="right" sx={{ fontSize: 12.5 }}>{RUPEE}{formatAmount(group.totalBillAmount)}</TableCell>
                 <TableCell align="right" sx={{ fontSize: 13.5, color: "success.main" }}>
                   {RUPEE}{formatAmount(totalAllocated)}
@@ -664,13 +678,13 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
           }}
         >
           <Box>
-            <Typography variant="caption" color="text.secondary">Total Allocated Payment</Typography>
+            <Typography variant="caption" color="text.secondary">Total Bulk Amount Paid</Typography>
             <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main" }}>
               {RUPEE}{formatAmount(totalAllocated)}
             </Typography>
           </Box>
           <Typography variant="caption" sx={{ color: "text.secondary" }}>
-            Updating will adjust paid balances across {group.bills.length} bill{group.bills.length > 1 ? "s" : ""}.
+            Adjusted across {group.bills.length} bill{group.bills.length > 1 ? "s" : ""}.
           </Typography>
         </Box>
       </DialogContent>
@@ -686,7 +700,7 @@ function EditPaymentAllocationDialog({ open, onClose, group, onSuccess }: EditPa
           disabled={saveMutation.isPending}
           startIcon={<Edit fontSize="small" />}
         >
-          {saveMutation.isPending ? "Updating..." : `Save Payment (${RUPEE}${formatAmount(totalAllocated)})`}
+          {saveMutation.isPending ? "Updating..." : `Save Adjustment (${RUPEE}${formatAmount(totalAllocated)})`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -711,7 +725,7 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Payment color="primary" />
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Payment Details — {group.voucherNo}
+            Payment Record — {group.voucherNo}
           </Typography>
         </Box>
         {statusChip(group.status)}
@@ -752,9 +766,9 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-              <Typography variant="caption" color="text.secondary">Bills Settled</Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {group.bills.length} Bill{group.bills.length > 1 ? "s" : ""}
+              <Typography variant="caption" color="text.secondary">Bulk Amount Paid</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "success.main" }}>
+                {RUPEE}{formatAmount(group.totalPaidAmount)}
               </Typography>
             </Paper>
           </Grid>
@@ -768,42 +782,9 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
           </Grid>
         </Grid>
 
-        {/* Payment Amount Strip */}
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 2,
-            mb: 2.5,
-            borderRadius: 2,
-            bgcolor: (t) => (t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "#f0fdf4"),
-            borderColor: (t) => (t.palette.mode === "dark" ? "divider" : "#bbf7d0"),
-          }}
-        >
-          <Grid container spacing={2} sx={{ alignItems: "center" }}>
-            <Grid size={{ xs: 4 }} sx={{ textAlign: "center" }}>
-              <Typography variant="caption" color="text.secondary">Total Invoiced Amount</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                {RUPEE}{formatAmount(group.totalBillAmount)}
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 4 }} sx={{ textAlign: "center", borderLeft: "1px solid", borderRight: "1px solid", borderColor: "divider" }}>
-              <Typography variant="caption" color="text.secondary">Total Amount Paid</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: "success.main" }}>
-                {RUPEE}{formatAmount(group.totalPaidAmount)}
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 4 }} sx={{ textAlign: "center" }}>
-              <Typography variant="caption" color="text.secondary">Remaining Balance</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: group.totalBalance > 0.01 ? "#dc3545" : "success.main" }}>
-                {RUPEE}{formatAmount(group.totalBalance)}
-              </Typography>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* Bill-Wise Breakdown Table */}
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-          Bills Paid and Amounts:
+        {/* Bill-Wise Adjustment Breakdown */}
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, textTransform: "uppercase", fontSize: "0.78rem", letterSpacing: 0.5, color: "primary.main" }}>
+          Amount Adjusted to Bills:
         </Typography>
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
           <Table size="small">
@@ -812,10 +793,9 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
                 <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Bill No</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Bill Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Inv Ref</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Bill Total (₹)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Amount Paid (₹)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Balance (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Bill Amount (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, color: "success.main" }}>Amount Adjusted (₹)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Remaining Balance (₹)</TableCell>
                 <TableCell align="center" sx={{ fontWeight: 700 }}>Status</TableCell>
               </TableRow>
             </TableHead>
@@ -829,9 +809,10 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
                     <TableCell>{i + 1}</TableCell>
                     <TableCell sx={{ fontWeight: 700, color: "primary.main" }}>{b.movement_no}</TableCell>
                     <TableCell>{b.movement_date || "—"}</TableCell>
-                    <TableCell>{b.ref_no || "—"}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 600 }}>{RUPEE}{formatAmount(bTotal)}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, color: "success.main" }}>{RUPEE}{formatAmount(bPaid)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: "success.main" }}>
+                      = {RUPEE}{formatAmount(bPaid)}
+                    </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 600, color: bBal > 0.01 ? "#dc3545" : "success.main" }}>
                       {RUPEE}{formatAmount(bBal)}
                     </TableCell>
@@ -840,6 +821,19 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
                 );
               })}
             </TableBody>
+            <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
+              <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
+                <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Total:</TableCell>
+                <TableCell align="right" sx={{ fontSize: 12.5 }}>{RUPEE}{formatAmount(group.totalBillAmount)}</TableCell>
+                <TableCell align="right" sx={{ fontSize: 13.5, color: "success.main" }}>
+                  {RUPEE}{formatAmount(group.totalPaidAmount)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontSize: 12.5, color: group.totalBalance > 0.01 ? "#dc3545" : "success.main" }}>
+                  {RUPEE}{formatAmount(group.totalBalance)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            </TableFooter>
           </Table>
         </Paper>
       </DialogContent>
@@ -866,7 +860,7 @@ function ViewPaymentDetailsDialog({ open, onClose, group, onEdit, onPrint }: Vie
                 onEdit(group);
               }}
             >
-              Edit Allocation
+              Edit Adjustment
             </Button>
           )}
         </Box>
@@ -1017,8 +1011,7 @@ export default function PurchasePaymentsPage() {
           g.bills.some(
             (b) =>
               (b.movement_no && String(b.movement_no).toLowerCase().includes(q)) ||
-              (b.ref_no && String(b.ref_no).toLowerCase().includes(q)) ||
-              (b.stock_item_name && String(b.stock_item_name).toLowerCase().includes(q))
+              (b.ref_no && String(b.ref_no).toLowerCase().includes(q))
           );
         if (!matches) return false;
       }
@@ -1114,7 +1107,7 @@ export default function PurchasePaymentsPage() {
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <PageHeader
         title="Purchase Payments"
-        subtitle="Register of paid purchase bills with bill-wise payment breakdown"
+        subtitle="Register of paid purchase bills showing bulk payment amounts and bill-wise adjustments"
         breadcrumbs={[{ label: "Purchase" }, { label: "Purchase Payments" }]}
         actions={
           <Box sx={{ display: "flex", gap: 1 }}>
@@ -1152,7 +1145,7 @@ export default function PurchasePaymentsPage() {
 
         <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "primary.main", color: "#fff", minWidth: 140 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Payment Transactions
+            Payment Records
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
             {summary.totalGroupsCount}
@@ -1161,7 +1154,7 @@ export default function PurchasePaymentsPage() {
 
         <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "#0f5132", color: "#fff", minWidth: 140 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Total Bills Settled
+            Bills Settled
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
             {summary.totalBillsCount}
@@ -1311,19 +1304,19 @@ export default function PurchasePaymentsPage() {
           <Table size="small" stickyHeader>
             <TableHead>
               <TableRow sx={{ "& > th": { fontWeight: 700, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.05)" : "#f8faf9" } }}>
-                <TableCell sx={{ width: 44, textAlign: "center" }} />
+                <TableCell sx={{ width: 40, textAlign: "center" }} />
                 <TableCell sx={{ width: 40, textAlign: "center" }}>#</TableCell>
                 <TableCell sx={{ width: 105 }}>Payment Date</TableCell>
-                <TableCell sx={{ width: 130 }}>Voucher No</TableCell>
-                <TableCell>Supplier / Party</TableCell>
-                <TableCell sx={{ width: 110, textAlign: "center" }}>Mode</TableCell>
-                <TableCell sx={{ width: 140 }}>Bills Settled</TableCell>
-                <TableCell align="right" sx={{ width: 120 }}>Bills Total</TableCell>
-                <TableCell align="right" sx={{ width: 130 }}>Total Paid</TableCell>
-                <TableCell align="right" sx={{ width: 110 }}>Balance</TableCell>
+                <TableCell sx={{ width: 125 }}>Voucher No</TableCell>
+                <TableCell sx={{ width: 150 }}>Supplier / Party</TableCell>
+                <TableCell sx={{ width: 100, textAlign: "center" }}>Mode</TableCell>
+                <TableCell align="right" sx={{ width: 130 }}>Bulk Paid Amount</TableCell>
+                <TableCell sx={{ minWidth: 260 }}>Amount Adjusted to Bills</TableCell>
+                <TableCell align="right" sx={{ width: 110 }}>Bills Total</TableCell>
+                <TableCell align="right" sx={{ width: 100 }}>Balance</TableCell>
                 <TableCell align="center" sx={{ width: 85 }}>Status</TableCell>
-                <TableCell sx={{ width: 140 }}>Notes / Ref</TableCell>
-                <TableCell align="center" sx={{ width: 110 }}>Actions</TableCell>
+                <TableCell sx={{ width: 130 }}>Notes / Ref</TableCell>
+                <TableCell align="center" sx={{ width: 105 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1380,7 +1373,7 @@ export default function PurchasePaymentsPage() {
                           bgcolor: isExpanded
                             ? (t) => t.palette.mode === "dark" ? "rgba(22, 196, 127, 0.08)" : "rgba(22, 196, 127, 0.04)"
                             : "inherit",
-                          "& > td": { py: 1.1 },
+                          "& > td": { py: 1 },
                         }}
                         onClick={() => handleToggleRow(group.groupId)}
                       >
@@ -1408,20 +1401,41 @@ export default function PurchasePaymentsPage() {
                         <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
                           {modeChip(group.paymentMode)}
                         </TableCell>
-                        <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>
-                          <Chip
-                            label={`${group.bills.length} Bill${group.bills.length > 1 ? "s" : ""}`}
-                            size="small"
-                            color="info"
-                            variant="outlined"
-                            sx={{ fontWeight: 700, height: 21, fontSize: "0.72rem" }}
-                          />
+                        {/* Bulk Paid Amount (Prominent) */}
+                        <TableCell align="right" sx={{ fontSize: 13.5, fontWeight: 800, color: "success.main", whiteSpace: "nowrap" }}>
+                          {RUPEE}{formatAmount(group.totalPaidAmount)}
+                        </TableCell>
+                        {/* Amount Adjusted to Bills (Clean & Explicit: bill no 1 = 10000) */}
+                        <TableCell sx={{ py: 0.8 }}>
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                            {group.bills.map((b) => (
+                              <Box
+                                key={b.id}
+                                sx={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 1,
+                                  py: 0.2,
+                                  px: 0.75,
+                                  borderRadius: 1,
+                                  bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.04)" : "#f4fbf7",
+                                  border: "1px solid",
+                                  borderColor: (t) => t.palette.mode === "dark" ? "divider" : "#d1e7dd",
+                                  width: "fit-content",
+                                }}
+                              >
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: "primary.main" }}>
+                                  {b.movement_no}
+                                </Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 800, color: "success.main" }}>
+                                  = {RUPEE}{formatAmount(b.paid_amount)}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Box>
                         </TableCell>
                         <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
                           {RUPEE}{formatAmount(group.totalBillAmount)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontSize: 13, fontWeight: 800, color: "success.main" }}>
-                          {RUPEE}{formatAmount(group.totalPaidAmount)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: group.totalBalance > 0.01 ? "#dc3545" : "success.main" }}>
                           {group.totalBalance > 0.01 ? `${RUPEE}${formatAmount(group.totalBalance)}` : "₹0.00"}
@@ -1429,14 +1443,14 @@ export default function PurchasePaymentsPage() {
                         <TableCell align="center">
                           {statusChip(group.status)}
                         </TableCell>
-                        <TableCell sx={{ fontSize: 11.5, color: "text.secondary", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <TableCell sx={{ fontSize: 11.5, color: "text.secondary", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           <Tooltip title={group.paymentNotes || ""}>
                             <span>{group.paymentNotes || "—"}</span>
                           </Tooltip>
                         </TableCell>
                         <TableCell align="center" sx={{ whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                           <Box sx={{ display: "inline-flex", gap: 0.5 }}>
-                            <Tooltip title="View Bill-Wise Details">
+                            <Tooltip title="View Adjusted Details">
                               <IconButton
                                 size="small"
                                 color="info"
@@ -1447,7 +1461,7 @@ export default function PurchasePaymentsPage() {
                               </IconButton>
                             </Tooltip>
 
-                            <Tooltip title="Edit Bill-Wise Payment Allocation">
+                            <Tooltip title="Edit Bill-Wise Adjustments">
                               <IconButton
                                 size="small"
                                 color="primary"
@@ -1472,29 +1486,27 @@ export default function PurchasePaymentsPage() {
                         </TableCell>
                       </TableRow>
 
-                      {/* Expandable Nested Breakdown: Which Bill Which Amount is Paid */}
+                      {/* Expandable Detail Table: Amount Adjusted per Bill */}
                       <TableRow sx={{ "& > td": { py: 0, borderBottom: isExpanded ? "1px solid" : "none", borderColor: "divider" } }}>
                         <TableCell colSpan={13} sx={{ p: 0, bgcolor: (t) => t.palette.mode === "dark" ? "rgba(0,0,0,0.18)" : "#fdfefe" }}>
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                            <Box sx={{ py: 1.5, px: 3, pl: 6 }}>
+                            <Box sx={{ py: 1.5, px: 3, pl: 7 }}>
                               <Typography variant="caption" sx={{ fontWeight: 700, color: "primary.main", textTransform: "uppercase", letterSpacing: 0.5, display: "block", mb: 0.75 }}>
-                                Bills Paid under this Payment ({group.bills.length} Bill{group.bills.length > 1 ? "s" : ""}):
+                                Amount Adjusted to Bills ({group.bills.length} Bill{group.bills.length > 1 ? "s" : ""}):
                               </Typography>
                               <Paper variant="outlined" sx={{ borderRadius: 1.5, overflow: "hidden", bgcolor: "background.paper" }}>
                                 <Table size="small">
                                   <TableHead>
                                     <TableRow sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "#f4f9f6" }}>
                                       <TableCell sx={{ fontWeight: 700, width: 40, fontSize: 11.5 }}>#</TableCell>
-                                      <TableCell sx={{ fontWeight: 700, width: 120, fontSize: 11.5 }}>Purchase Bill No</TableCell>
-                                      <TableCell sx={{ fontWeight: 700, width: 100, fontSize: 11.5 }}>Bill Date</TableCell>
-                                      <TableCell sx={{ fontWeight: 700, width: 110, fontSize: 11.5 }}>Inv Ref No</TableCell>
-                                      <TableCell sx={{ fontWeight: 700, fontSize: 11.5 }}>Item / Particulars</TableCell>
-                                      <TableCell align="right" sx={{ fontWeight: 700, width: 120, fontSize: 11.5 }}>Bill Total (₹)</TableCell>
-                                      <TableCell align="right" sx={{ fontWeight: 700, width: 130, fontSize: 11.5, color: "success.main" }}>
-                                        Amount Paid (₹)
+                                      <TableCell sx={{ fontWeight: 700, width: 140, fontSize: 11.5 }}>Bill No</TableCell>
+                                      <TableCell sx={{ fontWeight: 700, width: 110, fontSize: 11.5 }}>Bill Date</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 700, width: 130, fontSize: 11.5 }}>Bill Amount (₹)</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 700, width: 150, fontSize: 11.5, color: "success.main" }}>
+                                        Amount Adjusted (Paid) (₹)
                                       </TableCell>
-                                      <TableCell align="right" sx={{ fontWeight: 700, width: 110, fontSize: 11.5 }}>Balance (₹)</TableCell>
-                                      <TableCell align="center" sx={{ fontWeight: 700, width: 90, fontSize: 11.5 }}>Bill Status</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 700, width: 120, fontSize: 11.5 }}>Remaining Balance (₹)</TableCell>
+                                      <TableCell align="center" sx={{ fontWeight: 700, width: 90, fontSize: 11.5 }}>Status</TableCell>
                                     </TableRow>
                                   </TableHead>
                                   <TableBody>
@@ -1510,17 +1522,11 @@ export default function PurchasePaymentsPage() {
                                             {bill.movement_no}
                                           </TableCell>
                                           <TableCell sx={{ fontSize: 11.5 }}>{bill.movement_date || "—"}</TableCell>
-                                          <TableCell sx={{ fontSize: 11.5, color: bill.ref_no ? "text.primary" : "text.secondary" }}>
-                                            {bill.ref_no || "—"}
-                                          </TableCell>
-                                          <TableCell sx={{ fontSize: 11.5, color: "text.secondary" }}>
-                                            {bill.stock_item_name || "Tools / Consumables Purchase"}
-                                          </TableCell>
                                           <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600 }}>
                                             {RUPEE}{formatAmount(bTotal)}
                                           </TableCell>
-                                          <TableCell align="right" sx={{ fontSize: 12.5, fontWeight: 800, color: "success.main" }}>
-                                            {RUPEE}{formatAmount(bPaid)}
+                                          <TableCell align="right" sx={{ fontSize: 13, fontWeight: 800, color: "success.main" }}>
+                                            = {RUPEE}{formatAmount(bPaid)}
                                           </TableCell>
                                           <TableCell align="right" sx={{ fontSize: 11.5, fontWeight: 600, color: bBal > 0.01 ? "#dc3545" : "success.main" }}>
                                             {bBal > 0.01 ? `${RUPEE}${formatAmount(bBal)}` : "₹0.00"}
@@ -1532,6 +1538,19 @@ export default function PurchasePaymentsPage() {
                                       );
                                     })}
                                   </TableBody>
+                                  <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "#f8faf9" }}>
+                                    <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
+                                      <TableCell colSpan={3} align="right" sx={{ fontSize: 11.5 }}>Total:</TableCell>
+                                      <TableCell align="right" sx={{ fontSize: 12 }}>{RUPEE}{formatAmount(group.totalBillAmount)}</TableCell>
+                                      <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>
+                                        {RUPEE}{formatAmount(group.totalPaidAmount)}
+                                      </TableCell>
+                                      <TableCell align="right" sx={{ fontSize: 12, color: group.totalBalance > 0.01 ? "#dc3545" : "success.main" }}>
+                                        {RUPEE}{formatAmount(group.totalBalance)}
+                                      </TableCell>
+                                      <TableCell />
+                                    </TableRow>
+                                  </TableFooter>
                                 </Table>
                               </Paper>
                             </Box>
@@ -1546,14 +1565,15 @@ export default function PurchasePaymentsPage() {
             {filteredGroups.length > 0 && (
               <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "#f4f9f6" }}>
                 <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                  <TableCell colSpan={7} align="right" sx={{ fontSize: 12 }}>
-                    Totals ({filteredGroups.length} transactions, {summary.totalBillsCount} bills):
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontSize: 12.5, color: "text.secondary" }}>
-                    {RUPEE}{formatAmount(summary.totalBillAmount)}
+                  <TableCell colSpan={6} align="right" sx={{ fontSize: 12 }}>
+                    Totals ({filteredGroups.length} payments, {summary.totalBillsCount} bills):
                   </TableCell>
                   <TableCell align="right" sx={{ fontSize: 13.5, color: "success.main", fontWeight: 800 }}>
                     {RUPEE}{formatAmount(summary.totalPaidAmount)}
+                  </TableCell>
+                  <TableCell />
+                  <TableCell align="right" sx={{ fontSize: 12.5, color: "text.secondary" }}>
+                    {RUPEE}{formatAmount(summary.totalBillAmount)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontSize: 12.5, color: summary.totalBalance > 0 ? "#dc3545" : "success.main" }}>
                     {RUPEE}{formatAmount(summary.totalBalance)}
