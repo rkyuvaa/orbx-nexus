@@ -203,7 +203,23 @@ async def save_daily_staff_attendance_bulk(
         if not pout and entry.status == "Present":
             pout = "18:00:00"
             
-        hw = float(entry.hours_worked) if entry.hours_worked is not None and entry.status not in ["Absent", "On Leave"] else 0.0
+        if entry.status in ["Absent", "On Leave"]:
+            hw = 0.0
+            ot = 0.0
+        elif entry.hours_worked is not None and float(entry.hours_worked) > 0:
+            hw = float(entry.hours_worked)
+        elif pin and pout:
+            try:
+                t1 = datetime.datetime.strptime(pin, "%H:%M:%S")
+                t2 = datetime.datetime.strptime(pout, "%H:%M:%S")
+                diff = (t2 - t1).total_seconds()
+                if diff < 0:
+                    diff += 24 * 3600
+                hw = round(diff / 3600.0, 2)
+            except Exception:
+                hw = 0.0
+        else:
+            hw = 0.0
         ot = float(entry.ot_hours) if entry.ot_hours is not None else 0.0
         remarks = entry.remarks if entry.remarks else None
         

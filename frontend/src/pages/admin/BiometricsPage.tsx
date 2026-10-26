@@ -31,6 +31,28 @@ interface StaffRow {
   remarks: string;
 }
 
+export function calculateWorkHours(punchIn?: string | null, punchOut?: string | null): number {
+  if (!punchIn || !punchOut) return 0;
+  const inParts = punchIn.split(":");
+  const outParts = punchOut.split(":");
+  if (inParts.length < 2 || outParts.length < 2) return 0;
+
+  const inH = parseInt(inParts[0], 10);
+  const inM = parseInt(inParts[1], 10);
+  const outH = parseInt(outParts[0], 10);
+  const outM = parseInt(outParts[1], 10);
+
+  if (isNaN(inH) || isNaN(inM) || isNaN(outH) || isNaN(outM)) return 0;
+
+  let totalMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+  if (totalMinutes < 0) {
+    totalMinutes += 24 * 60; // Overnight shift
+  }
+
+  const hours = totalMinutes / 60;
+  return Math.round(hours * 100) / 100;
+}
+
 const BREADCRUMBS = [{ label: "Salary and Wages" }, { label: "Attendance" }];
 
 export default function BiometricsPage() {
@@ -59,18 +81,32 @@ export default function BiometricsPage() {
     if (dailyData && Array.isArray(dailyData)) {
       const formatted = dailyData.map((d: any) => {
         const isRecorded = !!d.entry_id;
+        const status = d.status || "Present";
         const defaultPunchIn = isRecorded ? "" : "09:00";
         const defaultPunchOut = isRecorded ? "" : "18:00";
-        const defaultHours = isRecorded ? 0.0 : 8.0;
+
+        const pin = d.punch_in ? d.punch_in.substring(0, 5) : (status === "Present" && !isRecorded ? defaultPunchIn : (status === "Half Day" && !isRecorded ? "09:00" : ""));
+        const pout = d.punch_out ? d.punch_out.substring(0, 5) : (status === "Present" && !isRecorded ? defaultPunchOut : (status === "Half Day" && !isRecorded ? "13:00" : ""));
+
+        let hw = 0.0;
+        if (status === "Absent" || status === "On Leave") {
+          hw = 0.0;
+        } else if (pin && pout) {
+          hw = calculateWorkHours(pin, pout);
+        } else if (d.hours_worked !== null && d.hours_worked !== undefined) {
+          hw = Number(d.hours_worked);
+        } else if (status === "Half Day") {
+          hw = 4.0;
+        }
 
         return {
           ledger_id: d.ledger_id,
           staff_name: d.staff_name,
           staff_code: d.staff_code || "",
-          status: d.status || "Present",
-          punch_in: d.punch_in ? d.punch_in.substring(0, 5) : (d.status === "Present" && !isRecorded ? defaultPunchIn : ""),
-          punch_out: d.punch_out ? d.punch_out.substring(0, 5) : (d.status === "Present" && !isRecorded ? defaultPunchOut : (d.status === "Half Day" && !isRecorded ? "13:00" : "")),
-          hours_worked: d.hours_worked !== null && d.hours_worked !== undefined ? Number(d.hours_worked) : (d.status === "Present" ? defaultHours : (d.status === "Half Day" ? 4.0 : 0.0)),
+          status: status,
+          punch_in: pin,
+          punch_out: pout,
+          hours_worked: hw,
           ot_hours: Number(d.ot_hours ?? 0.0),
           remarks: d.remarks || "",
         };
@@ -137,13 +173,18 @@ export default function BiometricsPage() {
 
   // Quick Action: Mark All
   const handleMarkAll = (statusVal: string) => {
-    const updatedRows = rows.map((r) => ({
-      ...r,
-      status: statusVal,
-      hours_worked: statusVal === "Present" ? 8.0 : statusVal === "Half Day" ? 4.0 : 0.0,
-      punch_in: statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_in || "09:00",
-      punch_out: statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_out || "18:00",
-    }));
+    const updatedRows = rows.map((r) => {
+      const pin = statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_in || "09:00";
+      const pout = statusVal === "Absent" || statusVal === "On Leave" ? "" : r.punch_out || (statusVal === "Half Day" ? "13:00" : "18:00");
+      const hw = (statusVal === "Absent" || statusVal === "On Leave") ? 0.0 : calculateWorkHours(pin, pout);
+      return {
+        ...r,
+        status: statusVal,
+        hours_worked: hw,
+        punch_in: pin,
+        punch_out: pout,
+      };
+    });
     setRows(updatedRows);
     triggerAutoSave(updatedRows, true);
   };
@@ -156,17 +197,22 @@ export default function BiometricsPage() {
         const updated = { ...r, [field]: val };
         if (field === "status") {
           if (val === "Present") {
-            updated.hours_worked = 8.0;
             if (!updated.punch_in) updated.punch_in = "09:00";
             if (!updated.punch_out) updated.punch_out = "18:00";
+            updated.hours_worked = calculateWorkHours(updated.punch_in, updated.punch_out);
           } else if (val === "Half Day") {
-            updated.hours_worked = 4.0;
             if (!updated.punch_in) updated.punch_in = "09:00";
             if (!updated.punch_out) updated.punch_out = "13:00";
+            updated.hours_worked = calculateWorkHours(updated.punch_in, updated.punch_out);
           } else if (val === "Absent" || val === "On Leave") {
             updated.hours_worked = 0.0;
             updated.punch_in = "";
             updated.punch_out = "";
+            updated.ot_hours = 0.0;
+          }
+        } else if (field === "punch_in" || field === "punch_out") {
+          if (updated.status !== "Absent" && updated.status !== "On Leave") {
+            updated.hours_worked = calculateWorkHours(updated.punch_in, updated.punch_out);
           }
         }
         return updated;
