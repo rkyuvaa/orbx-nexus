@@ -33,7 +33,102 @@ const statusChip = (status: string) => {
   return <Chip label={status || "Unpaid"} size="small" color={color} />;
 };
 
-function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function buildSupplierLedgerRows(purchases: any[], payments: any[] = []) {
+  const rows: any[] = [];
+  const handledMovementIdsWithPayments = new Set<number>();
+
+  purchases.forEach((p: any) => {
+    const invAmount = Number(p.amount || 0);
+    let particularText = "Purchase Invoice";
+    if (p.stock_item_name) {
+      particularText = `Purchase: ${p.stock_item_name}`;
+    } else if (p.narration) {
+      particularText = p.narration;
+    } else if (p.ref_no) {
+      particularText = `Purchase Inv ${p.ref_no}`;
+    }
+
+    rows.push({
+      date: p.movement_date || "-",
+      particulars: particularText,
+      voucher_type: "Purchase",
+      voucher_no: p.movement_no || "-",
+      purchase_ref_no: p.ref_no || "—",
+      cr: invAmount,
+      dr: 0,
+      bill: p,
+      status: p.payment_status,
+      isPayment: false,
+    });
+  });
+
+  payments.forEach((pay: any) => {
+    const paidAmt = Number(pay.paid_amount || 0);
+    if (paidAmt > 0) {
+      if (pay.movement_id) {
+        handledMovementIdsWithPayments.add(pay.movement_id);
+      }
+      const pMode = pay.payment_mode || "Direct Payment";
+      const pNotes = pay.payment_notes ? ` (${pay.payment_notes})` : "";
+      const forBill = pay.movement_no ? ` towards ${pay.movement_no}` : "";
+
+      rows.push({
+        date: pay.payment_date || "-",
+        particulars: `Payment via ${pMode}${forBill}${pNotes}`,
+        voucher_type: "Payment",
+        voucher_no: pay.payment_no || (pay.movement_no ? `PAY-${pay.movement_no}` : "PAYMENT"),
+        purchase_ref_no: pay.ref_no || "—",
+        cr: 0,
+        dr: paidAmt,
+        bill: purchases.find((p: any) => p.id === pay.movement_id) || null,
+        status: pay.bill_status,
+        isPayment: true,
+      });
+    }
+  });
+
+  purchases.forEach((p: any) => {
+    const paidAmt = Number(p.paid_amount || 0);
+    if (paidAmt > 0 && !handledMovementIdsWithPayments.has(p.id)) {
+      const pMode = p.payment_mode || "Direct Payment";
+      const pNotes = p.payment_notes ? ` (${p.payment_notes})` : "";
+      rows.push({
+        date: p.payment_date || p.movement_date || "-",
+        particulars: `Payment via ${pMode}${pNotes}`,
+        voucher_type: "Payment",
+        voucher_no: `PAY-${p.movement_no}`,
+        purchase_ref_no: p.ref_no || "—",
+        cr: 0,
+        dr: paidAmt,
+        bill: p,
+        status: p.payment_status,
+        isPayment: true,
+      });
+    }
+  });
+
+  rows.sort((a, b) => {
+    if (a.date !== b.date) {
+      return a.date > b.date ? 1 : -1;
+    }
+    if (a.voucher_type !== b.voucher_type) {
+      return a.voucher_type === "Purchase" ? -1 : 1;
+    }
+    return (a.voucher_no || "") > (b.voucher_no || "") ? 1 : -1;
+  });
+
+  let running = 0;
+  return rows.map((r) => {
+    running += r.cr - r.dr;
+    return { ...r, balance: round2(running) };
+  });
+}
+
+function handlePrintSupplierLedger(supplierRow: any, companyData: any, directPayments?: any[]) {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
 
@@ -57,45 +152,13 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
 
   const purchases = supplierRow.items || [];
   const supplierName = supplierRow.supplier || "Supplier";
+  const payments = directPayments || supplierRow.payments || [];
 
-  const rows: any[] = [];
-  purchases.forEach((p: any) => {
-    const invAmount = Number(p.amount || 0);
-    rows.push({
-      date: p.movement_date || "-",
-      voucher_no: p.movement_no || "-",
-      type: "Purchase Invoice",
-      particulars: p.stock_item_name ? `Purchase: ${p.stock_item_name}` : `Purchase ${p.movement_no}`,
-      dr: 0,
-      cr: invAmount,
-    });
+  const ledgerRows = buildSupplierLedgerRows(purchases, payments);
 
-    const paidAmt = Number(p.paid_amount || 0);
-    if (paidAmt > 0) {
-      const pMode = p.payment_mode || "Direct Payment";
-      const pNotes = p.payment_notes ? ` (${p.payment_notes})` : "";
-      rows.push({
-        date: p.payment_date || p.movement_date || "-",
-        voucher_no: `PAY-${p.movement_no}`,
-        type: "Payment",
-        particulars: `Payment via ${pMode}${pNotes}`,
-        dr: paidAmt,
-        cr: 0,
-      });
-    }
-  });
-
-  rows.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
-
-  let running = 0;
-  const ledgerRows = rows.map((r) => {
-    running += r.cr - r.dr;
-    return { ...r, balance: running };
-  });
-
-  const totalInvoice = purchases.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
-  const totalPaid = purchases.reduce((s: number, p: any) => s + Number(p.paid_amount || 0), 0);
-  const totalPending = Math.max(0, totalInvoice - totalPaid);
+  const totalCredit = purchases.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const totalDebit = ledgerRows.filter((r) => r.dr > 0).reduce((s: number, r: any) => s + r.dr, 0);
+  const totalPending = Math.max(0, round2(totalCredit - totalDebit));
   const amountInWordsStr = toWords(totalPending);
 
   let statementHtml = "";
@@ -103,11 +166,13 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
     statementHtml += `
       <tr>
         <td style="text-align: center;">${idx + 1}</td>
-        <td style="text-align: center;">${r.date}</td>
-        <td style="font-weight: 600;">${r.voucher_no}</td>
-        <td>${r.type}</td>
-        <td style="text-align: right; color: ${r.dr > 0 ? '#198754' : '#6c757d'};">${r.dr > 0 ? `₹${formatAmount(r.dr)}` : '—'}</td>
-        <td style="text-align: right;">${r.cr > 0 ? `₹${formatAmount(r.cr)}` : '—'}</td>
+        <td style="text-align: center; white-space: nowrap;">${r.date}</td>
+        <td style="font-size: 11px;">${r.particulars}</td>
+        <td style="text-align: center; font-weight: 600; color: ${r.voucher_type === 'Payment' ? '#198754' : '#0d6efd'};">${r.voucher_type}</td>
+        <td style="font-weight: 600; white-space: nowrap;">${r.voucher_no}</td>
+        <td style="white-space: nowrap; color: #495057;">${r.purchase_ref_no}</td>
+        <td style="text-align: right; font-weight: ${r.cr > 0 ? '600' : 'normal'};">${r.cr > 0 ? `₹${formatAmount(r.cr)}` : '—'}</td>
+        <td style="text-align: right; color: ${r.dr > 0 ? '#198754' : '#6c757d'}; font-weight: ${r.dr > 0 ? '600' : 'normal'};">${r.dr > 0 ? `₹${formatAmount(r.dr)}` : '—'}</td>
         <td style="text-align: right; font-weight: 700; color: ${r.balance > 0 ? '#dc3545' : '#198754'};">₹${formatAmount(r.balance)}</td>
       </tr>
     `;
@@ -119,7 +184,7 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
       <head>
         <title>Print Supplier Ledger - ${supplierName}</title>
         <style>
-          @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 15mm; }
+          @page { size: ${getPageSizeCSS(printConfig.billPaperSize as any)}; margin: 12mm; }
           ${COMMON_PRINT_CSS}
         </style>
       </head>
@@ -144,13 +209,15 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
         <table class="items-table">
           <thead style="background-color: #0f5132 !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
             <tr style="background-color: #0f5132 !important; color: #ffffff !important;">
-              <th style="width: 50px; text-align: center;">S.NO</th>
-              <th style="width: 110px; text-align: center;">DATE</th>
-              <th style="width: 140px;">VOUCHER NO</th>
-              <th style="width: 140px;">TYPE</th>
-              <th style="width: 130px; text-align: right;">DEBIT (DR)</th>
-              <th style="width: 130px; text-align: right;">CREDIT (CR)</th>
-              <th style="width: 140px; text-align: right;">BALANCE</th>
+              <th style="width: 40px; text-align: center;">S.NO</th>
+              <th style="width: 90px; text-align: center;">DATE</th>
+              <th>PARTICULARS</th>
+              <th style="width: 100px; text-align: center;">VOUCHER TYPE</th>
+              <th style="width: 110px;">VOUCHER NO</th>
+              <th style="width: 110px;">PURCHASE REF NO</th>
+              <th style="width: 110px; text-align: right;">CREDIT (CR)</th>
+              <th style="width: 110px; text-align: right;">DEBIT (DR)</th>
+              <th style="width: 115px; text-align: right;">BALANCE</th>
             </tr>
           </thead>
           <tbody>
@@ -162,11 +229,11 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
           <div class="calculation-box">
             <div class="calculation-row">
               <span>Total Credit (Invoices):</span>
-              <span>₹${formatAmount(totalInvoice)}</span>
+              <span>₹${formatAmount(totalCredit)}</span>
             </div>
             <div class="calculation-row">
               <span>Total Debit (Payments):</span>
-              <span>₹${formatAmount(totalPaid)}</span>
+              <span>₹${formatAmount(totalDebit)}</span>
             </div>
             <div class="calculation-row grand-total">
               <span>Net Outstanding Balance:</span>
@@ -199,10 +266,6 @@ function handlePrintSupplierLedger(supplierRow: any, companyData: any) {
     </html>
   `);
   printWindow.document.close();
-}
-
-function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
 interface EditPaidAmountDialogProps {
@@ -447,59 +510,32 @@ interface SupplierLedgerReportDialogProps {
   open: boolean;
   onClose: () => void;
   allPurchases: any[];
+  supplierPayments?: any[];
   companyData: any;
   onEditBillPayment?: (bill: any) => void;
 }
 
-function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData, onEditBillPayment }: SupplierLedgerReportDialogProps) {
-  const totalInvoice = allPurchases.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const totalPaid = allPurchases.reduce((s, p) => s + Number(p.paid_amount || 0), 0);
-  const totalPending = Math.max(0, round2(totalInvoice - totalPaid));
+function SupplierLedgerReportDialog({
+  open,
+  onClose,
+  allPurchases,
+  supplierPayments = [],
+  companyData,
+  onEditBillPayment,
+}: SupplierLedgerReportDialogProps) {
   const supplierName = allPurchases[0]?.ledger_name || "Supplier";
-
   const ledgerRows = useMemo(() => {
-    const rows: any[] = [];
-    allPurchases.forEach((p) => {
-      const invAmount = Number(p.amount || 0);
-      rows.push({
-        date: p.movement_date || "-",
-        voucher_no: p.movement_no || "-",
-        type: "Purchase Invoice",
-        dr: 0,
-        cr: invAmount,
-        status: p.payment_status,
-        bill: p,
-      });
+    return buildSupplierLedgerRows(allPurchases, supplierPayments);
+  }, [allPurchases, supplierPayments]);
 
-      const paidAmt = Number(p.paid_amount || 0);
-      if (paidAmt > 0) {
-        const pMode = p.payment_mode || "Direct Payment";
-        const pNotes = p.payment_notes ? ` (${p.payment_notes})` : "";
-        rows.push({
-          date: p.payment_date || p.movement_date || "-",
-          voucher_no: `PAY-${p.movement_no}`,
-          type: "Payment",
-          dr: paidAmt,
-          cr: 0,
-          status: p.payment_status,
-          bill: p,
-        });
-      }
-    });
-
-    rows.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
-
-    let running = 0;
-    return rows.map((r) => {
-      running += r.cr - r.dr;
-      return { ...r, balance: round2(running) };
-    });
-  }, [allPurchases]);
+  const totalCredit = allPurchases.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalDebit = ledgerRows.filter((r) => r.dr > 0).reduce((s, r) => s + r.dr, 0);
+  const totalPending = Math.max(0, round2(totalCredit - totalDebit));
 
   if (!allPurchases.length) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle sx={{ pb: 1, color: "text.primary", fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>Supplier Ledger Statement — {supplierName}</span>
         <Button
@@ -507,7 +543,7 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData, 
           variant="outlined"
           color="primary"
           size="small"
-          onClick={() => handlePrintSupplierLedger({ supplier: supplierName, items: allPurchases }, companyData)}
+          onClick={() => handlePrintSupplierLedger({ supplier: supplierName, items: allPurchases, payments: supplierPayments }, companyData)}
         >
           Print Statement
         </Button>
@@ -523,45 +559,53 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData, 
           </Typography>
         </Box>
         <Paper variant="outlined" sx={{ borderRadius: "8px", overflow: "hidden" }}>
-          <TableContainer sx={{ maxHeight: 420 }}>
+          <TableContainer sx={{ maxHeight: 460 }}>
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, width: 105 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 45, textAlign: "center" }}>#</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 100 }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Particulars</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 110, textAlign: "center" }}>Voucher Type</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: 125 }}>Voucher No.</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: 120 }}>Type</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Debit - Paid (Dr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Credit - Invoice (Cr)</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Running Balance</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700, width: 60 }}>Edit</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: 125 }}>Purchase Ref No</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Credit (Cr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>Debit (Dr)</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 130 }}>Balance</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700, width: 55 }}>Edit</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {ledgerRows.map((r, idx) => (
-                  <TableRow key={idx} hover sx={{ bgcolor: r.type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
+                  <TableRow key={idx} hover sx={{ bgcolor: r.voucher_type === "Payment" ? "rgba(25, 135, 84, 0.04)" : "inherit" }}>
+                    <TableCell sx={{ fontSize: 12, textAlign: "center", color: "text.secondary" }}>{idx + 1}</TableCell>
                     <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{r.date}</TableCell>
-                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>
+                    <TableCell sx={{ fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.particulars}>
+                      {r.particulars}
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontSize: 12 }}>
                       <Chip
-                        label={r.type}
+                        label={r.voucher_type}
                         size="small"
-                        color={r.type === "Payment" ? "success" : "default"}
+                        color={r.voucher_type === "Payment" ? "success" : "default"}
                         variant="outlined"
                         sx={{ height: 20, fontSize: 11, fontWeight: 600 }}
                       />
                     </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
-                      {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
-                    </TableCell>
+                    <TableCell sx={{ fontSize: 12, fontWeight: 600, color: "primary.main", whiteSpace: "nowrap" }}>{r.voucher_no}</TableCell>
+                    <TableCell sx={{ fontSize: 12, color: "text.secondary", whiteSpace: "nowrap" }}>{r.purchase_ref_no}</TableCell>
                     <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.cr > 0 ? "text.primary" : "text.disabled" }}>
                       {r.cr > 0 ? `${RUPEE}${formatAmount(r.cr)}` : "—"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12, fontWeight: 600, color: r.dr > 0 ? "success.main" : "text.disabled" }}>
+                      {r.dr > 0 ? `${RUPEE}${formatAmount(r.dr)}` : "—"}
                     </TableCell>
                     <TableCell align="right" sx={{ fontSize: 12, fontWeight: 700, color: r.balance > 0 ? "#dc3545" : "success.main" }}>
                       {RUPEE}{formatAmount(r.balance)}
                     </TableCell>
                     <TableCell align="center">
                       {r.bill && onEditBillPayment && (
-                        <Tooltip title={`Edit payment for ${r.bill.movement_no}`}>
+                        <Tooltip title={`Edit payment for ${r.voucher_no}`}>
                           <IconButton
                             size="small"
                             color="primary"
@@ -578,9 +622,9 @@ function SupplierLedgerReportDialog({ open, onClose, allPurchases, companyData, 
               </TableBody>
               <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.03)" : "#f4f9f6" }}>
                 <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                  <TableCell colSpan={3} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
-                  <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalPaid)}</TableCell>
-                  <TableCell align="right" sx={{ fontSize: 13, color: "text.secondary" }}>{RUPEE}{formatAmount(totalInvoice)}</TableCell>
+                  <TableCell colSpan={6} align="right" sx={{ fontSize: 12 }}>Statement Summary Totals:</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "text.primary" }}>{RUPEE}{formatAmount(totalCredit)}</TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "success.main" }}>{RUPEE}{formatAmount(totalDebit)}</TableCell>
                   <TableCell align="right" sx={{ fontSize: 14, color: totalPending > 0 ? "#dc3545" : "success.main" }}>{RUPEE}{formatAmount(totalPending)}</TableCell>
                   <TableCell />
                 </TableRow>
@@ -1221,6 +1265,12 @@ export default function PurchasePayablesPage() {
       (await api.get(`/stock/inventory/movements?fy=${activeFY}&movement_type=Inward`)).data,
   });
 
+  const { data: purchasePayments = [] } = useQuery<any[]>({
+    queryKey: ["purchase-payments", activeFY],
+    queryFn: async () =>
+      (await api.get(`/stock/inventory/purchase-payments?fy=${activeFY}`)).data,
+  });
+
   const allSuppliersList = useMemo(() => {
     const groupsMap: Record<string, any[]> = {};
     movements.forEach((m: any) => {
@@ -1304,6 +1354,14 @@ export default function PurchasePayablesPage() {
     if (!selectedReportSupplierName) return null;
     return allSuppliersList.find((s) => s.supplier === selectedReportSupplierName) || null;
   }, [allSuppliersList, selectedReportSupplierName]);
+
+  const activeReportSupplierPayments = useMemo(() => {
+    if (!activeReportSupplierRow) return [];
+    return purchasePayments.filter((pay: any) =>
+      pay.supplier_name === activeReportSupplierRow.supplier ||
+      (activeReportSupplierRow.items && activeReportSupplierRow.items.some((m: any) => m.id === pay.movement_id))
+    );
+  }, [activeReportSupplierRow, purchasePayments]);
 
   const openSupplierReport = (supplierRow: any) => {
     setSelectedReportSupplierName(supplierRow.supplier);
@@ -1450,7 +1508,13 @@ export default function PurchasePayablesPage() {
                         <IconButton
                           size="small"
                           color="primary"
-                          onClick={() => handlePrintSupplierLedger(row, companyData)}
+                          onClick={() => {
+                            const suppPayments = purchasePayments.filter((pay: any) =>
+                              pay.supplier_name === row.supplier ||
+                              (row.items && row.items.some((m: any) => m.id === pay.movement_id))
+                            );
+                            handlePrintSupplierLedger({ ...row, payments: suppPayments }, companyData);
+                          }}
                         >
                           <PrintIcon fontSize="small" />
                         </IconButton>
@@ -1499,6 +1563,7 @@ export default function PurchasePayablesPage() {
         open={reportOpen}
         onClose={handleCloseReport}
         allPurchases={activeReportSupplierRow?.items || []}
+        supplierPayments={activeReportSupplierPayments}
         companyData={companyData}
         onEditBillPayment={handleOpenEditBill}
       />
