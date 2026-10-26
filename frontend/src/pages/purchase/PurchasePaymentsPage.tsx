@@ -356,9 +356,10 @@ function handlePrintPaymentsRegister(rows: PurchasePaymentRow[], companyData: an
           </tbody>
           <tfoot style="font-weight: 700; background-color: #f4f9f6;">
             <tr>
-              <td colspan="7" style="text-align: right;">Totals:</td>
+              <td colspan="6" style="text-align: right;">Totals (${rows.length} payments, ${summary.uniqueBillsCount} bills):</td>
+              <td style="text-align: right; color: #0d6efd;">₹${formatAmount(summary.totalBillAmount)}</td>
               <td style="text-align: right; color: #0f5132; font-size: 13px;">₹${formatAmount(summary.totalPaidAmount)}</td>
-              <td style="text-align: right; color: #dc3545;">₹${formatAmount(summary.totalBalance)}</td>
+              <td style="text-align: right; color: #dc3545;">₹${formatAmount(summary.totalPendingBalance)}</td>
               <td style="text-align: center;"></td>
             </tr>
           </tfoot>
@@ -668,25 +669,48 @@ export default function PurchasePaymentsPage() {
     });
   }, [payments, search, supplierFilter, modeFilter, statusFilter, fromDate, toDate, sortOrder]);
 
-  // Summary Metrics
+  // Summary Metrics calculated accurately:
+  // - totalPaidAmount: sum of actual payment transaction amounts
+  // - unique bills metrics: each unique bill's total amount, pending balance, and settled status counted once (matching Purchase Payables)
   const summary = useMemo(() => {
     let totalPaidAmount = 0;
-    let totalBalance = 0;
-    let settledCount = 0;
-    let partialCount = 0;
+    const billsMap = new Map<number, { amount: number; totalPaid: number; balance: number; status: string }>();
 
     filteredRows.forEach((r) => {
       totalPaidAmount += Number(r.paid_amount || 0);
-      totalBalance += Number(r.bill_remaining_balance || 0);
-      if (r.bill_status === "Paid") settledCount++;
-      else partialCount++;
+
+      if (!billsMap.has(r.movement_id)) {
+        billsMap.set(r.movement_id, {
+          amount: Number(r.bill_amount || 0),
+          totalPaid: Number(r.bill_total_paid || 0),
+          balance: Number(r.bill_remaining_balance || 0),
+          status: r.bill_status,
+        });
+      }
+    });
+
+    let totalBillAmount = 0;
+    let totalPendingBalance = 0;
+    let settledCount = 0;
+    let partialCount = 0;
+
+    billsMap.forEach((bill) => {
+      totalBillAmount += bill.amount;
+      totalPendingBalance += bill.balance;
+      if (bill.status === "Paid" || bill.balance <= 0.01) {
+        settledCount++;
+      } else {
+        partialCount++;
+      }
     });
 
     return {
       totalPaidAmount: round2(totalPaidAmount),
-      totalBalance: round2(totalBalance),
+      totalBillAmount: round2(totalBillAmount),
+      totalPendingBalance: round2(totalPendingBalance),
       settledCount,
       partialCount,
+      uniqueBillsCount: billsMap.size,
       totalCount: filteredRows.length,
     };
   }, [filteredRows]);
@@ -762,23 +786,41 @@ export default function PurchasePaymentsPage() {
         }
       />
 
-      {/* KPI Stat Cards */}
+      {/* KPI Stat Cards matching Purchase Payables accuracy */}
       <Box sx={{ display: "flex", gap: 2, mb: 2, flexWrap: "wrap" }}>
+        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "#dc3545", color: "#fff", minWidth: 160 }}>
+          <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
+            Total Pending Payable
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
+            {RUPEE}{formatAmount(summary.totalPendingBalance)}
+          </Typography>
+        </Box>
+
         <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "success.main", color: "#fff", minWidth: 160 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Total Payments Paid
+            Total Paid
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
             {RUPEE}{formatAmount(summary.totalPaidAmount)}
           </Typography>
         </Box>
 
-        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "primary.main", color: "#fff", minWidth: 140 }}>
+        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "primary.main", color: "#fff", minWidth: 160 }}>
           <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Payment Records
+            Total Purchase Amount
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
-            {summary.totalCount}
+            {RUPEE}{formatAmount(summary.totalBillAmount)}
+          </Typography>
+        </Box>
+
+        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "warning.dark", color: "#fff", minWidth: 140 }}>
+          <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
+            Pending Bills
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
+            {summary.partialCount} {summary.partialCount === 1 ? "bill" : "bills"}
           </Typography>
         </Box>
 
@@ -787,25 +829,16 @@ export default function PurchasePaymentsPage() {
             Fully Settled
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
-            {summary.settledCount}
+            {summary.settledCount} {summary.settledCount === 1 ? "bill" : "bills"}
           </Typography>
         </Box>
 
-        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "warning.dark", color: "#fff", minWidth: 140 }}>
-          <Typography variant="caption" sx={{ opacity: 0.9, display: "block", fontWeight: 600 }}>
-            Partially Paid
+        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "action.selected", minWidth: 140, border: "1px solid", borderColor: "divider" }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 600 }}>
+            Payment Records
           </Typography>
           <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3 }}>
-            {summary.partialCount}
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2.5, py: 1.2, borderRadius: 2, bgcolor: "action.selected", minWidth: 150, border: "1px solid", borderColor: "divider" }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 600 }}>
-            Remaining Balance
-          </Typography>
-          <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.3, color: summary.totalBalance > 0 ? "error.main" : "text.secondary" }}>
-            {RUPEE}{formatAmount(summary.totalBalance)}
+            {summary.totalCount}
           </Typography>
         </Box>
       </Box>
@@ -939,7 +972,7 @@ export default function PurchasePaymentsPage() {
                 <TableCell sx={{ width: 120 }}>Bill No</TableCell>
                 <TableCell align="right" sx={{ width: 120 }}>Bill Total</TableCell>
                 <TableCell align="right" sx={{ width: 135, color: "success.main" }}>Amount Paid (₹)</TableCell>
-                <TableCell align="right" sx={{ width: 110 }}>Balance</TableCell>
+                <TableCell align="right" sx={{ width: 110 }}>Pending Balance</TableCell>
                 <TableCell align="center" sx={{ width: 85 }}>Status</TableCell>
                 <TableCell align="center" sx={{ width: 110 }}>Actions</TableCell>
               </TableRow>
@@ -1066,14 +1099,17 @@ export default function PurchasePaymentsPage() {
             {filteredRows.length > 0 && (
               <TableFooter sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "#f4f9f6" }}>
                 <TableRow sx={{ "& > td": { fontWeight: 700 } }}>
-                  <TableCell colSpan={7} align="right" sx={{ fontSize: 12 }}>
-                    Totals ({filteredRows.length} payment records):
+                  <TableCell colSpan={6} align="right" sx={{ fontSize: 12 }}>
+                    Totals ({filteredRows.length} payments, {summary.uniqueBillsCount} bills):
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontSize: 13, color: "primary.main", fontWeight: 800 }}>
+                    {RUPEE}{formatAmount(summary.totalBillAmount)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontSize: 13.5, color: "success.main", fontWeight: 800 }}>
                     {RUPEE}{formatAmount(summary.totalPaidAmount)}
                   </TableCell>
-                  <TableCell align="right" sx={{ fontSize: 12.5, color: summary.totalBalance > 0 ? "#dc3545" : "success.main" }}>
-                    {RUPEE}{formatAmount(summary.totalBalance)}
+                  <TableCell align="right" sx={{ fontSize: 13, color: summary.totalPendingBalance > 0 ? "#dc3545" : "success.main", fontWeight: 800 }}>
+                    {RUPEE}{formatAmount(summary.totalPendingBalance)}
                   </TableCell>
                   <TableCell colSpan={2} />
                 </TableRow>
