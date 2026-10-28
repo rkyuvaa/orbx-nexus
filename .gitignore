@@ -24,6 +24,7 @@ backend/orbx_nexus_backup.sql
 .idea/
 .kilo/
 *.swp
+*.tsbuildinfo
 
 # OS Files
 Thumbs.db

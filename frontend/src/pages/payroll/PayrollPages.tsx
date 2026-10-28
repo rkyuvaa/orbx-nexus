@@ -44,10 +44,17 @@ function VoucherModule({
 
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
 
-  const { data: ledgers = [] } = useQuery({
+  const { data: rawLedgers = [] } = useQuery({
     queryKey: ["ledgers", ledgerType],
-    queryFn: async () => (await api.get(`/ledgers/?ledger_type=${ledgerType}`)).data,
+    queryFn: async () => (await api.get(`/ledgers/?ledger_type=${ledgerType}&is_active=true`)).data,
   });
+
+  const ledgers = useMemo(() => {
+    return rawLedgers.filter((l: any) =>
+      !l.name.includes("(Staff Advance)") &&
+      !l.name.includes("(Contractor Advance)")
+    );
+  }, [rawLedgers]);
 
   const { register, handleSubmit, reset, control } = useForm({
     defaultValues: { voucher_no: "", voucher_date: today, ledger_id: "", payment_type: paymentType, ledger_type: ledgerType, amount: 0, narration: "" },
@@ -119,7 +126,9 @@ function VoucherModule({
     }).replace(/\//g, "-");
 
     const l = ledgers.find((item: any) => item.id === row.ledger_id || item.id === Number(row.ledger_id));
-    const ledgerName = l ? `${l.code ? l.code + ' - ' : ''}${l.name}` : row.ledger_id;
+    const code = row.staff_code || row.ledger_code || l?.ledger_code;
+    const name = row.staff_name || row.ledger_name || l?.name || row.ledger_id;
+    const ledgerName = code ? `${code} - ${name}` : name;
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -193,11 +202,18 @@ function VoucherModule({
     { field: "voucher_date", headerName: "Date", width: 100 },
     {
       field: "ledger_id",
-      headerName: ledgerType,
-      width: 200,
-      valueFormatter: (p: any) => {
+      headerName: ledgerType === "Staff" ? "Staff Member" : "Contractor",
+      width: 220,
+      cellRenderer: (p: any) => {
         const l = ledgers.find((item: any) => item.id === p.value || item.id === Number(p.value));
-        return l ? `${l.code ? l.code + ' - ' : ''}${l.name}` : p.value;
+        const code = p.data?.staff_code || p.data?.ledger_code || l?.ledger_code;
+        const name = p.data?.staff_name || p.data?.ledger_name || l?.name || p.value;
+        return (
+          <Box>
+            <span style={{ fontWeight: 600 }}>{name}</span>
+            {code && <span style={{ fontSize: "0.75rem", color: "#64748b", marginLeft: "6px" }}>({code})</span>}
+          </Box>
+        );
       }
     },
     { field: "amount", headerName: "Amount", width: 120, type: "numericColumn", valueFormatter: (p) => `₹${formatAmount(p.value)}` },
@@ -270,7 +286,7 @@ function VoucherModule({
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_no")} label="Voucher No. *" fullWidth required disabled slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 6 }}><TextField {...register("voucher_date")} label="Date *" type="date" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12 }}><Controller name="ledger_id" control={control} rules={{ required: "Required" }} render={({ field, fieldState }) => (
-                <LazyAutocomplete options={ledgers} getOptionLabel={(o: any) => o.name} value={ledgers.find((l: any) => l.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label={`${ledgerType} *`} error={!!fieldState.error} helperText={fieldState.error?.message} />} />
+                <LazyAutocomplete options={ledgers} getOptionLabel={(o: any) => `${o.name}${o.ledger_code ? ` (${o.ledger_code})` : ""}`} value={ledgers.find((l: any) => l.id === field.value) || null} onChange={(_, v) => field.onChange(v ? v.id : "")} renderInput={(params) => <TextField {...params} label={`${ledgerType === "Staff" ? "Staff Member" : ledgerType} *`} error={!!fieldState.error} helperText={fieldState.error?.message} />} />
               )} /></Grid>
               <Grid size={{ xs: 12 }}><TextField {...register("amount")} label="Amount" type="number" fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Grid>
               <Grid size={{ xs: 12 }}><TextField {...register("narration")} label="Narration" fullWidth multiline rows={2} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
@@ -287,10 +303,10 @@ function VoucherModule({
 }
 
 export function StaffAdvancePaymentPage() {
-  return <VoucherModule title="Advance Payment (Staff)" queryKey="staff-advance-pay" endpoint="/payroll/advances" ledgerType="Staff" paymentType="Payment" breadcrumbs={[{ label: "Payroll Voucher" }, { label: "Advance Payment" }]} />;
+  return <VoucherModule title="Advance Payment (Staff)" queryKey="staff-advance-pay" endpoint="/payroll/advances" ledgerType="Staff" paymentType="Payment" breadcrumbs={[{ label: "Salary and Wages" }, { label: "Advance Payment" }]} />;
 }
 export function StaffAdvanceReceiptPage() {
-  return <VoucherModule title="Advance Receipt (Staff)" queryKey="staff-advance-rec" endpoint="/payroll/advances" ledgerType="Staff" paymentType="Receipt" breadcrumbs={[{ label: "Payroll Voucher" }, { label: "Advance Receipt" }]} />;
+  return <VoucherModule title="Advance Receipt (Staff)" queryKey="staff-advance-rec" endpoint="/payroll/advances" ledgerType="Staff" paymentType="Receipt" breadcrumbs={[{ label: "Salary and Wages" }, { label: "Advance Receipt" }]} />;
 }
 export function ContractorAdvancePaymentPage() {
   return <VoucherModule title="Advance Payment (Contractor)" queryKey="cont-advance-pay" endpoint="/payroll/advances" ledgerType="Contractor" paymentType="Payment" breadcrumbs={[{ label: "Contractor Voucher" }, { label: "Advance Payment" }]} />;
@@ -1200,11 +1216,21 @@ export function SalaryVoucherPage() {
                       }
                     </Typography>
                   </Box>
-                  <Chip
-                    label={`Payable: ₹${formatAmount(payable)}`}
-                    color={watchPayType === "Hourly" ? "warning" : "success"}
-                    sx={{ fontWeight: 800, fontSize: "0.85rem" }}
-                  />
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    {attendanceStats && attendanceStats.advance_balance > 0 && (
+                      <Chip
+                        label={`Advance Due: ₹${formatAmount(attendanceStats.advance_balance)}`}
+                        color="warning"
+                        variant="filled"
+                        sx={{ fontWeight: 800, fontSize: "0.82rem" }}
+                      />
+                    )}
+                    <Chip
+                      label={`Payable: ₹${formatAmount(payable)}`}
+                      color={watchPayType === "Hourly" ? "warning" : "success"}
+                      sx={{ fontWeight: 800, fontSize: "0.85rem" }}
+                    />
+                  </Box>
                 </Box>
               </Grid>
 
@@ -1335,17 +1361,38 @@ export function SalaryVoucherPage() {
               </Grid>
 
               <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  {...register("deductions")}
-                  label="Deductions / Advance (-) (₹)"
-                  type="number"
-                  fullWidth
-                  placeholder="0.00"
-                  slotProps={{
-                    inputLabel: { shrink: true },
-                    htmlInput: { step: "0.01", min: "0" }
-                  }}
-                />
+                <Box>
+                  <TextField
+                    {...register("deductions")}
+                    label="Deductions / Advance (-) (₹)"
+                    type="number"
+                    fullWidth
+                    placeholder="0.00"
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      htmlInput: { step: "0.01", min: "0" }
+                    }}
+                    helperText={
+                      attendanceStats && attendanceStats.advance_balance > 0
+                        ? `Staff has ₹${formatAmount(attendanceStats.advance_balance)} advance due`
+                        : "Salary deductions or advance recovered"
+                    }
+                  />
+                  {attendanceStats && attendanceStats.advance_balance > 0 && !editing && (
+                    <Button
+                      size="small"
+                      variant="text"
+                      color="warning"
+                      onClick={() => {
+                        const dedAmt = Math.min(payable, Number(attendanceStats.advance_balance || 0));
+                        setValue("deductions", dedAmt);
+                      }}
+                      sx={{ fontSize: "0.72rem", py: 0.2, px: 0.5, textTransform: "none", fontWeight: 700 }}
+                    >
+                      Deduct Advance (₹{formatAmount(attendanceStats.advance_balance)})
+                    </Button>
+                  )}
+                </Box>
               </Grid>
 
               <Grid size={{ xs: 12, sm: 4 }}>

@@ -129,8 +129,11 @@ const NAV_ITEMS: NavItem[] = [
     label: "Salary and Wages",
     icon: <Group sx={{ fontSize: 20 }} />,
     children: [
+      { label: "Staff Balance", path: "/payroll/balance", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Attendance", path: "/biometrics", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Staff Ledgers", path: "/accounts/staff", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Advance Payment", path: "/payroll/advance-payment", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
+      { label: "Advance Receipt", path: "/payroll/advance-receipt", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Salary Voucher", path: "/payroll/salary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Configuration", path: "/payroll/config", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],

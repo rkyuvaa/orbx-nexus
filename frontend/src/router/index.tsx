@@ -11,8 +11,10 @@ import LabourBillPage from "../pages/labour-bill/LabourBillPage";
 import JobWorkBillPage from "../pages/billing/JobWorkBillPage";
 import {
   ContractorAdvancePaymentPage, ContractorAdvanceReceiptPage,
+  StaffAdvancePaymentPage, StaffAdvanceReceiptPage,
   SalaryVoucherPage
 } from "../pages/payroll/PayrollPages";
+import StaffBalancePage from "../pages/payroll/StaffBalancePage";
 import PayrollConfigPage from "../pages/payroll/PayrollConfigPage";
 import {
   PaymentVoucherPage, ReceiptVoucherPage, ContraVoucherPage,
@@ -103,7 +105,10 @@ export const router = createBrowserRouter([
       { path: "billing/receivables", element: <ReceivablesReport /> },
 
       // Payroll
+      { path: "payroll/balance", element: <StaffBalancePage /> },
       { path: "payroll/attendance", element: <BiometricsPage /> },
+      { path: "payroll/advance-payment", element: <StaffAdvancePaymentPage /> },
+      { path: "payroll/advance-receipt", element: <StaffAdvanceReceiptPage /> },
       { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "Salary and Wages" }, { label: "Contractor" }]} /> },
       { path: "payroll/salary", element: <SalaryVoucherPage /> },
       { path: "payroll/config", element: <PayrollConfigPage /> },
