@@ -25,6 +25,17 @@ import { toWords } from "../../utils/numberToWords";
 const today = new Date().toISOString().split("T")[0];
 
 // Reusable voucher form + grid for Payment/Receipt, Staff/Contractor
+function formatDisplayDate(dateStr?: string) {
+  if (!dateStr) return "";
+  try {
+    const parts = String(dateStr).split("T")[0].split("-");
+    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
 function VoucherModule({
   title,
   breadcrumbs,
@@ -108,7 +119,7 @@ function VoucherModule({
     if (!printWindow) return;
 
     const savedConfig = localStorage.getItem("orbx_print_config");
-    let printConfig = { showLogo: true, billPaperSize: "A5", voucherPaperSize: "A5" };
+    let printConfig = { showLogo: true, billPaperSize: "A4", voucherPaperSize: "A4" };
     if (savedConfig) {
       try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
     }
@@ -122,9 +133,9 @@ function VoucherModule({
     const cEmail = compData?.email ? `Email: ${compData?.email}` : "";
     const cTax = compData?.gstin ? `GSTIN: ${compData?.gstin}` : "";
 
-    const dateStr = new Date(row.voucher_date).toLocaleDateString("en-IN", {
+    const dateStr = formatDisplayDate(row.voucher_date) || (row.voucher_date ? new Date(row.voucher_date).toLocaleDateString("en-IN", {
       day: "2-digit", month: "2-digit", year: "numeric"
-    }).replace(/\//g, "-");
+    }).replace(/\//g, "-") : "");
 
     const l = ledgers.find((item: any) => item.id === row.ledger_id || item.id === Number(row.ledger_id));
     const code = row.staff_code || row.ledger_code || l?.ledger_code || "";
@@ -134,19 +145,17 @@ function VoucherModule({
     const contactPhone = l?.mobile || l?.phone || "";
 
     const isPayment = paymentType === "Payment";
-    const docTitle = isPayment ? `ADVANCE PAYMENT VOUCHER` : `ADVANCE RECEIPT VOUCHER`;
-    const partyRoleLabel = isPayment ? "PAID TO (BENEFICIARY):" : "RECEIVED FROM:";
+    const docTitle = `${ledgerType.toUpperCase()} ADVANCE ${paymentType.toUpperCase()} VOUCHER`;
     const amountVal = Number(row.amount || 0);
     const amountInWordsStr = amountVal > 0 ? toWords(amountVal) : "";
-    const paperSize = printConfig.voucherPaperSize || printConfig.billPaperSize || "A4";
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${docTitle} - ${row.voucher_no}</title>
+          <title>${docTitle} - ${row.voucher_no || name}</title>
           <style>
-            @page { size: ${paperSize} portrait; margin: 10mm; }
+            @page { size: A4 portrait; margin: 10mm; }
             ${COMMON_PRINT_CSS}
             .signatures-container { margin-top: 35px; page-break-inside: avoid; }
           </style>
@@ -163,105 +172,85 @@ function VoucherModule({
             </div>
           </div>
 
-          <div class="title-section">
-            <h2>${docTitle}</h2>
-            <div class="doc-no">Voucher No: <strong>${row.voucher_no}</strong></div>
-            <div class="doc-date">Date: <strong>${dateStr}</strong></div>
+          <div class="title-section" style="align-items: center; border-bottom: 1.5px solid #0f5132; margin-bottom: 10px;">
+            <h2 style="font-size: 15px; margin-bottom: 3px;">${docTitle}</h2>
+            <div style="font-size: 11px; font-weight: 600; color: #2d3748;">Voucher Category: ${ledgerType} Ledger</div>
           </div>
 
-          <!-- Beneficiary & Voucher Meta Section -->
-          <div class="address-section" style="margin-top: 10px; margin-bottom: 12px;">
-            <div class="address-column">
-              <h3>${partyRoleLabel}</h3>
-              <div class="name">${name}</div>
-              ${code ? `<div style="font-size: 10px; color: #334155; margin-top: 2px;"><strong>${ledgerType} Code:</strong> ${code}</div>` : ""}
-              ${designation ? `<div style="font-size: 10px; color: #334155; margin-top: 1px;"><strong>Designation:</strong> ${designation}</div>` : ""}
-              ${department ? `<div style="font-size: 10px; color: #334155; margin-top: 1px;"><strong>Department:</strong> ${department}</div>` : ""}
-              ${contactPhone ? `<div style="font-size: 10px; color: #334155; margin-top: 1px;"><strong>Contact:</strong> ${contactPhone}</div>` : ""}
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; border: 0.5px solid #198754; padding: 8px 10px; background-color: #f8fafc;">
+            <div>
+              <div style="font-size: 9.5px; color: #555;">Voucher No: <strong style="font-size: 11px; color: #000;">${row.voucher_no || "-"}</strong></div>
+              <div style="font-size: 9.5px; color: #555; margin-top: 3px;">Date: <strong style="font-size: 11px; color: #000;">${dateStr}</strong></div>
+              <div style="font-size: 9.5px; color: #555; margin-top: 3px;">Payment Mode: <strong style="font-size: 10.5px; color: #000;">Cash / Bank</strong></div>
             </div>
-            <div class="address-column">
-              <h3>VOUCHER PARTICULARS:</h3>
-              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Voucher Type:</strong> Advance ${paymentType}</div>
-              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Category:</strong> ${ledgerType} Ledger</div>
-              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Payment Mode:</strong> Cash / Bank</div>
-              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Posting Date:</strong> ${dateStr}</div>
+            <div>
+              <div style="font-size: 9.5px; color: #555;">${ledgerType} Name: <strong style="font-size: 11.5px; color: #0f5132;">${name}${code ? ` (${code})` : ""}</strong></div>
+              ${designation ? `<div style="font-size: 9.5px; color: #555; margin-top: 3px;">Designation: <strong style="font-size: 10.5px; color: #000;">${designation}</strong></div>` : ""}
+              ${department ? `<div style="font-size: 9.5px; color: #555; margin-top: 3px;">Department: <strong style="font-size: 10.5px; color: #000;">${department}</strong></div>` : ""}
+              ${contactPhone ? `<div style="font-size: 9.5px; color: #555; margin-top: 3px;">Contact: <strong style="font-size: 10.5px; color: #000;">${contactPhone}</strong></div>` : ""}
             </div>
           </div>
 
-          <!-- Particulars Table -->
-          <table class="items-table" style="width: 100%; margin-top: 12px; border-collapse: collapse;">
+          <table class="items-table">
             <thead>
               <tr>
-                <th style="width: 40px; text-align: center;">#</th>
-                <th style="text-align: left;">Particulars / Description</th>
-                <th style="width: 130px; text-align: right;">Amount (₹)</th>
+                <th>DESCRIPTION</th>
+                <th style="text-align: right; width: 140px;">AMOUNT</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td style="text-align: center; vertical-align: top; padding-top: 8px;">1</td>
-                <td style="padding-top: 8px; padding-bottom: 8px;">
-                  <div style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: #0f5132;">
-                    Advance ${paymentType} — ${ledgerType}
+                <td>
+                  <div style="font-weight: 700; color: #0f5132; text-transform: uppercase;">
+                    Advance ${paymentType} — ${name}${code ? ` (${code})` : ""}
                   </div>
-                  <div style="font-size: 10px; color: #475569; margin-top: 3px;">
+                  <div style="font-size: 9.5px; color: #475569; margin-top: 3px;">
                     ${isPayment
-                      ? `Being advance payment disbursed to ${name}${code ? ` (${code})` : ""}`
-                      : `Being advance repayment / refund received from ${name}${code ? ` (${code})` : ""}`
-                    }
+                      ? `Being advance payment disbursed to ${ledgerType.toLowerCase()} ${name}${code ? ` (${code})` : ""}`
+                      : `Being advance repayment / refund received from ${ledgerType.toLowerCase()} ${name}${code ? ` (${code})` : ""}`}
                   </div>
-                  ${row.narration ? `
-                    <div style="margin-top: 5px; font-size: 10px; color: #1e293b; background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; display: inline-block;">
-                      <strong>Narration:</strong> ${row.narration}
-                    </div>
-                  ` : ""}
                 </td>
-                <td style="text-align: right; font-weight: 700; font-size: 12px; vertical-align: top; padding-top: 8px;">
+                <td style="text-align: right; font-weight: 700; font-size: 11.5px; vertical-align: top;">
                   ₹${formatAmount(amountVal)}
                 </td>
               </tr>
             </tbody>
             <tfoot>
               <tr class="total-row">
-                <td colspan="2" style="text-align: right; text-transform: uppercase; font-weight: 700; font-size: 11px;">
-                  Total Amount (${paymentType === 'Payment' ? 'Paid' : 'Received'})
+                <td style="font-weight: 700; text-transform: uppercase;">
+                  NET ADVANCE ${paymentType.toUpperCase()}
                 </td>
-                <td style="text-align: right; font-weight: 800; font-size: 13px; color: #0f5132;">
+                <td style="text-align: right; font-weight: 800; font-size: 12px; color: #0f5132;">
                   ₹${formatAmount(amountVal)}
                 </td>
               </tr>
             </tfoot>
           </table>
 
-          <!-- Amount In Words -->
           ${amountInWordsStr ? `
-            <div style="margin-top: 8px; padding: 8px 12px; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 10.5px; color: #0f5132;">
-              <strong>AMOUNT IN WORDS:</strong> ${amountInWordsStr.replace(/^Rupees:\s*/i, "").replace(/\s*Rupees Only$/i, "").trim().toUpperCase()} RUPEES ONLY
+            <div style="margin-top: 8px; padding: 6px 10px; background-color: #f8fafc; border: 0.5px solid #198754; border-radius: 4px; font-size: 10px; color: #0f5132;">
+              <strong>Amount in Words:</strong> ${amountInWordsStr.replace(/^Rupees:\s*/i, "").replace(/\s*Rupees Only$/i, "").trim().toUpperCase()} RUPEES ONLY
             </div>
           ` : ""}
 
-          <!-- Three Signature Blocks: Issued By, Received By, Authorised Signatory -->
-          <div class="signatures-container" style="margin-top: 45px; page-break-inside: avoid;">
+          ${row.narration ? `
+            <div class="narration-box" style="margin-top: 8px;">
+              <strong>Narration:</strong> ${row.narration}
+            </div>
+          ` : ""}
+
+          <div class="signatures-container" style="margin-top: 35px; page-break-inside: avoid;">
             <div class="signature-block">
               <div class="signature-line"></div>
-              <div class="signature-label">
-                ${isPayment ? "Issued By" : "Received By"}<br/>
-                <span style="font-size: 8.5px; color: #64748b;">(Accounts / Cashier)</span>
-              </div>
+              <div class="signature-label">Issued By</div>
             </div>
             <div class="signature-block">
               <div class="signature-line"></div>
-              <div class="signature-label">
-                ${isPayment ? "Received By" : "Paid / Deposited By"}<br/>
-                <span style="font-size: 8.5px; color: #64748b;">(${name})</span>
-              </div>
+              <div class="signature-label">Received By</div>
             </div>
             <div class="signature-block">
               <div class="signature-line"></div>
-              <div class="signature-label">
-                Authorised Signatory<br/>
-                <span style="font-size: 8.5px; color: #64748b;">For ${cName}</span>
-              </div>
+              <div class="signature-label">Authorized Signatory for ${cName}</div>
             </div>
           </div>
 
@@ -306,7 +295,7 @@ function VoucherModule({
               <Edit fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Print A5 Voucher">
+          <Tooltip title="Print Voucher">
             <IconButton size="small" color="primary" onClick={() => handlePrintVoucher(p.data)}>
               <Print fontSize="small" />
             </IconButton>
@@ -432,17 +421,6 @@ function getWeeklyPayCycle(referenceDateStr?: string, payoutDayName: string = "S
     to_date: formatDateYMD(toDate),
     payout_date: formatDateYMD(payoutDate)
   };
-}
-
-function formatDisplayDate(dateStr?: string) {
-  if (!dateStr) return "";
-  try {
-    const parts = String(dateStr).split("T")[0].split("-");
-    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    return dateStr;
-  } catch {
-    return dateStr;
-  }
 }
 
 export function SalaryVoucherPage() {
