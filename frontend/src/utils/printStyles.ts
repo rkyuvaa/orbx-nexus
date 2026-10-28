@@ -260,9 +260,11 @@ export const COMMON_PRINT_CSS = `
 
 import { useCompanyStore, preloadAndDecodeImage } from "../store";
 
-export function getPageSizeCSS(paperSize: "A4" | "A5"): string {
-  if (paperSize === "A5") return "A5 landscape";
-  return "A4 portrait";
+export function getPageSizeCSS(paperSize: "A4" | "A5" = "A4", orientation: "portrait" | "landscape" = "portrait"): string {
+  if (orientation === "landscape") {
+    return `${paperSize} landscape`;
+  }
+  return `${paperSize} portrait`;
 }
 
 /**

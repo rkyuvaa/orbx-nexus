@@ -138,7 +138,7 @@ function VoucherModule({
     const partyRoleLabel = isPayment ? "PAID TO (BENEFICIARY):" : "RECEIVED FROM:";
     const amountVal = Number(row.amount || 0);
     const amountInWordsStr = amountVal > 0 ? toWords(amountVal) : "";
-    const paperSize = printConfig.voucherPaperSize || printConfig.billPaperSize || "A5";
+    const paperSize = printConfig.voucherPaperSize || printConfig.billPaperSize || "A4";
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -146,8 +146,9 @@ function VoucherModule({
         <head>
           <title>${docTitle} - ${row.voucher_no}</title>
           <style>
-            @page { size: ${getPageSizeCSS(paperSize as any)}; margin: 12mm; }
+            @page { size: ${paperSize} portrait; margin: 10mm; }
             ${COMMON_PRINT_CSS}
+            .signatures-container { margin-top: 35px; page-break-inside: avoid; }
           </style>
         </head>
         <body>
