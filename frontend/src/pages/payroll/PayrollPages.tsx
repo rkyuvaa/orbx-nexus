@@ -19,7 +19,8 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import { LazyAutocomplete } from "../../components/LazyAutocomplete";
 import { useAuthStore, useCompanyStore } from "../../store";
 import { formatAmount } from "../../utils/format";
-import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, ensurePrintReady, resolveCompanyDetails, getGlobalPrintFooterHtml } from "../../utils/printStyles";
+import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, ensurePrintReady, resolveCompanyDetails, getGlobalPrintFooterHtml, getPageSizeCSS } from "../../utils/printStyles";
+import { toWords } from "../../utils/numberToWords";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -107,7 +108,7 @@ function VoucherModule({
     if (!printWindow) return;
 
     const savedConfig = localStorage.getItem("orbx_print_config");
-    let printConfig = { showLogo: true, billPaperSize: "A5" };
+    let printConfig = { showLogo: true, billPaperSize: "A5", voucherPaperSize: "A5" };
     if (savedConfig) {
       try { printConfig = { ...printConfig, ...JSON.parse(savedConfig) }; } catch (e) {}
     }
@@ -126,23 +127,27 @@ function VoucherModule({
     }).replace(/\//g, "-");
 
     const l = ledgers.find((item: any) => item.id === row.ledger_id || item.id === Number(row.ledger_id));
-    const code = row.staff_code || row.ledger_code || l?.ledger_code;
+    const code = row.staff_code || row.ledger_code || l?.ledger_code || "";
     const name = row.staff_name || row.ledger_name || l?.name || row.ledger_id;
-    const ledgerName = code ? `${code} - ${name}` : name;
+    const designation = l?.designation || row.designation || "";
+    const department = l?.department || row.department || "";
+    const contactPhone = l?.mobile || l?.phone || "";
+
+    const isPayment = paymentType === "Payment";
+    const docTitle = isPayment ? `ADVANCE PAYMENT VOUCHER` : `ADVANCE RECEIPT VOUCHER`;
+    const partyRoleLabel = isPayment ? "PAID TO (BENEFICIARY):" : "RECEIVED FROM:";
+    const amountVal = Number(row.amount || 0);
+    const amountInWordsStr = amountVal > 0 ? toWords(amountVal) : "";
+    const paperSize = printConfig.voucherPaperSize || printConfig.billPaperSize || "A5";
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${title} - ${row.voucher_no}</title>
+          <title>${docTitle} - ${row.voucher_no}</title>
           <style>
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: ${getPageSizeCSS(paperSize as any)}; margin: 12mm; }
             ${COMMON_PRINT_CSS}
-            table.items-table th, table.items-table td {
-              border: 1px solid #cbd5e1;
-              padding: 5px 7px;
-            }
-            table.items-table th { background-color: #f8fafc; }
           </style>
         </head>
         <body>
@@ -156,39 +161,109 @@ function VoucherModule({
               ${cTax ? `<p class="gstin">${cTax}</p>` : ""}
             </div>
           </div>
+
           <div class="title-section">
-            <h2>${title.toUpperCase()}</h2>
-            <div class="doc-no">Voucher No: ${row.voucher_no}</div>
-            <div class="doc-date">Date: ${dateStr}</div>
+            <h2>${docTitle}</h2>
+            <div class="doc-no">Voucher No: <strong>${row.voucher_no}</strong></div>
+            <div class="doc-date">Date: <strong>${dateStr}</strong></div>
           </div>
-          
-          <div class="address-section">
-            <div class="address-column" style="width: 100%;">
-              <h3>${ledgerType.toUpperCase()} DETAILS:</h3>
-              <div class="name">${ledgerName}</div>
+
+          <!-- Beneficiary & Voucher Meta Section -->
+          <div class="address-section" style="margin-top: 10px; margin-bottom: 12px;">
+            <div class="address-column">
+              <h3>${partyRoleLabel}</h3>
+              <div class="name">${name}</div>
+              ${code ? `<div style="font-size: 10px; color: #334155; margin-top: 2px;"><strong>${ledgerType} Code:</strong> ${code}</div>` : ""}
+              ${designation ? `<div style="font-size: 10px; color: #334155; margin-top: 1px;"><strong>Designation:</strong> ${designation}</div>` : ""}
+              ${department ? `<div style="font-size: 10px; color: #334155; margin-top: 1px;"><strong>Department:</strong> ${department}</div>` : ""}
+              ${contactPhone ? `<div style="font-size: 10px; color: #334155; margin-top: 1px;"><strong>Contact:</strong> ${contactPhone}</div>` : ""}
+            </div>
+            <div class="address-column">
+              <h3>VOUCHER PARTICULARS:</h3>
+              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Voucher Type:</strong> Advance ${paymentType}</div>
+              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Category:</strong> ${ledgerType} Ledger</div>
+              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Payment Mode:</strong> Cash / Bank</div>
+              <div style="font-size: 10px; color: #334155; margin-bottom: 2px;"><strong>Posting Date:</strong> ${dateStr}</div>
             </div>
           </div>
 
-          <table class="items-table" style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+          <!-- Particulars Table -->
+          <table class="items-table" style="width: 100%; margin-top: 12px; border-collapse: collapse;">
             <thead>
               <tr>
                 <th style="width: 40px; text-align: center;">#</th>
-                <th style="text-align: left;">Particulars</th>
-                <th style="width: 120px; text-align: right;">Amount (₹)</th>
+                <th style="text-align: left;">Particulars / Description</th>
+                <th style="width: 130px; text-align: right;">Amount (₹)</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td style="text-align: center;">1</td>
-                <td>Advance ${paymentType} ${row.narration ? `- ${row.narration}` : ''}</td>
-                <td style="text-align: right; font-weight: 600;">${formatAmount(row.amount)}</td>
-              </tr>
-              <tr class="totals-row">
-                <td colspan="2" style="text-align: right; text-transform: uppercase; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">Total</td>
-                <td style="text-align: right; font-weight: 700; border-top: 2px solid #0f5132; background-color: #e2e8f0;">${formatAmount(row.amount)}</td>
+                <td style="text-align: center; vertical-align: top; padding-top: 8px;">1</td>
+                <td style="padding-top: 8px; padding-bottom: 8px;">
+                  <div style="font-weight: 700; font-size: 11px; text-transform: uppercase; color: #0f5132;">
+                    Advance ${paymentType} — ${ledgerType}
+                  </div>
+                  <div style="font-size: 10px; color: #475569; margin-top: 3px;">
+                    ${isPayment
+                      ? `Being advance payment disbursed to ${name}${code ? ` (${code})` : ""}`
+                      : `Being advance repayment / refund received from ${name}${code ? ` (${code})` : ""}`
+                    }
+                  </div>
+                  ${row.narration ? `
+                    <div style="margin-top: 5px; font-size: 10px; color: #1e293b; background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; display: inline-block;">
+                      <strong>Narration:</strong> ${row.narration}
+                    </div>
+                  ` : ""}
+                </td>
+                <td style="text-align: right; font-weight: 700; font-size: 12px; vertical-align: top; padding-top: 8px;">
+                  ₹${formatAmount(amountVal)}
+                </td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="total-row">
+                <td colspan="2" style="text-align: right; text-transform: uppercase; font-weight: 700; font-size: 11px;">
+                  Total Amount (${paymentType === 'Payment' ? 'Paid' : 'Received'})
+                </td>
+                <td style="text-align: right; font-weight: 800; font-size: 13px; color: #0f5132;">
+                  ₹${formatAmount(amountVal)}
+                </td>
+              </tr>
+            </tfoot>
           </table>
+
+          <!-- Amount In Words -->
+          ${amountInWordsStr ? `
+            <div style="margin-top: 8px; padding: 8px 12px; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 10.5px; color: #0f5132;">
+              <strong>AMOUNT IN WORDS:</strong> ${amountInWordsStr.replace(/^Rupees:\s*/i, "").replace(/\s*Rupees Only$/i, "").trim().toUpperCase()} RUPEES ONLY
+            </div>
+          ` : ""}
+
+          <!-- Three Signature Blocks: Issued By, Received By, Authorised Signatory -->
+          <div class="signatures-container" style="margin-top: 45px; page-break-inside: avoid;">
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">
+                ${isPayment ? "Issued By" : "Received By"}<br/>
+                <span style="font-size: 8.5px; color: #64748b;">(Accounts / Cashier)</span>
+              </div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">
+                ${isPayment ? "Received By" : "Paid / Deposited By"}<br/>
+                <span style="font-size: 8.5px; color: #64748b;">(${name})</span>
+              </div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">
+                Authorised Signatory<br/>
+                <span style="font-size: 8.5px; color: #64748b;">For ${cName}</span>
+              </div>
+            </div>
+          </div>
+
           ${getGlobalPrintFooterHtml()}
           ${PRINT_TRIGGER_SCRIPT}
         </body>

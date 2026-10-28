@@ -254,15 +254,15 @@ async function handlePrintStaffStatement(staffData: any, transactionsParam: any[
         <div class="signatures-container" style="margin-top: 45px; page-break-inside: avoid;">
           <div class="signature-block">
             <div class="signature-line"></div>
-            <div class="signature-label">Staff Signature<br/>(${staffName})</div>
+            <div class="signature-label">Issued By / Prepared By<br/><span style="font-size: 8.5px; color: #64748b;">(Accounts / Cashier)</span></div>
           </div>
           <div class="signature-block">
             <div class="signature-line"></div>
-            <div class="signature-label">Prepared By</div>
+            <div class="signature-label">Received By / Staff Signature<br/><span style="font-size: 8.5px; color: #64748b;">(${staffName})</span></div>
           </div>
           <div class="signature-block">
             <div class="signature-line"></div>
-            <div class="signature-label">Authorised Signatory<br/>For ${cName}</div>
+            <div class="signature-label">Authorised Signatory<br/><span style="font-size: 8.5px; color: #64748b;">For ${cName}</span></div>
           </div>
         </div>
         ${getGlobalPrintFooterHtml()}
