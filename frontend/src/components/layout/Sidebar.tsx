@@ -80,7 +80,6 @@ const NAV_ITEMS: NavItem[] = [
     label: "Billing",
     icon: <Assignment sx={{ fontSize: 20 }} />,
     children: [
-      { label: "Labour Bill", path: "/labour-bill", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Job Work Bill", path: "/billing/job-work-bill", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Bills Receivable", path: "/billing/receivables", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],
@@ -148,7 +147,6 @@ const NAV_ITEMS: NavItem[] = [
       { label: "Stock Summary", path: "/reports/stock-summary", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Inward Register", path: "/reports/inward-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Outward Register", path: "/reports/outward-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
-      { label: "Labour Bill Register", path: "/reports/labour-bill-register", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Monthly Report", path: "/reports/monthly", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
       { label: "Trial Balance", path: "/reports/trial-balance", icon: <ChevronRight sx={{ fontSize: 12 }} /> },
     ],

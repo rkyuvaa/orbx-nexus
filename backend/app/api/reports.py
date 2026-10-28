@@ -26,7 +26,7 @@ async def dashboard_summary(
         text(
             f"SELECT "
             f"  (SELECT COUNT(*) FROM {schema}.vouchers WHERE voucher_date = CURRENT_DATE) AS today_vouchers,"
-            f"  (SELECT COALESCE(SUM(total_amount), 0) FROM {schema}.labour_bills WHERE is_paid = FALSE) AS pending_bills,"
+            f"  (SELECT COALESCE(SUM(COALESCE(pending_amount, total_amount)), 0) FROM {schema}.job_work_bills WHERE is_paid = FALSE) AS pending_bills,"
             f"  (SELECT COUNT(*) FROM {schema}.stock_inward WHERE is_completed = FALSE) AS pending_inward,"
             f"  (SELECT COALESCE(SUM(qty), 0) FROM ("
             f"     SELECT quantity AS qty FROM {schema}.stock_inward WHERE inward_date = CURRENT_DATE AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) = 0"
@@ -996,46 +996,46 @@ async def pending_bills(
     schema = s(fy)
     result = await db.execute(
         text(
-            f"SELECT lb.id, lb.bill_date::text, lb.bill_no, l.name AS ledger, "
-            f"lb.total_amount, lb.narration "
-            f"FROM {schema}.labour_bills lb "
-            f"LEFT JOIN master.ledgers l ON l.id = lb.ledger_id "
-            f"WHERE lb.is_paid = FALSE ORDER BY lb.bill_date"
+            f"SELECT jwb.id, jwb.bill_date::text, jwb.bill_no, COALESCE(jwb.customer_name, l.name) AS ledger, "
+            f"jwb.total_amount, jwb.narration "
+            f"FROM {schema}.job_work_bills jwb "
+            f"LEFT JOIN master.ledgers l ON l.id = jwb.ledger_id "
+            f"WHERE jwb.is_paid = FALSE ORDER BY jwb.bill_date"
         )
     )
     return [dict(r) for r in result.mappings().all()]
 
 
-# ─────── Receivables (Labour Bills) ───────
+# ─────── Receivables (Job Work Bills) ───────
 
 async def _ensure_payment_schema(db: DBSession, schema: str):
     try:
         await db.execute(text(f"""
-            ALTER TABLE {schema}.labour_bills 
-            ADD COLUMN IF NOT EXISTS paid_amount NUMERIC DEFAULT 0,
-            ADD COLUMN IF NOT EXISTS pending_amount NUMERIC,
+            ALTER TABLE {schema}.job_work_bills 
+            ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(15,2) DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS pending_amount NUMERIC(15,2),
             ADD COLUMN IF NOT EXISTS taxable_paid BOOLEAN DEFAULT FALSE,
             ADD COLUMN IF NOT EXISTS gst_paid BOOLEAN DEFAULT FALSE,
             ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'UNPAID';
         """))
 
         await db.execute(text(f"""
-            CREATE TABLE IF NOT EXISTS {schema}.labour_bill_payments (
+            CREATE TABLE IF NOT EXISTS {schema}.job_work_bill_payments (
                 id SERIAL PRIMARY KEY,
-                bill_id INTEGER NOT NULL REFERENCES {schema}.labour_bills(id) ON DELETE CASCADE,
+                bill_id INTEGER NOT NULL REFERENCES {schema}.job_work_bills(id) ON DELETE CASCADE,
                 payment_date DATE NOT NULL,
                 payment_mode VARCHAR(50) DEFAULT 'Bank Transfer',
                 component VARCHAR(20) DEFAULT 'PARTIAL',
-                taxable_amount NUMERIC DEFAULT 0,
-                gst_amount NUMERIC DEFAULT 0,
-                tds_amount NUMERIC DEFAULT 0,
-                net_paid_amount NUMERIC DEFAULT 0,
+                taxable_amount NUMERIC(15,2) DEFAULT 0,
+                gst_amount NUMERIC(15,2) DEFAULT 0,
+                tds_amount NUMERIC(15,2) DEFAULT 0,
+                net_paid_amount NUMERIC(15,2) DEFAULT 0,
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             );
         """))
     except Exception as e:
-        print("Error setting up payment schema:", e)
+        print("Error setting up job work payment schema:", e)
 
 
 @router.get("/receivables")
@@ -1049,7 +1049,7 @@ async def receivables(
     status: Optional[str] = Query(default="pending"),
 ):
     """
-    Returns labour bills with aging buckets, date filters, status (pending/received/all) and per-ledger subtotals.
+    Returns Job Work bills with aging buckets, date filters, status (pending/received/all) and per-ledger subtotals.
     """
     schema = s(fy)
     await _ensure_payment_schema(db, schema)
@@ -1060,51 +1060,51 @@ async def receivables(
     params: dict = {}
 
     if fd:
-        conds.append("lb.bill_date >= CAST(:fd AS date)")
+        conds.append("jwb.bill_date >= CAST(:fd AS date)")
         params["fd"] = fd
     if td:
-        conds.append("lb.bill_date <= CAST(:td AS date)")
+        conds.append("jwb.bill_date <= CAST(:td AS date)")
         params["td"] = td
     if ledger_id:
-        conds.append("lb.ledger_id = :lid")
+        conds.append("jwb.ledger_id = :lid")
         params["lid"] = ledger_id
 
     if status == "pending":
-        conds.append("lb.is_paid = FALSE")
+        conds.append("jwb.is_paid = FALSE")
     elif status == "received":
-        conds.append("lb.is_paid = TRUE")
+        conds.append("jwb.is_paid = TRUE")
 
     where_str = "WHERE " + " AND ".join(conds)
 
     result = await db.execute(
         text(
             f"SELECT "
-            f"  lb.id, "
-            f"  lb.bill_no, "
-            f"  lb.bill_date::text, "
-            f"  lb.ledger_id, "
-            f"  l.name AS ledger_name, "
-            f"  COALESCE(lb.amount, lb.total_amount) AS taxable_amount, "
-            f"  COALESCE(lb.gst_amount, 0) AS gst_amount, "
-            f"  COALESCE(lb.cgst_amount, 0) AS cgst_amount, "
-            f"  COALESCE(lb.sgst_amount, 0) AS sgst_amount, "
-            f"  ROUND(COALESCE(lb.amount, lb.total_amount, 0) * 0.01, 2) AS tds_amount, "
-            f"  lb.total_amount, "
-            f"  lb.net_amount, "
-            f"  COALESCE(lb.paid_amount, 0) AS paid_amount, "
-            f"  COALESCE(lb.pending_amount, lb.total_amount) AS pending_amount, "
-            f"  COALESCE(lb.taxable_paid, FALSE) AS taxable_paid, "
-            f"  COALESCE(lb.gst_paid, FALSE) AS gst_paid, "
-            f"  COALESCE(lb.payment_status, CASE WHEN lb.is_paid THEN 'PAID' ELSE 'UNPAID' END) AS payment_status, "
-            f"  lb.narration, "
-            f"  lb.dispatch_through, "
-            f"  lb.is_paid, "
-            f"  lb.payment_date::text, "
-            f"  (CURRENT_DATE - lb.bill_date::date) AS days_outstanding "
-            f"FROM {schema}.labour_bills lb "
-            f"LEFT JOIN master.ledgers l ON l.id = lb.ledger_id "
+            f"  jwb.id, "
+            f"  jwb.bill_no, "
+            f"  jwb.bill_date::text, "
+            f"  jwb.ledger_id, "
+            f"  COALESCE(jwb.customer_name, l.name) AS ledger_name, "
+            f"  COALESCE(jwb.amount, jwb.total_amount) AS taxable_amount, "
+            f"  COALESCE(jwb.gst_amount, 0) AS gst_amount, "
+            f"  COALESCE(jwb.cgst_amount, 0) AS cgst_amount, "
+            f"  COALESCE(jwb.sgst_amount, 0) AS sgst_amount, "
+            f"  ROUND(COALESCE(jwb.amount, jwb.total_amount, 0) * 0.01, 2) AS tds_amount, "
+            f"  jwb.total_amount, "
+            f"  jwb.net_amount, "
+            f"  COALESCE(jwb.paid_amount, 0) AS paid_amount, "
+            f"  COALESCE(jwb.pending_amount, jwb.total_amount) AS pending_amount, "
+            f"  COALESCE(jwb.taxable_paid, FALSE) AS taxable_paid, "
+            f"  COALESCE(jwb.gst_paid, FALSE) AS gst_paid, "
+            f"  COALESCE(jwb.payment_status, CASE WHEN jwb.is_paid THEN 'PAID' ELSE 'UNPAID' END) AS payment_status, "
+            f"  jwb.narration, "
+            f"  jwb.dispatch_through, "
+            f"  jwb.is_paid, "
+            f"  jwb.payment_date::text, "
+            f"  (CURRENT_DATE - jwb.bill_date::date) AS days_outstanding "
+            f"FROM {schema}.job_work_bills jwb "
+            f"LEFT JOIN master.ledgers l ON l.id = jwb.ledger_id "
             f"{where_str} "
-            f"ORDER BY l.name ASC, lb.bill_date ASC"
+            f"ORDER BY COALESCE(jwb.customer_name, l.name) ASC, jwb.bill_date ASC"
         ),
         params,
     )

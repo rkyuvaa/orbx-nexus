@@ -102,6 +102,7 @@ export const router = createBrowserRouter([
       // Labour Bill & Billing
       { path: "labour-bill", element: <LabourBillPage /> },
       { path: "billing/job-work-bill", element: <JobWorkBillPage /> },
+      { path: "billing/job-work-bills", element: <JobWorkBillPage /> },
       { path: "billing/receivables", element: <ReceivablesReport /> },
 
       // Payroll

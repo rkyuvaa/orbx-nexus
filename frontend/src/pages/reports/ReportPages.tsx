@@ -1233,12 +1233,13 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const [netPaidAmt, setNetPaidAmt] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const endpointBase = (bill?.bill_no?.startsWith("01-") || bill?.bill_type === "Labour Bill") ? "labour-bills" : "job-work-bills";
 
   const { data: paymentHistory = [] } = useQuery({
     queryKey: ["bill-payments", bill?.id, activeFY],
     queryFn: async () => {
       if (!bill?.id) return [];
-      return (await api.get(`/labour-bills/${bill.id}/payments?fy=${activeFY}`)).data;
+      return (await api.get(`/${endpointBase}/${bill.id}/payments?fy=${activeFY}`)).data;
     },
     enabled: open && !!bill?.id,
   });
@@ -1366,9 +1367,9 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
       };
 
       if (editingPaymentId) {
-        await api.put(`/labour-bills/${bill.id}/payments/${editingPaymentId}?fy=${activeFY}`, payload);
+        await api.put(`/${endpointBase}/${bill.id}/payments/${editingPaymentId}?fy=${activeFY}`, payload);
       } else {
-        await api.post(`/labour-bills/${bill.id}/record-payment?fy=${activeFY}`, payload);
+        await api.post(`/${endpointBase}/${bill.id}/record-payment?fy=${activeFY}`, payload);
       }
       onSuccess();
       onClose();
@@ -1382,7 +1383,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const handleDeletePayment = async (paymentId: number) => {
     if (!confirm("Are you sure you want to delete this payment installment? The bill balance will be automatically recalculated.")) return;
     try {
-      await api.delete(`/labour-bills/${bill.id}/payments/${paymentId}?fy=${activeFY}`);
+      await api.delete(`/${endpointBase}/${bill.id}/payments/${paymentId}?fy=${activeFY}`);
       qc.invalidateQueries({ queryKey: ["bill-payments", bill?.id] });
       qc.invalidateQueries({ queryKey: ["receivables"] });
       onSuccess();
@@ -1394,7 +1395,7 @@ function RecordBillPaymentDialog({ open, onClose, bill, activeFY, onSuccess }: R
   const handleResetToPending = async () => {
     if (!confirm(`Are you sure you want to reset Bill #${bill.bill_no} back to Pending? All payment entries for this bill will be cleared and full bill balance will become receivable again.`)) return;
     try {
-      await api.post(`/labour-bills/${bill.id}/reset-payment?fy=${activeFY}`);
+      await api.post(`/${endpointBase}/${bill.id}/reset-payment?fy=${activeFY}`);
       qc.invalidateQueries({ queryKey: ["receivables"] });
       onSuccess();
       onClose();
@@ -1704,6 +1705,7 @@ function EditBillDetailsDialog({ open, onClose, bill, activeFY, onSuccess }: Edi
   const [totalAmt, setTotalAmt] = useState("");
   const [narration, setNarration] = useState("");
   const [saving, setSaving] = useState(false);
+  const endpointBase = (bill?.bill_no?.startsWith("01-") || bill?.bill_type === "Labour Bill") ? "labour-bills" : "job-work-bills";
 
   useEffect(() => {
     if (open && bill) {
@@ -1841,7 +1843,7 @@ export function ReceivablesReport() {
   const { data: rawLaborLedgers = [] } = useQuery({
     queryKey: ["ledgers-account"],
     queryFn: async () => {
-      const res = await api.get("/ledgers/?ledger_type=Account");
+      const res = await api.get("/ledgers/");
       return Array.isArray(res.data) ? res.data : [];
     },
   });
@@ -1995,7 +1997,7 @@ export function ReceivablesReport() {
       <Box className="no-print">
         <PageHeader
           title="Bills Receivable"
-          subtitle="Outstanding & Received labour bill amounts with Taxable, GST & TDS breakdown"
+          subtitle="Outstanding & Received Job Work bill amounts with Taxable, GST & TDS breakdown"
           breadcrumbs={[{ label: "Billing" }, { label: "Bills Receivable" }]}
         />
 
@@ -2025,7 +2027,7 @@ export function ReceivablesReport() {
             getOptionLabel={(o: any) => o.name}
             value={ledgers.find((l: any) => l.id === selectedLedgerId) || null}
             onChange={(_, val) => setSelectedLedgerId(val ? val.id : "")}
-            renderInput={(params) => <TextField {...params} label="Filter by Contractor" sx={{ minWidth: 230 }} />}
+            renderInput={(params) => <TextField {...params} label="Filter by Customer" sx={{ minWidth: 230 }} />}
           />
           <Box sx={{ display: "flex", gap: 0.5, bgcolor: "rgba(0,0,0,0.04)", p: 0.5, borderRadius: 1.5, border: "1px solid rgba(0,0,0,0.08)" }}>
             <Button
@@ -2065,7 +2067,7 @@ export function ReceivablesReport() {
         {/* Summary pills */}
         {rawData.length > 0 && (
           <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mb: 2 }}>
-            <StatPill label="Contractors" value={totalContractors} color="#1565c0" />
+            <StatPill label="Customers" value={totalContractors} color="#1565c0" />
             <StatPill label="Bills" value={totalBills} color="#0288d1" />
             <StatPill label="Total Amount" value={`₹${formatAmount(grandTotal)}`} color="#c62828" />
             {Object.entries(agingTotals).filter(([, v]) => v > 0).map(([bucket, amt]) => (

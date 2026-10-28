@@ -107,7 +107,7 @@ export default function DashboardPage() {
           <KPICard
             title="Pending Bills"
             value={`₹${((data?.pending_bills ?? 0) / 1000).toFixed(1)}K`}
-            subtitle="Unpaid labour bills"
+            subtitle="Unpaid job work bills"
             icon={<PendingActions />}
             trend="down"
             color="#ed6c02"
@@ -218,7 +218,7 @@ export default function DashboardPage() {
             {[
               { label: "Inward Voucher", path: "/process-voucher/inward", color: isDark ? "#4ade80" : "#0f5132" },
               { label: "Outward Voucher", path: "/process-voucher/outward", color: isDark ? "#38bdf8" : "#0288d1" },
-              { label: "Labour Bill", path: "/labour-bill", color: "#ed6c02" },
+              { label: "Job Work Bill", path: "/billing/job-work-bill", color: "#ed6c02" },
               { label: "Payment Voucher", path: "/vouchers/payment", color: "#7c4dff" },
               { label: "Receipt Voucher", path: "/vouchers/receipt", color: "#2e7d32" },
               { label: "Stock in Hand", path: "/reports/stock-in-hand", color: "#1976d2" },
