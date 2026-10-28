@@ -22,6 +22,8 @@ import {
   Alert,
   CircularProgress,
   Grid,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
@@ -280,6 +282,7 @@ export default function StaffBalancePage() {
   const [quickAdvOpen, setQuickAdvOpen] = useState(false);
   const [advAmount, setAdvAmount] = useState("");
   const [advNarration, setAdvNarration] = useState("");
+  const [showZeroBalance, setShowZeroBalance] = useState(false);
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({
     open: false,
     msg: "",
@@ -295,6 +298,15 @@ export default function StaffBalancePage() {
     queryKey: ["staff-balance-summary", activeFY],
     queryFn: async () => (await api.get(`/payroll/balance-summary?fy=${activeFY}`)).data,
   });
+
+  const filteredData = useMemo(() => {
+    if (showZeroBalance) return data;
+    return data.filter((row: any) => {
+      const curBal = Math.abs(row.current_balance || 0);
+      const advDue = Math.abs(row.advance_balance || 0);
+      return curBal >= 0.01 || advDue >= 0.01;
+    });
+  }, [data, showZeroBalance]);
 
   const { data: transactions = [], isLoading: isTxLoading } = useQuery({
     queryKey: ["staff-transactions", selectedStaff?.ledger_id, activeFY],
@@ -492,10 +504,28 @@ export default function StaffBalancePage() {
         title="Staff Balance"
         subtitle="Consolidated staff advances, recoveries, salary deductions, and net balances"
         breadcrumbs={[{ label: "Salary and Wages" }, { label: "Staff Balance" }]}
+        actions={
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showZeroBalance}
+                onChange={(e) => setShowZeroBalance(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Typography variant="body2" sx={{ fontSize: "0.82rem", fontWeight: 600, color: "text.secondary" }}>
+                Show Zero Balance
+              </Typography>
+            }
+            sx={{ m: 0 }}
+          />
+        }
       />
 
       <OrbxGrid
-        rowData={data}
+        rowData={filteredData}
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}

@@ -22,6 +22,8 @@ import {
   Alert,
   CircularProgress,
   Grid,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
@@ -262,6 +264,7 @@ export default function ContractorBalancePage() {
   const [selectedContractor, setSelectedContractor] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payNarration, setPayNarration] = useState("");
+  const [showZeroBalance, setShowZeroBalance] = useState(false);
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({ open: false, msg: "", severity: "success" });
 
   const { data: companyData } = useQuery({
@@ -321,16 +324,13 @@ export default function ContractorBalancePage() {
   };
 
   const filteredData = useMemo(() => {
+    if (showZeroBalance) return data;
     return data.filter((row: any) => {
-      const ob = Math.abs(row.opening_balance || 0);
-      const advPaid = Math.abs(row.advance_paid || 0);
-      const advRec = Math.abs(row.advance_received || 0);
-      const jwAmt = Math.abs(row.job_work_amount || 0);
-      const jwPaid = Math.abs(row.job_work_paid || 0);
       const curBal = Math.abs(row.current_balance || 0);
-      return ob !== 0 || advPaid !== 0 || advRec !== 0 || jwAmt !== 0 || jwPaid !== 0 || curBal !== 0;
+      const advDue = Math.abs((row.advance_paid || 0) - (row.advance_received || 0));
+      return curBal >= 0.01 || advDue >= 0.01;
     });
-  }, [data]);
+  }, [data, showZeroBalance]);
 
   const colDefs: ColDef[] = [
     {
@@ -456,6 +456,24 @@ export default function ContractorBalancePage() {
       <PageHeader
         title="Contractor Balance"
         breadcrumbs={[{ label: "Contractor Work" }]}
+        actions={
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={showZeroBalance}
+                onChange={(e) => setShowZeroBalance(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Typography variant="body2" sx={{ fontSize: "0.82rem", fontWeight: 600, color: "text.secondary" }}>
+                Show Zero Balance
+              </Typography>
+            }
+            sx={{ m: 0 }}
+          />
+        }
       />
       <OrbxGrid
         rowData={filteredData}
