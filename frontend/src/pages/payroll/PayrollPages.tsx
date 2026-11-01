@@ -484,6 +484,7 @@ export function SalaryVoucherPage() {
         params.set("from_date", selectedWeek.from);
         params.set("to_date", selectedWeek.to);
         params.set("pay_period_type", "Weekly");
+        params.set("include_balance", "true");
       }
       return (await api.get(`/payroll/salary?${params.toString()}`)).data;
     },
@@ -491,9 +492,13 @@ export function SalaryVoucherPage() {
   const weeklyItems = items;
   const weeklyTotals = useMemo(() => weeklyItems.reduce((acc: any, item: any) => ({
     count: acc.count + 1,
+    salary: acc.salary + Number(item.payable_amount || 0),
+    advance: acc.advance + Number(item.advance || 0),
+    paid: acc.paid + Number(item.net_salary || 0),
+    balance: acc.balance + Number(item.balance || 0),
     payable: acc.payable + Number(item.payable_amount || 0),
     net: acc.net + Number(item.net_salary || 0),
-  }), { count: 0, payable: 0, net: 0 }), [weeklyItems]);
+  }), { count: 0, salary: 0, advance: 0, paid: 0, balance: 0, payable: 0, net: 0 }), [weeklyItems]);
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", "Staff"],
@@ -998,6 +1003,48 @@ export function SalaryVoucherPage() {
       <OrbxGrid
         rowData={weeklyItems}
         columnDefs={colDefs}
+        printOverride={weeklyMode === "week" ? (rows, printWindow) => {
+          const totals = rows.reduce((sum: any, row: any) => ({
+            salary: sum.salary + Number(row.payable_amount || 0) + Number(row.allowances || 0),
+            advance: sum.advance + Number(row.advance || 0),
+            paid: sum.paid + Number(row.net_salary || 0),
+            balance: sum.balance + Number(row.balance || 0),
+          }), { salary: 0, advance: 0, paid: 0, balance: 0 });
+          const compData = useCompanyStore.getState().company;
+          const { name: companyName, address, cityStatePin, phone, email, gstin } = resolveCompanyDetails(compData);
+          const logoHtml = getCompanyLogoHtml(true, compData);
+          const rowsHtml = rows.map((row: any, index: number) => {
+            const staffName = row.staff_name || staffMap[row.ledger_id]?.name || `Staff #${row.ledger_id}`;
+            return `<tr><td>${index + 1}</td><td>${staffName}</td><td>₹${formatAmount(Number(row.payable_amount || 0) + Number(row.allowances || 0))}</td><td>₹${formatAmount(row.advance || 0)}</td><td>₹${formatAmount(row.net_salary || 0)}</td><td>₹${formatAmount(row.balance || 0)}</td></tr>`;
+          }).join("");
+          printWindow.document.write(`<!DOCTYPE html><html><head><title>Weekly Salary Report</title><style>
+            ${COMMON_PRINT_CSS}
+            @page { size: A4 portrait; margin: 14mm; }
+            body { color: #1a1a1a; font: 11px Arial, sans-serif; }
+            .header { display:flex; align-items:center; gap:16px; border-bottom:1px solid #bbb; padding-bottom:10px; margin-bottom:14px; }
+            .logo img { max-width:80px; max-height:60px; }
+            .company { flex:1; } .company h2 { margin:0 0 4px; font-size:16px; }
+            .company p { margin:2px 0; color:#444; }
+            h1 { font-size:15px; margin:12px 0 6px; text-transform:uppercase; }
+            .period { font-size:12px; margin:0 0 14px; }
+            table { width:100%; border-collapse:collapse; }
+            th,td { border-bottom:1px solid #d8d8d8; padding:6px 5px; text-align:left; }
+            th { border-top:1px solid #555; border-bottom:1px solid #555; font-size:9px; text-transform:uppercase; }
+            td:first-child,th:first-child { text-align:center; width:34px; }
+            .amount { text-align:right; white-space:nowrap; }
+            tfoot td { font-weight:700; border-top:1.5px solid #444; border-bottom:0; }
+            .footer { margin-top:22px; font-size:9px; color:#666; }
+            @media print { tr { break-inside:avoid; } }
+          </style></head><body>
+            <div class="header"><div class="logo">${logoHtml}</div><div class="company"><h2>${companyName}</h2>${address ? `<p>${address}</p>` : ""}${cityStatePin ? `<p>${cityStatePin}</p>` : ""}${phone ? `<p>${phone}</p>` : ""}${email ? `<p>${email}</p>` : ""}${gstin ? `<p>GSTIN: ${gstin}</p>` : ""}</div></div>
+            <h1>Salary Voucher Report</h1>
+            <p class="period"><strong>From:</strong> ${formatDisplayDate(selectedWeek.from)} &nbsp;&nbsp; <strong>To:</strong> ${formatDisplayDate(selectedWeek.to)}</p>
+            <table><thead><tr><th>S.No</th><th>Name</th><th class="amount">Salary</th><th class="amount">Advance</th><th class="amount">Paid</th><th class="amount">Balance</th></tr></thead>
+            <tbody>${rowsHtml}</tbody><tfoot><tr><td colspan="2">Totals</td><td class="amount">₹${formatAmount(totals.salary)}</td><td class="amount">₹${formatAmount(totals.advance)}</td><td class="amount">₹${formatAmount(totals.paid)}</td><td class="amount">₹${formatAmount(totals.balance)}</td></tr></tfoot></table>
+            ${getGlobalPrintFooterHtml()}${PRINT_TRIGGER_SCRIPT}
+          </body></html>`);
+          printWindow.document.close();
+        } : undefined}
         loading={isLoading}
         onRefresh={refetch}
         onBulkDelete={async (rows) => {

@@ -59,6 +59,7 @@ export interface OrbxGridProps<T = any> {
   onDeleteRow?: (row: T) => void | Promise<void>;
   onBulkStatusChange?: (selectedRows: T[], is_active: boolean) => void | Promise<void>;
   extraFilters?: React.ReactNode;
+  printOverride?: (rows: T[], printWindow: Window) => void;
 }
 
 export default function OrbxGrid<T = any>({
@@ -82,6 +83,7 @@ export default function OrbxGrid<T = any>({
   onDeleteRow,
   onBulkStatusChange,
   extraFilters,
+  printOverride,
 }: OrbxGridProps<T>) {
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(0);
@@ -352,6 +354,10 @@ export default function OrbxGrid<T = any>({
   const handlePrint = (previewOnly: boolean) => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
+    if (printOverride) {
+      printOverride(processedRows, printWindow);
+      return;
+    }
 
     const savedConfig = localStorage.getItem("orbx_print_config");
     let gridPaperSize: "A4" | "A5" = "A4";

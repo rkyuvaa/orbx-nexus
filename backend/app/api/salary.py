@@ -258,7 +258,7 @@ async def list_salary_vouchers(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
     ledger_id: Optional[int] = None, month: Optional[int] = None, year: Optional[int] = None,
     from_date: Optional[str] = None, to_date: Optional[str] = None,
-    pay_period_type: Optional[str] = None
+    pay_period_type: Optional[str] = None, include_balance: bool = False
 ):
     schema = s(fy)
     await ensure_salary_voucher_columns(db, schema)
@@ -299,7 +299,14 @@ async def list_salary_vouchers(
         ),
         params
     )
-    return [dict(r) for r in result.mappings().all()]
+    vouchers = [dict(r) for r in result.mappings().all()]
+    if include_balance and vouchers:
+        for row in vouchers:
+            row["advance"] = float(row.get("deductions") or 0)
+            gross_pay = float(row.get("payable_amount") or 0) + float(row.get("allowances") or 0)
+            paid = float(row.get("net_salary") or 0)
+            row["balance"] = round(gross_pay - row["advance"] - paid, 2)
+    return vouchers
 
 
 @router.post("/salary", status_code=201)
