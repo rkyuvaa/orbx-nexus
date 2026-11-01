@@ -1,5 +1,5 @@
 import calendar
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional
@@ -10,6 +10,8 @@ router = APIRouter()
 
 
 def s(fy: str) -> str:
+    if not fy.replace("_", "").isalnum() or not fy.startswith(("20", "19")):
+        raise HTTPException(status_code=400, detail="Invalid financial year")
     return f"fy_{fy}"
 
 
@@ -254,7 +256,9 @@ async def ensure_salary_voucher_columns(db: DBSession, schema: str):
 @router.get("/salary")
 async def list_salary_vouchers(
     current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027"),
-    ledger_id: Optional[int] = None, month: Optional[int] = None, year: Optional[int] = None
+    ledger_id: Optional[int] = None, month: Optional[int] = None, year: Optional[int] = None,
+    from_date: Optional[str] = None, to_date: Optional[str] = None,
+    pay_period_type: Optional[str] = None
 ):
     schema = s(fy)
     await ensure_salary_voucher_columns(db, schema)
@@ -270,6 +274,21 @@ async def list_salary_vouchers(
     if year:
         conds.append("sv.year = :y")
         params["y"] = year
+    if from_date and to_date and pay_period_type == "Weekly":
+        conds.append("sv.from_date = CAST(:from_date AS date)")
+        conds.append("sv.to_date = CAST(:to_date AS date)")
+        params["from_date"] = from_date
+        params["to_date"] = to_date
+    else:
+        if from_date:
+            conds.append("COALESCE(sv.to_date, sv.voucher_date) >= CAST(:from_date AS date)")
+            params["from_date"] = from_date
+        if to_date:
+            conds.append("COALESCE(sv.from_date, sv.voucher_date) <= CAST(:to_date AS date)")
+            params["to_date"] = to_date
+    if pay_period_type:
+        conds.append("sv.pay_period_type = :pay_period_type")
+        params["pay_period_type"] = pay_period_type
     result = await db.execute(
         text(
             f"SELECT sv.*, l.name AS staff_name, l.ledger_code AS staff_code, "

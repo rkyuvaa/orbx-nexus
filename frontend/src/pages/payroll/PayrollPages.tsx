@@ -11,6 +11,9 @@ import Print from "@mui/icons-material/Print";
 import Calculate from "@mui/icons-material/Calculate";
 import EventAvailable from "@mui/icons-material/EventAvailable";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
+import ChevronLeft from "@mui/icons-material/ChevronLeft";
+import ChevronRight from "@mui/icons-material/ChevronRight";
+import Today from "@mui/icons-material/Today";
 import { useForm, Controller } from "react-hook-form";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import api from "../../api/client";
@@ -23,6 +26,37 @@ import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, ensurePrint
 import { toWords } from "../../utils/numberToWords";
 
 const today = new Date().toISOString().split("T")[0];
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+function shiftDate(date: Date, days: number) {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+}
+
+function isoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getSalaryPayWeek(anchorDate: string, payoutWeekday: number) {
+  const [year, month, day] = anchorDate.split("-").map(Number);
+  const anchor = new Date(year, month - 1, day);
+  const daysSincePayout = (anchor.getDay() - payoutWeekday + 7) % 7;
+  const payoutDate = shiftDate(anchor, -daysSincePayout);
+  const to = shiftDate(payoutDate, -1);
+  const from = shiftDate(payoutDate, -7);
+  return { from: isoDate(from), to: isoDate(to), payoutDate: isoDate(payoutDate) };
+}
+
+function formatDateRange(from: string, to: string) {
+  return `${formatDisplayDate(from)} to ${formatDisplayDate(to)}`;
+}
 
 // Reusable voucher form + grid for Payment/Receipt, Staff/Contractor
 function formatDisplayDate(dateStr?: string) {
@@ -429,17 +463,37 @@ export function SalaryVoucherPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [viewVoucher, setViewVoucher] = useState<any>(null);
-
-  const { data: items = [], isLoading, refetch } = useQuery({
-    queryKey: ["salary-vouchers", activeFY],
-    queryFn: async () => (await api.get(`/payroll/salary?fy=${activeFY}`)).data,
+  const [weeklyAnchor, setWeeklyAnchor] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
-
+  const [weeklyMode, setWeeklyMode] = useState<"week" | "all">("week");
   const { data: payrollConfig } = useQuery({
     queryKey: ["payroll-config"],
     queryFn: async () => (await api.get("/payroll/config-settings/")).data,
   });
   const configuredPayoutDay = payrollConfig?.payout_day || "Saturday";
+  const payoutWeekday = WEEKDAY_INDEX[configuredPayoutDay] ?? 6;
+  const selectedWeek = useMemo(() => getSalaryPayWeek(weeklyAnchor, payoutWeekday), [weeklyAnchor, payoutWeekday]);
+
+  const { data: items = [], isLoading, refetch } = useQuery({
+    queryKey: ["salary-vouchers", activeFY, weeklyMode, weeklyMode === "week" ? selectedWeek.from : null, weeklyMode === "week" ? selectedWeek.to : null],
+    queryFn: async () => {
+      const params = new URLSearchParams({ fy: activeFY });
+      if (weeklyMode === "week") {
+        params.set("from_date", selectedWeek.from);
+        params.set("to_date", selectedWeek.to);
+        params.set("pay_period_type", "Weekly");
+      }
+      return (await api.get(`/payroll/salary?${params.toString()}`)).data;
+    },
+  });
+  const weeklyItems = items;
+  const weeklyTotals = useMemo(() => weeklyItems.reduce((acc: any, item: any) => ({
+    count: acc.count + 1,
+    payable: acc.payable + Number(item.payable_amount || 0),
+    net: acc.net + Number(item.net_salary || 0),
+  }), { count: 0, payable: 0, net: 0 }), [weeklyItems]);
 
   const { data: ledgers = [] } = useQuery({
     queryKey: ["ledgers", "Staff"],
@@ -923,8 +977,26 @@ export function SalaryVoucherPage() {
         subtitle="Staff monthly salary vouchers calculated from daily attendance (Working Days × Per Day Salary)"
         breadcrumbs={[{ label: "Payroll Voucher" }, { label: "Salary Voucher" }]}
       />
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+          <Button size="small" variant={weeklyMode === "week" ? "contained" : "outlined"} onClick={() => setWeeklyMode("week")}>Weekly</Button>
+          <Button size="small" variant={weeklyMode === "all" ? "contained" : "outlined"} onClick={() => setWeeklyMode("all")}>All Vouchers</Button>
+          {weeklyMode === "week" && <>
+            <IconButton size="small" aria-label="Previous pay week" onClick={() => setWeeklyAnchor(isoDate(shiftDate(new Date(`${selectedWeek.from}T00:00:00`), -1)))}><ChevronLeft /></IconButton>
+            <Chip icon={<CalendarMonth fontSize="small" />} label={`${formatDateRange(selectedWeek.from, selectedWeek.to)} | Paid ${formatDisplayDate(selectedWeek.payoutDate)}`} variant="outlined" />
+            <IconButton size="small" aria-label="Next pay week" disabled={selectedWeek.payoutDate >= weeklyAnchor} onClick={() => setWeeklyAnchor(isoDate(shiftDate(new Date(`${selectedWeek.payoutDate}T00:00:00`), 7)))}><ChevronRight /></IconButton>
+            <Button size="small" startIcon={<Today />} onClick={() => {
+              const d = new Date();
+              setWeeklyAnchor(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+            }}>This Week</Button>
+          </>}
+        </Box>
+        <Typography variant="body2" color="text.secondary">
+          {weeklyMode === "week" ? `Pay day: ${configuredPayoutDay} | ${weeklyTotals.count} vouchers | Payable ${formatAmount(weeklyTotals.payable)} | Net ${formatAmount(weeklyTotals.net)}` : `${items.length} vouchers`}
+        </Typography>
+      </Box>
       <OrbxGrid
-        rowData={items}
+        rowData={weeklyItems}
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
