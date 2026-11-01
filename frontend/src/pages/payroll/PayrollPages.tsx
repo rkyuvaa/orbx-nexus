@@ -1023,24 +1023,27 @@ export function SalaryVoucherPage() {
             body { color: #1a1a1a; font: 11px Arial, sans-serif; }
             .header { display:flex; align-items:center; gap:16px; border-bottom:1px solid #bbb; padding-bottom:10px; margin-bottom:14px; }
             .logo img { max-width:80px; max-height:60px; }
-            .company { flex:1; } .company h2 { margin:0 0 4px; font-size:16px; }
+            .company { flex:1; text-align:center; } .company h2 { margin:0 0 4px; font-size:16px; }
             .company p { margin:2px 0; color:#444; }
             h1 { font-size:15px; margin:12px 0 6px; text-transform:uppercase; }
             .period { font-size:12px; margin:0 0 14px; }
-            table { width:100%; border-collapse:collapse; }
-            th,td { border-bottom:1px solid #d8d8d8; padding:6px 5px; text-align:left; }
+            table { width:100%; border-collapse:collapse; table-layout:fixed; }
+            col.serial { width:8%; } col.name { width:28%; } col.money { width:16%; }
+            th,td { border-bottom:1px solid #d8d8d8; padding:6px 7px; text-align:left; vertical-align:middle; }
             th { border-top:1px solid #555; border-bottom:1px solid #555; font-size:9px; text-transform:uppercase; }
-            td:first-child,th:first-child { text-align:center; width:34px; }
-            .amount { text-align:right; white-space:nowrap; }
+            th:first-child,td:first-child { text-align:center; }
+            th.amount,td.amount { text-align:right; white-space:nowrap; }
             tfoot td { font-weight:700; border-top:1.5px solid #444; border-bottom:0; }
+            tfoot td.amount { text-align:right; }
             .footer { margin-top:22px; font-size:9px; color:#666; }
             @media print { tr { break-inside:avoid; } }
           </style></head><body>
             <div class="header"><div class="logo">${logoHtml}</div><div class="company"><h2>${companyName}</h2>${address ? `<p>${address}</p>` : ""}${cityStatePin ? `<p>${cityStatePin}</p>` : ""}${phone ? `<p>${phone}</p>` : ""}${email ? `<p>${email}</p>` : ""}${gstin ? `<p>GSTIN: ${gstin}</p>` : ""}</div></div>
             <h1>Salary Voucher Report</h1>
             <p class="period"><strong>From:</strong> ${formatDisplayDate(selectedWeek.from)} &nbsp;&nbsp; <strong>To:</strong> ${formatDisplayDate(selectedWeek.to)}</p>
-            <table><thead><tr><th>S.No</th><th>Name</th><th class="amount">Salary</th><th class="amount">Advance</th><th class="amount">Paid</th><th class="amount">Balance</th></tr></thead>
-            <tbody>${rowsHtml}</tbody><tfoot><tr><td colspan="2">Totals</td><td class="amount">₹${formatAmount(totals.salary)}</td><td class="amount">₹${formatAmount(totals.advance)}</td><td class="amount">₹${formatAmount(totals.paid)}</td><td class="amount">₹${formatAmount(totals.balance)}</td></tr></tfoot></table>
+            <table><colgroup><col class="serial"><col class="name"><col class="money"><col class="money"><col class="money"><col class="money"></colgroup>
+              <thead><tr><th>S.No</th><th>Name</th><th class="amount">Salary</th><th class="amount">Advance</th><th class="amount">Paid</th><th class="amount">Balance</th></tr></thead>
+              <tbody>${rowsHtml}</tbody><tfoot><tr><td colspan="2">Totals</td><td class="amount">₹${formatAmount(totals.salary)}</td><td class="amount">₹${formatAmount(totals.advance)}</td><td class="amount">₹${formatAmount(totals.paid)}</td><td class="amount">₹${formatAmount(totals.balance)}</td></tr></tfoot></table>
             ${getGlobalPrintFooterHtml()}${PRINT_TRIGGER_SCRIPT}
           </body></html>`);
           printWindow.document.close();
