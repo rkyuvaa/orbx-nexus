@@ -125,6 +125,9 @@ class DailyAttendanceBulkIn(BaseModel):
     entry_date: str
     entries: list[DailyAttendanceItem]
 
+class DailyAttendanceUpsertIn(DailyAttendanceItem):
+    entry_date: str
+
 
 @router.get("/daily-staff")
 async def get_daily_staff_attendance(
@@ -240,6 +243,57 @@ async def save_daily_staff_attendance_bulk(
         )
     await db.commit()
     return {"message": f"Saved attendance for {len(body.entries)} staff members on {body.entry_date}"}
+
+@router.put("/daily-staff/{ledger_id}")
+async def upsert_daily_staff_attendance(
+    ledger_id: int, body: DailyAttendanceUpsertIn, current_user: CurrentUser,
+    db: DBSession, fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    pin = parse_time_str(body.punch_in)
+    pout = parse_time_str(body.punch_out)
+    if not pin and body.status in ["Present", "Half Day"]:
+        pin = "09:00:00"
+    if not pout and body.status == "Present":
+        pout = "18:00:00"
+
+    if body.status in ["Absent", "On Leave"]:
+        hours = overtime = 0.0
+    elif body.hours_worked is not None and body.hours_worked > 0:
+        hours, overtime = body.hours_worked, body.ot_hours or 0.0
+    elif pin and pout:
+        start = datetime.datetime.strptime(pin, "%H:%M:%S")
+        end = datetime.datetime.strptime(pout, "%H:%M:%S")
+        seconds = (end - start).total_seconds()
+        if seconds < 0:
+            seconds += 24 * 3600
+        hours, overtime = round(seconds / 3600.0, 2), body.ot_hours or 0.0
+    else:
+        hours, overtime = 0.0, body.ot_hours or 0.0
+
+    params = {
+        "ledger_id": ledger_id, "entry_date": body.entry_date, "punch_in": pin,
+        "punch_out": pout, "hours": hours, "status": body.status,
+        "ot": overtime, "remarks": body.remarks or None,
+    }
+    updated = await db.execute(
+        text(f"""UPDATE {schema}.biometric_entries
+            SET punch_in = :punch_in, punch_out = :punch_out, hours_worked = :hours,
+                status = :status, ot_hours = :ot, device_log_id = :remarks
+            WHERE ledger_id = :ledger_id AND entry_date = CAST(:entry_date AS date)
+            RETURNING id"""),
+        params,
+    )
+    if updated.scalar_one_or_none() is None:
+        await db.execute(
+            text(f"""INSERT INTO {schema}.biometric_entries
+                (ledger_id, entry_date, punch_in, punch_out, hours_worked, status, ot_hours, device_log_id)
+                VALUES (:ledger_id, CAST(:entry_date AS date), :punch_in, :punch_out,
+                        :hours, :status, :ot, :remarks)"""),
+            params,
+        )
+    await db.commit()
+    return {"message": "Attendance saved for this staff member"}
 
 
 class DevicePunchItem(BaseModel):

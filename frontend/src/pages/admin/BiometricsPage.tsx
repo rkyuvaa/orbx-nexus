@@ -22,6 +22,7 @@ const todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2
 
 interface StaffRow {
   ledger_id: number;
+  entry_id?: number | null;
   staff_name: string;
   staff_code?: string;
   status: string;
@@ -76,6 +77,7 @@ export default function BiometricsPage() {
     queryKey: ["daily-staff-attendance", activeFY, entryDate],
     queryFn: async () => (await api.get(`/biometrics/daily-staff?fy=${activeFY}&entry_date=${entryDate}`)).data,
   });
+  const [savingLedgerId, setSavingLedgerId] = useState<number | null>(null);
 
   // Populate editable rows when dailyData changes
   useEffect(() => {
@@ -102,6 +104,7 @@ export default function BiometricsPage() {
 
         return {
           ledger_id: d.ledger_id,
+          entry_id: d.entry_id ?? null,
           staff_name: d.staff_name,
           staff_code: d.staff_code || "",
           status: status,
@@ -118,10 +121,10 @@ export default function BiometricsPage() {
 
   // 2. Save Daily Attendance Bulk Mutation
   const saveMutation = useMutation({
-    mutationFn: async (rowsToSave: StaffRow[]) => {
+    mutationFn: async ({ rowsToSave, ledgerIds }: { rowsToSave: StaffRow[]; ledgerIds?: number[] }) => {
       const payload = {
         entry_date: entryDate,
-        entries: rowsToSave.map((r) => ({
+        entries: rowsToSave.filter((r) => !ledgerIds || ledgerIds.includes(r.ledger_id)).map((r) => ({
           ledger_id: r.ledger_id,
           status: r.status,
           punch_in: r.punch_in || null,
@@ -131,6 +134,13 @@ export default function BiometricsPage() {
           remarks: r.remarks || "",
         })),
       };
+      if (ledgerIds?.length === 1) {
+        const entry = payload.entries[0];
+        return (await api.put(`/biometrics/daily-staff/${entry.ledger_id}?fy=${activeFY}`, {
+          entry_date: payload.entry_date,
+          ...entry,
+        })).data;
+      }
       return (await api.post(`/biometrics/daily-bulk?fy=${activeFY}`, payload)).data;
     },
     onSuccess: (res: any) => {
@@ -140,9 +150,11 @@ export default function BiometricsPage() {
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastSavedTime(timeStr);
-      setSnackMsg({ severity: "success", text: res?.message || `Attendance saved successfully for ${rows.length} staff members!` });
+      setSavingLedgerId(null);
+      setSnackMsg({ severity: "success", text: res?.message || "Attendance saved successfully." });
     },
     onError: (err: any) => {
+      setSavingLedgerId(null);
       console.error("Save attendance error:", err);
       const detail = err?.response?.data?.detail || err?.message || "Failed to save attendance";
       setSnackMsg({ severity: "error", text: `Failed to save attendance: ${detail}` });
@@ -154,10 +166,10 @@ export default function BiometricsPage() {
       clearTimeout(autoSaveTimerRef.current);
     }
     if (immediate) {
-      saveMutation.mutate(updatedRows);
+      saveMutation.mutate({ rowsToSave: updatedRows });
     } else {
       autoSaveTimerRef.current = setTimeout(() => {
-        saveMutation.mutate(updatedRows);
+        saveMutation.mutate({ rowsToSave: updatedRows });
       }, 500);
     }
   };
@@ -334,7 +346,7 @@ export default function BiometricsPage() {
                     size="small"
                     startIcon={saveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
                     disabled={saveMutation.isPending || rows.length === 0}
-                    onClick={() => saveMutation.mutate(rows)}
+                    onClick={() => saveMutation.mutate({ rowsToSave: rows })}
                     sx={{
                       fontWeight: 700,
                       borderRadius: "6px",
@@ -381,7 +393,7 @@ export default function BiometricsPage() {
                       label="Save failed - Retry"
                       color="error"
                       variant="outlined"
-                      onClick={() => saveMutation.mutate(rows)}
+                      onClick={() => saveMutation.mutate({ rowsToSave: rows })}
                       sx={{ fontWeight: 700, borderRadius: "6px", px: 1, cursor: "pointer" }}
                     />
                   ) : lastSavedTime ? (
@@ -468,6 +480,7 @@ export default function BiometricsPage() {
                     <TableCell sx={{ width: 100, fontWeight: 700, textAlign: "right" }}>Work Hrs</TableCell>
                     <TableCell sx={{ width: 100, fontWeight: 700, textAlign: "right" }}>OT Hrs</TableCell>
                     <TableCell sx={{ fontWeight: 700, minWidth: 160 }}>Remarks / Notes</TableCell>
+                    <TableCell sx={{ width: 110, fontWeight: 700 }}>Action</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -558,6 +571,21 @@ export default function BiometricsPage() {
                             slotProps={{ htmlInput: { style: { padding: "6px 8px", fontSize: "0.85rem" } } }}
                           />
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            size="small"
+                            variant={row.entry_id ? "outlined" : "contained"}
+                            color={row.entry_id ? "primary" : "success"}
+                            disabled={saveMutation.isPending}
+                            startIcon={<SaveIcon fontSize="small" />}
+                            onClick={() => {
+                              setSavingLedgerId(row.ledger_id);
+                              saveMutation.mutate({ rowsToSave: rows, ledgerIds: [row.ledger_id] });
+                            }}
+                          >
+                            {savingLedgerId === row.ledger_id && saveMutation.isPending ? "Saving" : row.entry_id ? "Update" : "Add"}
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -591,7 +619,7 @@ export default function BiometricsPage() {
                 size="medium"
                 startIcon={saveMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
                 disabled={saveMutation.isPending}
-                onClick={() => saveMutation.mutate(rows)}
+                onClick={() => saveMutation.mutate({ rowsToSave: rows })}
                 sx={{
                   fontWeight: 700,
                   borderRadius: "6px",
