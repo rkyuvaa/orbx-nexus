@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Optional
@@ -72,15 +72,17 @@ async def create_biometric_entry(
     )
     return {"id": result.scalar_one(), "message": "Entry created"}
 
-
 @router.delete("/{entry_id}", status_code=204)
 async def delete_biometric_entry(
     entry_id: int, current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
 ):
-    await db.execute(
-        text(f"DELETE FROM {s(fy)}.biometric_entries WHERE id = :id"), {"id": entry_id}
+    result = await db.execute(
+        text(f"DELETE FROM {s(fy)}.biometric_entries WHERE id = :entry_id"),
+        {"entry_id": entry_id},
     )
-
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Attendance entry not found")
+    await db.commit()
 
 @router.get("/attendance-summary")
 async def attendance_summary(

@@ -10,6 +10,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import TableViewIcon from "@mui/icons-material/TableView";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../api/client";
 import PageHeader from "../../components/PageHeader";
@@ -238,6 +239,17 @@ export default function BiometricsPage() {
     enabled: activeTab === 2,
   });
 
+  const deleteLogMutation = useMutation({
+    mutationFn: (entryId: number) => api.delete(`/biometrics/${entryId}?fy=${activeFY}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biometrics", activeFY] });
+      qc.invalidateQueries({ queryKey: ["attendance-summary"] });
+      qc.invalidateQueries({ queryKey: ["daily-staff-attendance"] });
+      setSnackMsg({ severity: "success", text: "Attendance log deleted." });
+    },
+    onError: (error: any) => setSnackMsg({ severity: "error", text: error?.response?.data?.detail || "Failed to delete attendance log." }),
+  });
+
   const rawColDefs: ColDef[] = useMemo(() => [
     { field: "entry_date", headerName: "Date", width: 110 },
     { field: "ledger_name", headerName: "Staff Member", flex: 1 },
@@ -255,7 +267,21 @@ export default function BiometricsPage() {
     { field: "hours_worked", headerName: "Work Hrs", width: 100, type: "numericColumn" },
     { field: "ot_hours", headerName: "OT Hrs", width: 90, type: "numericColumn" },
     { field: "device_log_id", headerName: "Remarks / Log", width: 160 },
-  ], []);
+    { field: "actions", headerName: "Actions", width: 100, sortable: false, filter: false,
+      cellRenderer: ({ data }: any) => (
+        <Tooltip title="Delete attendance log">
+          <span>
+            <Button size="small" color="error" disabled={deleteLogMutation.isPending} onClick={(event: React.MouseEvent) => {
+              event.stopPropagation();
+              if (window.confirm(`Delete the attendance log for ${data.ledger_name || "this staff member"} on ${data.entry_date}?`)) {
+                deleteLogMutation.mutate(data.id);
+              }
+            }}><DeleteIcon fontSize="small" /></Button>
+          </span>
+        </Tooltip>
+      )
+    },
+  ], [activeFY, deleteLogMutation.isPending]);
 
   return (
     <Box>
