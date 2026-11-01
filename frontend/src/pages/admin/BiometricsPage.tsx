@@ -680,7 +680,8 @@ export default function BiometricsPage() {
                 <Typography color="text.secondary">No attendance records found for this month.</Typography>
               </Box>
             ) : (
-              <Table size="small">
+              <Box sx={{ width: "100%", overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 330px)", scrollbarWidth: "auto", "&::-webkit-scrollbar": { height: 12, width: 10 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 6 }, "&::-webkit-scrollbar-track": { bgcolor: "action.hover" } }}>
+              <Table size="small" sx={{ minWidth: 44 + 180 + monthDays.length * 42 + 100, tableLayout: "fixed" }}>
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 700, position: "sticky", left: 0, zIndex: 3, bgcolor: "background.paper", minWidth: 44 }}>#</TableCell>
@@ -706,6 +707,7 @@ export default function BiometricsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </Box>
             )}
           </Paper>
         </Box>
