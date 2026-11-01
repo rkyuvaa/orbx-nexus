@@ -681,28 +681,28 @@ export default function BiometricsPage() {
               </Box>
             ) : (
               <Box sx={{ width: "100%", overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 330px)", scrollbarWidth: "auto", "&::-webkit-scrollbar": { height: 12, width: 10 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 6 }, "&::-webkit-scrollbar-track": { bgcolor: "action.hover" } }}>
-              <Table size="small" sx={{ minWidth: 44 + 180 + monthDays.length * 42 + 100, tableLayout: "fixed" }}>
+              <Table size="small" sx={{ minWidth: 44 + 180 + monthDays.length * 42 + 100, tableLayout: "fixed", borderCollapse: "separate", borderSpacing: 0 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700, position: "sticky", left: 0, zIndex: 3, bgcolor: "background.paper", minWidth: 44 }}>#</TableCell>
-                    <TableCell sx={{ fontWeight: 700, position: "sticky", left: 44, zIndex: 3, bgcolor: "background.paper", minWidth: 180 }}>Staff Name</TableCell>
-                    {monthDays.map((day) => <TableCell key={day} align="center" sx={{ fontWeight: 700, minWidth: 42, px: 0.5 }}>{day}<br /><Typography component="span" variant="caption" color="text.secondary">{new Date(selectedYear, selectedMonth - 1, day).toLocaleDateString(undefined, { weekday: "short" })}</Typography></TableCell>)}
-                    <TableCell align="right" sx={{ fontWeight: 700, position: "sticky", right: 0, zIndex: 3, bgcolor: "background.paper", minWidth: 100 }}>Total Hours</TableCell>
+                    <TableCell sx={{ fontWeight: 700, position: "sticky", left: 0, zIndex: 4, bgcolor: "background.paper", width: 44, minWidth: 44, maxWidth: 44, boxSizing: "border-box", textAlign: "center", p: 0.5 }}>#</TableCell>
+                    <TableCell sx={{ fontWeight: 700, position: "sticky", left: 44, zIndex: 4, bgcolor: "background.paper", width: 180, minWidth: 180, maxWidth: 180, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Staff Name</TableCell>
+                    {monthDays.map((day) => <TableCell key={day} align="center" sx={{ fontWeight: 700, width: 42, minWidth: 42, maxWidth: 42, boxSizing: "border-box", px: 0.25, py: 0.5, lineHeight: 1.2, whiteSpace: "nowrap" }}><Box component="span" sx={{ display: "block", lineHeight: 1.2 }}>{day}</Box><Typography component="span" variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>{new Date(selectedYear, selectedMonth - 1, day).toLocaleDateString(undefined, { weekday: "short" })}</Typography></TableCell>)}
+                    <TableCell align="right" sx={{ fontWeight: 700, position: "sticky", right: 0, zIndex: 4, bgcolor: "background.paper", width: 100, minWidth: 100, maxWidth: 100, boxSizing: "border-box", whiteSpace: "nowrap" }}>Total Hours</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {monthlyData.map((row: any, idx: number) => (
                     <TableRow key={row.id} hover>
-                      <TableCell sx={{ position: "sticky", left: 0, zIndex: 1, bgcolor: "background.paper" }}>{idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 700, position: "sticky", left: 44, zIndex: 1, bgcolor: "background.paper", minWidth: 180 }}>{row.ledger}</TableCell>
+                      <TableCell sx={{ position: "sticky", left: 0, zIndex: 2, bgcolor: "background.paper", width: 44, minWidth: 44, maxWidth: 44, boxSizing: "border-box", textAlign: "center", p: 0.5 }}>{idx + 1}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, position: "sticky", left: 44, zIndex: 2, bgcolor: "background.paper", width: 180, minWidth: 180, maxWidth: 180, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.ledger}</TableCell>
                       {monthDays.map((day) => {
                         const attendance = row.daily_attendance?.[String(day)];
                         const color = attendance?.status === "Present" ? "success.main" : attendance?.status === "Half Day" ? "warning.main" : attendance?.status === "Absent" ? "error.main" : attendance?.status === "On Leave" ? "info.main" : "text.disabled";
                         const marker = attendance?.status === "Present" ? "P" : attendance?.status === "Half Day" ? "H" : attendance?.status === "Absent" ? "A" : attendance?.status === "On Leave" ? "L" : "-";
                         const details = attendance ? `${attendance.status}; ${attendance.hours ?? 0} work hrs${attendance.punch_in ? `; in ${attendance.punch_in}` : ""}${attendance.punch_out ? `; out ${attendance.punch_out}` : ""}${attendance.ot_hours ? `; OT ${attendance.ot_hours} hrs` : ""}` : "No attendance entry";
-                        return <TableCell key={day} align="center" sx={{ p: 0.5 }}><Tooltip title={details}><Box component="span" sx={{ color, fontWeight: 800, fontSize: "0.75rem", cursor: attendance ? "help" : "default" }}>{marker}</Box></Tooltip></TableCell>;
+                        return <TableCell key={day} align="center" sx={{ width: 42, minWidth: 42, maxWidth: 42, boxSizing: "border-box", p: 0.5 }}><Tooltip title={details}><Box component="span" sx={{ color, fontWeight: 800, fontSize: "0.75rem", cursor: attendance ? "help" : "default" }}>{marker}</Box></Tooltip></TableCell>;
                       })}
-                      <TableCell align="right" sx={{ fontWeight: 700, position: "sticky", right: 0, zIndex: 1, bgcolor: "background.paper" }}>{Number(row.total_hours || 0).toLocaleString()} hrs</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, position: "sticky", right: 0, zIndex: 2, bgcolor: "background.paper", width: 100, minWidth: 100, maxWidth: 100, boxSizing: "border-box", whiteSpace: "nowrap" }}>{Number(row.total_hours || 0).toLocaleString()} hrs</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
