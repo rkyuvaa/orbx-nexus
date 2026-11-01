@@ -243,6 +243,10 @@ export default function BiometricsPage() {
       (await api.get(`/biometrics/attendance-summary?fy=${activeFY}&month=${selectedMonth}&year=${selectedYear}`)).data,
     enabled: activeTab === 1,
   });
+  const monthDays = Array.from(
+    { length: new Date(selectedYear, selectedMonth, 0).getDate() },
+    (_, index) => index + 1,
+  );
 
   // 4. Fetch Raw Attendance Logs Data
   const { data: rawLogs = [], isLoading: isLogsLoading, refetch: refetchLogs } = useQuery({
@@ -679,25 +683,25 @@ export default function BiometricsPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>#</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Staff Name</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }} align="right">Present Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }} align="right">Half Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }} align="right">Absent Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }} align="right">Leave Days</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">Total Work Hours</TableCell>
+                    <TableCell sx={{ fontWeight: 700, position: "sticky", left: 0, zIndex: 3, bgcolor: "background.paper", minWidth: 44 }}>#</TableCell>
+                    <TableCell sx={{ fontWeight: 700, position: "sticky", left: 44, zIndex: 3, bgcolor: "background.paper", minWidth: 180 }}>Staff Name</TableCell>
+                    {monthDays.map((day) => <TableCell key={day} align="center" sx={{ fontWeight: 700, minWidth: 42, px: 0.5 }}>{day}<br /><Typography component="span" variant="caption" color="text.secondary">{new Date(selectedYear, selectedMonth - 1, day).toLocaleDateString(undefined, { weekday: "short" })}</Typography></TableCell>)}
+                    <TableCell align="right" sx={{ fontWeight: 700, position: "sticky", right: 0, zIndex: 3, bgcolor: "background.paper", minWidth: 100 }}>Total Hours</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {monthlyData.map((row: any, idx: number) => (
                     <TableRow key={row.id} hover>
-                      <TableCell>{idx + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{row.ledger}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "primary.main" : "#15803d" }}>{row.present_days}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#fbbf24" : "#b45309" }}>{row.half_days}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#f87171" : "#b91c1c" }}>{row.absent_days}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: (theme) => theme.palette.mode === "dark" ? "#60a5fa" : "#1d4ed8" }}>{row.leave_days || 0}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>{row.total_hours} hrs</TableCell>
+                      <TableCell sx={{ position: "sticky", left: 0, zIndex: 1, bgcolor: "background.paper" }}>{idx + 1}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, position: "sticky", left: 44, zIndex: 1, bgcolor: "background.paper", minWidth: 180 }}>{row.ledger}</TableCell>
+                      {monthDays.map((day) => {
+                        const attendance = row.daily_attendance?.[String(day)];
+                        const color = attendance?.status === "Present" ? "success.main" : attendance?.status === "Half Day" ? "warning.main" : attendance?.status === "Absent" ? "error.main" : attendance?.status === "On Leave" ? "info.main" : "text.disabled";
+                        const marker = attendance?.status === "Present" ? "P" : attendance?.status === "Half Day" ? "H" : attendance?.status === "Absent" ? "A" : attendance?.status === "On Leave" ? "L" : "-";
+                        const details = attendance ? `${attendance.status}; ${attendance.hours ?? 0} work hrs${attendance.punch_in ? `; in ${attendance.punch_in}` : ""}${attendance.punch_out ? `; out ${attendance.punch_out}` : ""}${attendance.ot_hours ? `; OT ${attendance.ot_hours} hrs` : ""}` : "No attendance entry";
+                        return <TableCell key={day} align="center" sx={{ p: 0.5 }}><Tooltip title={details}><Box component="span" sx={{ color, fontWeight: 800, fontSize: "0.75rem", cursor: attendance ? "help" : "default" }}>{marker}</Box></Tooltip></TableCell>;
+                      })}
+                      <TableCell align="right" sx={{ fontWeight: 700, position: "sticky", right: 0, zIndex: 1, bgcolor: "background.paper" }}>{Number(row.total_hours || 0).toLocaleString()} hrs</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
