@@ -982,9 +982,9 @@ export function SalaryVoucherPage() {
           <Button size="small" variant={weeklyMode === "week" ? "contained" : "outlined"} onClick={() => setWeeklyMode("week")}>Weekly</Button>
           <Button size="small" variant={weeklyMode === "all" ? "contained" : "outlined"} onClick={() => setWeeklyMode("all")}>All Vouchers</Button>
           {weeklyMode === "week" && <>
-            <IconButton size="small" aria-label="Previous pay week" onClick={() => setWeeklyAnchor(isoDate(shiftDate(new Date(`${selectedWeek.from}T00:00:00`), -1)))}><ChevronLeft /></IconButton>
+            <IconButton size="small" aria-label="Previous pay week" onClick={() => setWeeklyAnchor(isoDate(shiftDate(new Date(`${selectedWeek.payoutDate}T00:00:00`), -7)))}><ChevronLeft /></IconButton>
             <Chip icon={<CalendarMonth fontSize="small" />} label={`${formatDateRange(selectedWeek.from, selectedWeek.to)} | Paid ${formatDisplayDate(selectedWeek.payoutDate)}`} variant="outlined" />
-            <IconButton size="small" aria-label="Next pay week" disabled={selectedWeek.payoutDate >= weeklyAnchor} onClick={() => setWeeklyAnchor(isoDate(shiftDate(new Date(`${selectedWeek.payoutDate}T00:00:00`), 7)))}><ChevronRight /></IconButton>
+            <IconButton size="small" aria-label="Next pay week" disabled={selectedWeek.payoutDate >= weeklyAnchor} onClick={() => setWeeklyAnchor(isoDate(shiftDate(new Date(`${selectedWeek.payoutDate}T00:00:00`), 14)))}><ChevronRight /></IconButton>
             <Button size="small" startIcon={<Today />} onClick={() => {
               const d = new Date();
               setWeeklyAnchor(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
