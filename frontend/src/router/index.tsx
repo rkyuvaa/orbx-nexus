@@ -110,7 +110,7 @@ export const router = createBrowserRouter([
       { path: "payroll/attendance", element: <BiometricsPage /> },
       { path: "payroll/advance-payment", element: <StaffAdvancePaymentPage /> },
       { path: "payroll/advance-receipt", element: <StaffAdvanceReceiptPage /> },
-      { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "Salary and Wages" }, { label: "Contractor" }]} /> },
+      { path: "payroll/contractors", element: <LedgerPage ledgerType="Contractor" title="Contractor" breadcrumbs={[{ label: "Contractor Work" }, { label: "Contractor" }]} /> },
       { path: "payroll/salary", element: <SalaryVoucherPage /> },
       { path: "payroll/config", element: <PayrollConfigPage /> },
 

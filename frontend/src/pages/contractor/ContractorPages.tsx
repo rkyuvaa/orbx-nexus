@@ -94,7 +94,18 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
-  const { data: ledgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
+  const { data: rawLedgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
+
+  const ledgers = useMemo(() => {
+    return rawLedgers.filter((l: any) => {
+      if (l.is_active === false && (!editing || editing.ledger_id !== l.id)) return false;
+      return (
+        !l.name.includes("(Contractor Advance)") &&
+        !l.name.includes("(Job Work Payment)") &&
+        !l.name.includes("(Staff Advance)")
+      );
+    });
+  }, [rawLedgers, editing]);
 
   const { data: outwardVouchers = [] } = useQuery<any>({
     queryKey: ["inward-vouchers", activeFY],

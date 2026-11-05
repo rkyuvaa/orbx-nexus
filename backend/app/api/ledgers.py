@@ -205,6 +205,11 @@ async def list_ledgers(
                 (Ledger.ledger_type == "Contractor")
                 | (LedgerGroup.name.ilike("%Contractor%"))
             )
+            q = q.where(
+                Ledger.name.not_ilike("%(Contractor Advance)%"),
+                Ledger.name.not_ilike("%(Job Work Payment)%"),
+                Ledger.name.not_ilike("%(Staff Advance)%"),
+            )
         else:
             q = q.where(Ledger.ledger_type == ledger_type)
     if group_id:

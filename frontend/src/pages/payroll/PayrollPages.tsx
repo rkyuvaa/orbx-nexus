@@ -98,7 +98,8 @@ function VoucherModule({
   const ledgers = useMemo(() => {
     return rawLedgers.filter((l: any) =>
       !l.name.includes("(Staff Advance)") &&
-      !l.name.includes("(Contractor Advance)")
+      !l.name.includes("(Contractor Advance)") &&
+      !l.name.includes("(Job Work Payment)")
     );
   }, [rawLedgers]);
 
