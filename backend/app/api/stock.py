@@ -81,6 +81,7 @@ async def list_inward(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     product_id: Optional[int] = None,
+    ledger_id: Optional[int] = None,
 ):
     s = _schema(fy)
     conds = ["1=1"]
@@ -94,6 +95,9 @@ async def list_inward(
     if product_id:
         conds.append("product_id = :pid")
         params["pid"] = product_id
+    if ledger_id:
+        conds.append("ledger_id = :ledger_id")
+        params["ledger_id"] = ledger_id
     where = " AND ".join(conds)
     result = await db.execute(
         text(f"SELECT * FROM {s}.stock_inward WHERE {where} ORDER BY inward_date DESC"), params
