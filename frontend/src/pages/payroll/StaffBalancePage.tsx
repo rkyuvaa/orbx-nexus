@@ -778,7 +778,7 @@ export default function StaffBalancePage() {
             <p class="period"><strong>From:</strong> ${formatDisplayDate(fromDate)} &nbsp;&nbsp; <strong>To:</strong> ${formatDisplayDate(toDate)}</p>
             <table><colgroup><col class="serial"><col class="name"><col class="money"><col class="money"><col class="money"><col class="money"></colgroup>
               <thead><tr><th>S.No</th><th>Name</th><th class="amount">Salary</th><th class="amount">Advance</th><th class="amount">Paid</th><th class="amount">Balance</th></tr></thead>
-              <tbody>${rowsHtml}</tbody><tfoot><tr><td colspan="2">Totals</td><td class="amount">₹${formatAmount(totals.salary)}</td><td class="amount">₹${formatAmount(totals.advance)}</td><td class="amount">₹${formatAmount(totals.paid)}</td><td class="amount">₹${formatAmount(totals.balance)}</td></tr></tfoot></table>
+              <tbody>${rowsHtml}</tbody><tfoot><tr><td colspan="2">Totals</td><td class="amount">₹${formatAmount(totals.salary)}</td><td class="amount">₹${formatAmount(totals.advance)}</td><td class="amount">₹${formatAmount(totals.paid)}</td><td class="amount">₹${formatAmount(totals.balance)}</td></tr><tr><td colspan="2">Total Inward Weight</td><td class="amount" colspan="4">${formatWeight(inwardWeightData)} kg</td></tr><tr><td colspan="2">Cost Per Ton</td><td class="amount" colspan="4">₹${formatAmount(costPerTon)}</td></tr></tfoot></table>
             ${getGlobalPrintFooterHtml()}${PRINT_TRIGGER_SCRIPT}
           </body></html>`);
           printWindow.document.close();
