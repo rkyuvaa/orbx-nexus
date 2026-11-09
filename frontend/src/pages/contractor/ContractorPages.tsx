@@ -91,8 +91,9 @@ const getVoucherItems = (v: any): any[] => {
   if (Array.isArray(items) && items.length > 0) {
     return items.map((it) => ({
       product_id: it.product_id || it.stock_item_id || v.product_id,
-      quantity: Number(it.quantity ?? it.qty ?? 0),
-      weight: Number(it.weight ?? it.total_weight ?? 0),
+      // Try multiple quantity field names, fall back to header quantity
+      quantity: Number(it.quantity ?? it.qty ?? it.line_qty ?? v.quantity ?? 0),
+      weight: Number(it.weight ?? it.total_weight ?? v.total_weight ?? v.weight ?? 0),
       process_id: it.process_id || v.process_id,
     }));
   }
