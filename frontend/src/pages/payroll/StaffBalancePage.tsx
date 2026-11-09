@@ -416,6 +416,17 @@ export default function StaffBalancePage() {
     enabled: !!defaultSupplier?.id,
   });
 
+  // Total salary paid for the week (all staff balance rows for the selected week/supplier)
+  const totalSalary = useMemo(() => {
+    return data.reduce((sum: number, row: any) => sum + Number(row.net_salary || 0), 0);
+  }, [data]);
+
+  // Cost per ton = Total Salary / Total Inward Weight for the week
+  const costPerTon = useMemo(() => {
+    const weight = Number(inwardWeightData || 0);
+    return weight > 0 ? totalSalary / weight : 0;
+  }, [totalSalary, inwardWeightData]);
+
   const filteredData = useMemo(() => {
     if (showZeroBalance) return data;
     return data.filter((row: any) => {
@@ -696,17 +707,30 @@ export default function StaffBalancePage() {
               ))}
             </TextField>
             {defaultSupplier && (
-              <Chip
-                label={`Total Inward Weight: ${formatWeight(inwardWeightData)} kg`}
-                size="small"
-                sx={{
-                  height: 24,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  bgcolor: isInwardWeightLoading ? "#f0f4f8" : "#e8f5e9",
-                  color: isInwardWeightLoading ? "text.secondary" : "success.dark",
-                }}
-              />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <Chip
+                  label={`Total Inward Weight: ${formatWeight(inwardWeightData)} kg`}
+                  size="small"
+                  sx={{
+                    height: 24,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    bgcolor: isInwardWeightLoading ? "#f0f4f8" : "#e8f5e9",
+                    color: isInwardWeightLoading ? "text.secondary" : "success.dark",
+                  }}
+                />
+                <Chip
+                  label={`Cost Per Ton: ₹${formatAmount(costPerTon)}`}
+                  size="small"
+                  sx={{
+                    height: 24,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    bgcolor: costPerTon > 0 ? "#fff3e0" : "#f0f4f8",
+                    color: costPerTon > 0 ? "orange.dark" : "text.secondary",
+                  }}
+                />
+              </Box>
             )}
           </Box>
         }
