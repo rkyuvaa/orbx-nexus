@@ -62,6 +62,7 @@ export interface OrbxGridProps<T = any> {
   fromDate?: string;
   toDate?: string;
   onDateChange?: (fromDate: string, toDate: string) => void;
+  hideDateFields?: boolean;
   printOverride?: (rows: T[], printWindow: Window) => void;
 }
 
@@ -88,6 +89,7 @@ export default function OrbxGrid<T = any>({
   extraFilters,
   fromDate: fromDateProp = "",
   toDate: toDateProp = "",
+  hideDateFields = false,
   onDateChange,
   printOverride,
 }: OrbxGridProps<T>) {
@@ -506,7 +508,7 @@ export default function OrbxGrid<T = any>({
                 }}
               />
             )}
-            {dateFieldKey && (
+            {!hideDateFields && dateFieldKey && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
                 <TextField
                   type="date"
@@ -545,6 +547,11 @@ export default function OrbxGrid<T = any>({
                     },
                   }}
                 />
+              </Box>
+            )}
+            {hideDateFields && extraFilters && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexShrink: 0 }}>
+                {extraFilters}
               </Box>
             )}
           </Box>

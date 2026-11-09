@@ -24,6 +24,8 @@ import {
   Grid,
   Switch,
   FormControlLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
@@ -40,6 +42,16 @@ import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCR
 import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
+
+// Persist the last-selected supplier for Staff Balance so it loads by default next time
+const loadDefaultSupplier = () => {
+  try {
+    const saved = localStorage.getItem("orbx_staff_balance_default_supplier");
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+};
 
 const WEEKDAY_INDEX: Record<string, number> = {
   Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
@@ -327,6 +339,7 @@ export default function StaffBalancePage() {
   const [showZeroBalance, setShowZeroBalance] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [defaultSupplier, setDefaultSupplier] = useState<{ id: number | null; name: string } | null>(loadDefaultSupplier);
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({
     open: false,
     msg: "",
@@ -343,6 +356,11 @@ export default function StaffBalancePage() {
     queryFn: async () => (await api.get("/payroll/config-settings/")).data || {},
   });
 
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ["ledgers", "Account"],
+    queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data,
+  });
+
   // Auto-calculate weekly pay period (Saturday->Friday based on configured payout day)
   const payoutWeekday = WEEKDAY_INDEX[payrollConfig?.payout_day ?? "Saturday"] ?? 6;
   const autoWeek = useMemo(() => getWeeklyPayPeriod(todayStr(), payoutWeekday), [payoutWeekday]);
@@ -353,6 +371,10 @@ export default function StaffBalancePage() {
       setToDate(autoWeek.to);
     }
   }, [autoWeek, fromDate, toDate]);
+
+  useEffect(() => {
+    localStorage.setItem("orbx_staff_balance_default_supplier", JSON.stringify(defaultSupplier));
+  }, [defaultSupplier]);
 
   const handlePrevWeek = () => {
     if (!fromDate || !toDate) return;
@@ -371,11 +393,12 @@ export default function StaffBalancePage() {
   };
 
   const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["staff-balance-summary", activeFY, fromDate, toDate],
+    queryKey: ["staff-balance-summary", activeFY, fromDate, toDate, defaultSupplier?.id],
     queryFn: async () => {
       const params = new URLSearchParams({ fy: activeFY });
       if (fromDate) params.set("from_date", fromDate);
       if (toDate) params.set("to_date", toDate);
+      if (defaultSupplier?.id) params.set("supplier_id", String(defaultSupplier.id));
       return (await api.get(`/payroll/balance-summary?${params}`)).data;
     },
   });
@@ -632,6 +655,35 @@ export default function StaffBalancePage() {
         columnDefs={colDefs}
         loading={isLoading}
         onRefresh={refetch}
+        hideDateFields
+        extraFilters={
+          <Box sx={{ minWidth: 260, display: "flex", alignItems: "center", gap: 0.5 }}>
+            <TextField
+              select
+              size="small"
+              label="Supplier"
+              value={defaultSupplier?.id ?? ""}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setDefaultSupplier({ id: Number(e.target.value), name: "" });
+                } else {
+                  setDefaultSupplier(null);
+                }
+              }}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                },
+              }}
+            >
+              <MenuItem value="">All Suppliers</MenuItem>
+              {suppliers.map((l: any) => (
+                <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+              ))}
+            </TextField>
+          </Box>
+        }
         printOverride={(rows, printWindow) => {
           const totals = rows.reduce((sum: any, row: any) => ({
             salary: sum.salary + Number(row.net_salary || 0),
