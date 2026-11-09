@@ -532,8 +532,8 @@ async def staff_balance_summary(
     sv_date_cond = ""
     sv_params: dict = {}
     if from_date and to_date:
-        sv_date_cond = "AND sv.voucher_date BETWEEN CAST(:sv_from AS DATE) AND CAST(:sv_to AS DATE)"
-        sv_date_cond += " AND sv.pay_period_type = :ppt"
+        sv_date_cond = "AND voucher_date BETWEEN CAST(:sv_from AS DATE) AND CAST(:sv_to AS DATE)"
+        sv_date_cond += " AND pay_period_type = :ppt"
         sv_params["sv_from"] = from_date[:10]
         sv_params["sv_to"] = to_date[:10]
         sv_params["ppt"] = "Weekly"
@@ -541,7 +541,7 @@ async def staff_balance_summary(
     # Date range filter for advance payments (weekly pay period)
     ap_date_cond = ""
     if from_date and to_date:
-        ap_date_cond = "AND ap.voucher_date BETWEEN CAST(:ap_from AS DATE) AND CAST(:ap_to AS DATE)"
+        ap_date_cond = "AND voucher_date BETWEEN CAST(:ap_from AS DATE) AND CAST(:ap_to AS DATE)"
         sv_params["ap_from"] = from_date[:10]
         sv_params["ap_to"] = to_date[:10]
 
