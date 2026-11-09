@@ -727,8 +727,8 @@ export default function StaffBalancePage() {
                     minWidth: 150,
                     fontSize: 12,
                     fontWeight: 700,
-                    bgcolor: costPerTon > 0 ? "#fff3e0" : "#f0f4f8",
-                    color: costPerTon > 0 ? "orange.dark" : "text.secondary",
+                    bgcolor: isInwardWeightLoading ? "#f0f4f8" : "#e8f5e9",
+                    color: isInwardWeightLoading ? "text.secondary" : "success.dark",
                   }}
                 />
               </Box>
