@@ -545,22 +545,6 @@ export default function OrbxGrid<T = any>({
                     },
                   }}
                 />
-                {(fromDate || toDate) && (
-                  <Button
-                    size="small"
-                    variant="text"
-                    color="error"
-                    onClick={() => {
-                      setFromDate("");
-                      setToDate("");
-                      setPage(0);
-                      onDateChange?.("", "");
-                    }}
-                    sx={{ textTransform: "none", fontWeight: 600 }}
-                  >
-                    Clear Dates
-                  </Button>
-                )}
               </Box>
             )}
           </Box>
@@ -575,99 +559,6 @@ export default function OrbxGrid<T = any>({
               justifyContent: "flex-end",
             }}
           >
-            {enableSelection && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: 1, flexWrap: "nowrap" }}>
-                <Tooltip title="Select all visible records">
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<SelectAll sx={{ fontSize: 16 }} />}
-                    onClick={selectAll}
-                    sx={{
-                      borderRadius: "8px",
-                      textTransform: "none",
-                      fontSize: "0.75rem",
-                      py: 0.4,
-                      px: 1.2,
-                      borderColor: "divider",
-                    }}
-                  >
-                    Select All
-                  </Button>
-                </Tooltip>
-                {selectedKeys.size > 0 && (
-                  <>
-                    <Tooltip title="Deselect all records">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="secondary"
-                        startIcon={<Deselect sx={{ fontSize: 16 }} />}
-                        onClick={clearSelection}
-                        sx={{
-                          borderRadius: "8px",
-                          textTransform: "none",
-                          fontSize: "0.75rem",
-                          py: 0.4,
-                          px: 1.2,
-                        }}
-                      >
-                        Deselect All
-                      </Button>
-                    </Tooltip>
-                    <Chip
-                      label={`${selectedKeys.size} selected`}
-                      size="small"
-                      color="primary"
-                      sx={{ fontWeight: 600, fontSize: "0.75rem", borderRadius: "6px" }}
-                    />
-                    {onBulkStatusChange && (
-                      <>
-                        <Tooltip title="Mark selected records as Inactive">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="warning"
-                            startIcon={<Block sx={{ fontSize: 16 }} />}
-                            onClick={() => setConfirmStatusTarget(false)}
-                            sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
-                          >
-                            Mark Inactive
-                          </Button>
-                        </Tooltip>
-                        <Tooltip title="Mark selected records as Active">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="success"
-                            startIcon={<CheckCircle sx={{ fontSize: 16 }} />}
-                            onClick={() => setConfirmStatusTarget(true)}
-                            sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
-                          >
-                            Mark Active
-                          </Button>
-                        </Tooltip>
-                      </>
-                    )}
-                    {(onBulkDelete || onDeleteRow) && (
-                      <Tooltip title="Delete selected records">
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="error"
-                          startIcon={<Delete sx={{ fontSize: 16 }} />}
-                          onClick={() => setConfirmDeleteOpen(true)}
-                          sx={{ borderRadius: "8px", textTransform: "none", fontSize: "0.75rem", py: 0.4, px: 1.2 }}
-                        >
-                          Delete Selected ({selectedKeys.size})
-                        </Button>
-                      </Tooltip>
-                    )}
-                    {bulkActions && bulkActions(rowData.filter((r) => selectedKeys.has(getRowKey(r))), clearSelection)}
-                  </>
-                )}
-              </Box>
-            )}
 
 
             <Tooltip title="Print Preview">
