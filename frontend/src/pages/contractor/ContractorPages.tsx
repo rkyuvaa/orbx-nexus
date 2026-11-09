@@ -209,6 +209,39 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     enabled: type === "job-work",
   });
 
+  // Filter out inward vouchers that have been fully utilized (all items balance = 0)
+  const availableOutwardVouchers = useMemo(() => {
+    return outwardVouchers.filter((v: any) => {
+      const vItems = getVoucherItems(v);
+      if (vItems.length === 0) return false;
+      // Check if any item still has remaining balance against register entries
+      return vItems.some((it: any) => {
+        const totalAvailable = Number(it.quantity ?? 0);
+        if (totalAvailable === 0) return false;
+        let totalCompleted = 0;
+        data.forEach((entry: any) => {
+          if (entry.entry_type !== "Register") return;
+          const entryOids = entry.outward_ids || (entry.outward_id ? [entry.outward_id] : []);
+          if (!entryOids.includes(v.id)) return;
+          let entryItems: any[] = [];
+          if (entry.items) {
+            try { entryItems = typeof entry.items === "string" ? JSON.parse(entry.items) : entry.items; } catch {}
+          }
+          if (Array.isArray(entryItems) && entryItems.length > 0) {
+            entryItems.forEach((eit: any) => {
+              if (Number(eit.product_id || eit.source_inward_id) === Number(it.product_id)) {
+                totalCompleted += Number(eit.quantity ?? 0);
+              }
+            });
+          } else if (Number(entry.product_id) === Number(it.product_id)) {
+            totalCompleted += Number(entry.quantity ?? 0);
+          }
+        });
+        return totalAvailable > totalCompleted;
+      });
+    });
+  }, [outwardVouchers, data]);
+
   const [lineItems, setLineItems] = useState<any[]>([{ product_id: "", process_id: "", quantity: "", balance_qty: 0, rate: 0, amount: 0 }]);
   const [submitError, setSubmitError] = useState("");
 
@@ -982,9 +1015,9 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
                     render={({ field }) => (
                       <Autocomplete
                         multiple
-                        options={outwardVouchers}
+                        options={availableOutwardVouchers}
                         getOptionLabel={(o: any) => `${o.inward_no || o.outward_no || `Voucher #${o.id}`} (${o.inward_date || o.outward_date || ""})`}
-                        value={outwardVouchers.filter((v: any) => field.value?.includes(v.id))}
+                        value={availableOutwardVouchers.filter((v: any) => field.value?.includes(v.id))}
                         onChange={(_, v) => {
                           const ids = v ? (v as any[]).map((x) => x.id) : [];
                           field.onChange(ids);
