@@ -4,6 +4,8 @@ import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextFie
 import Edit from "@mui/icons-material/Edit";
 import Delete from "@mui/icons-material/Delete";
 import Print from "@mui/icons-material/Print";
+import ArrowLeft from "@mui/icons-material/ArrowLeft";
+import ArrowRight from "@mui/icons-material/ArrowRight";
 import { useForm, Controller } from "react-hook-form";
 import { COMMON_PRINT_CSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml } from "../../utils/printStyles";
 import { ColDef } from "../../components/tables/OrbxGrid";
@@ -16,10 +18,42 @@ import { formatAmount, formatQty } from "../../utils/format";
 
 const today = new Date().toISOString().split("T")[0];
 
-// Persist the last-selected contractor for Job Work Register so it loads by default next time
-const loadDefaultContractor = () => {
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+function shiftDate(date: Date, days: number) {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+}
+
+function isoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}-${m}-${y}`;
+}
+
+function getWeeklyPayPeriod(anchorDate: string, payoutWeekday: number) {
+  const [year, month, day] = anchorDate.split("-").map(Number);
+  const anchor = new Date(year, month - 1, day);
+  const daysSincePayout = (anchor.getDay() - payoutWeekday + 7) % 7;
+  const payoutDate = shiftDate(anchor, -daysSincePayout);
+  const to = shiftDate(payoutDate, -1);
+  const from = shiftDate(payoutDate, -7);
+  return { from: isoDate(from), to: isoDate(to), payoutDate: isoDate(payoutDate) };
+}
+
+// Persist the last-selected supplier for Job Work Register so it loads by default next time
+const loadDefaultSupplier = () => {
   try {
-    const saved = localStorage.getItem("orbx_jobwork_default_contractor");
+    const saved = localStorage.getItem("orbx_jobwork_default_supplier");
     return saved ? JSON.parse(saved) : null;
   } catch {
     return null;
@@ -90,31 +124,69 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [defaultContractor, setDefaultContractor] = useState<{ id: number | null; name: string } | null>(loadDefaultContractor);
+  const [defaultSupplier, setDefaultSupplier] = useState<{ id: number | null; name: string } | null>(loadDefaultSupplier);
 
   useEffect(() => {
     try {
-      localStorage.setItem("orbx_jobwork_default_contractor", JSON.stringify(defaultContractor));
+      localStorage.setItem("orbx_jobwork_default_supplier", JSON.stringify(defaultSupplier));
     } catch {
       // ignore storage errors
     }
-  }, [defaultContractor]);
+  }, [defaultSupplier]);
 
-  const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["contractor", type, activeFY, defaultContractor?.id],
-    queryFn: async () => {
-      if (type === "rates") return (await api.get("/products/rates/all")).data;
-      const entryType = type === "payment" ? "Payment" : "Register";
-      const params = new URLSearchParams({ fy: activeFY, entry_type: entryType });
-      if (defaultContractor?.id) params.set("ledger_id", String(defaultContractor.id));
-      return (await api.get(`/contractor/?${params.toString()}`)).data;
-    },
-  });
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const { data: companyData } = useQuery({ queryKey: ["company"], queryFn: async () => (await api.get("/company/")).data });
   const { data: processes = [] } = useQuery({ queryKey: ["processes"], queryFn: async () => (await api.get("/products/processes/all")).data });
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: async () => (await api.get("/products/")).data });
+  const { data: payrollConfig } = useQuery({
+    queryKey: ["payroll-config"],
+    queryFn: async () => (await api.get("/payroll/config-settings/")).data || {},
+  });
+
+  // Auto-calculate weekly pay period (Saturday->Friday based on configured payout day)
+  const payoutWeekday = WEEKDAY_INDEX[payrollConfig?.payout_day ?? "Saturday"] ?? 6;
+  const autoWeek = useMemo(() => getWeeklyPayPeriod(today, payoutWeekday), [payoutWeekday]);
+
+  useEffect(() => {
+    if (autoWeek && !fromDate && !toDate) {
+      setFromDate(autoWeek.from);
+      setToDate(autoWeek.to);
+    }
+  }, [autoWeek, fromDate, toDate]);
+
+  const handlePrevWeek = () => {
+    if (!fromDate || !toDate) return;
+    const [y, m, d] = fromDate.split("-").map(Number);
+    const prevFrom = shiftDate(new Date(y, m - 1, d), -7);
+    setFromDate(isoDate(prevFrom));
+    setToDate(isoDate(shiftDate(prevFrom, 6)));
+  };
+
+  const handleNextWeek = () => {
+    if (!fromDate || !toDate) return;
+    const [y, m, d] = fromDate.split("-").map(Number);
+    const nextFrom = shiftDate(new Date(y, m - 1, d), 7);
+    setFromDate(isoDate(nextFrom));
+    setToDate(isoDate(shiftDate(nextFrom, 6)));
+  };
+
+  const { data = [], isLoading, refetch } = useQuery({
+    queryKey: ["contractor", type, activeFY, defaultSupplier?.id, fromDate, toDate],
+    queryFn: async () => {
+      if (type === "rates") return (await api.get("/products/rates/all")).data;
+      const entryType = type === "payment" ? "Payment" : "Register";
+      const params = new URLSearchParams({ fy: activeFY, entry_type: entryType });
+      if (defaultSupplier?.id) params.set("ledger_id", String(defaultSupplier.id));
+      if (fromDate) params.set("from_date", fromDate);
+      if (toDate) params.set("to_date", toDate);
+      return (await api.get(`/contractor/?${params.toString()}`)).data;
+    },
+  });
+
   const { data: rawLedgers = [] } = useQuery({ queryKey: ["ledgers", "Contractor"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Contractor")).data });
+  const { data: suppliers = [] } = useQuery({ queryKey: ["ledgers", "Account"], queryFn: async () => (await api.get("/ledgers/?ledger_type=Account")).data });
 
   const ledgers = useMemo(() => {
     return rawLedgers.filter((l: any) => {
@@ -804,23 +876,44 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         actions={
           type === "job-work" && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <IconButton
+                size="small"
+                onClick={handlePrevWeek}
+                disabled={!fromDate || !toDate}
+                title="Previous Week"
+              >
+                <ArrowLeft fontSize="small" />
+              </IconButton>
+              <Box sx={{ minWidth: 150, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                  {fromDate && toDate ? `${formatDisplayDate(fromDate)} – ${formatDisplayDate(toDate)}` : "–"}
+                </Typography>
+              </Box>
+              <IconButton
+                size="small"
+                onClick={handleNextWeek}
+                disabled={!fromDate || !toDate}
+                title="Next Week"
+              >
+                <ArrowRight fontSize="small" />
+              </IconButton>
+              <Box sx={{ px: 1 }} />
               <Box sx={{ minWidth: 220 }}>
                 <TextField
                   select
                   size="small"
-                  label="Contractor"
-                  value={defaultContractor?.id ?? ""}
-                  onChange={(e) => setDefaultContractor(e.target.value ? { id: Number(e.target.value), name: "" } : null)}
+                  label="Supplier"
+                  value={defaultSupplier?.id ?? ""}
+                  onChange={(e) => setDefaultSupplier(e.target.value ? { id: Number(e.target.value), name: "" } : null)}
                 >
-                  <MenuItem value="">All Contractors</MenuItem>
-                  {ledgers.map((l: any) => (
+                  <MenuItem value="">All Suppliers</MenuItem>
+                  {suppliers.map((l: any) => (
                     <MenuItem key={l.id} value={l.id}>
                       {l.name}
                     </MenuItem>
                   ))}
                 </TextField>
               </Box>
-              <Box sx={{ px: 1 }} />
             </Box>
           )
         }
