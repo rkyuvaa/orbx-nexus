@@ -79,6 +79,156 @@ async def dashboard_summary(
     }
 
 
+# ─────── Dashboard Weekly Summary ───────
+
+def _week_bounds() -> tuple[str, str]:
+    """Return Monday and Sunday dates (ISO strings) for the current week."""
+    from datetime import date, timedelta
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    sunday = monday + timedelta(days=6)
+    return monday.isoformat(), sunday.isoformat()
+
+
+def _sum_qty_weight(schema: str, table: str, date_col: str, fd: str, td: str) -> tuple[float, float]:
+    """Sum qty and weight (from items JSONB or top-level columns) for a table over a date range."""
+    return (
+        f"(SELECT COALESCE(SUM(COALESCE(qty, 0)), 0) FROM ("
+        f"  SELECT quantity AS qty FROM {schema}.{table} WHERE {date_col} >= :fd AND {date_col} <= :td AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) = 0"
+        f"  UNION ALL "
+        f"  SELECT (item->>'quantity')::numeric AS qty FROM {schema}.{table}, jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item WHERE {date_col} >= :fd AND {date_col} <= :td AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) > 0"
+        f") t1),"
+        f"(SELECT COALESCE(SUM(COALESCE(wt, 0)), 0) FROM ("
+        f"  SELECT COALESCE(NULLIF(total_weight, 0), weight, 0) AS wt FROM {schema}.{table} WHERE {date_col} >= :fd AND {date_col} <= :td AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) = 0"
+        f"  UNION ALL "
+        f"  SELECT COALESCE((item->>'total_weight')::numeric, (item->>'weight')::numeric, 0) AS wt FROM {schema}.{table}, jsonb_array_elements(COALESCE(items, '[]'::jsonb)) AS item WHERE {date_col} >= :fd AND {date_col} <= :td AND jsonb_array_length(COALESCE(items, '[]'::jsonb)) > 0"
+        f") t2)"
+    )
+
+
+@router.get("/dashboard-weekly")
+async def dashboard_weekly(
+    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
+):
+    schema = s(fy)
+    fd, td = _week_bounds()
+
+    # ── Current week inward (qty + weight) ──
+    inw_qty_sql, inw_wt_sql = _sum_qty_weight(schema, "stock_inward", "inward_date", fd, td)
+    inward_result = await db.execute(
+        text(f"SELECT {inw_qty_sql} {inw_wt_sql}"),
+        {"fd": fd, "td": td},
+    )
+    inward_row = inward_result.mappings().one()
+
+    # ── Current week outward (qty + weight) ──
+    out_qty_sql, out_wt_sql = _sum_qty_weight(schema, "stock_outward", "outward_date", fd, td)
+    outward_result = await db.execute(
+        text(f"SELECT {out_qty_sql} {out_wt_sql}"),
+        {"fd": fd, "td": td},
+    )
+    outward_row = outward_result.mappings().one()
+
+    # ── Current week purchases (job work bills total_amount) ──
+    purchase_result = await db.execute(
+        text(
+            f"SELECT COALESCE(SUM(total_amount), 0) AS purchase_total "
+            f"FROM {schema}.job_work_bills WHERE bill_date >= :fd AND bill_date <= :td"
+        ),
+        {"fd": fd, "td": td},
+    )
+    purchase_row = purchase_result.mappings().one()
+
+    # ── Contractor performance this week (top contractors by bill amount) ──
+    contractor_result = await db.execute(
+        text(
+            f"SELECT l.id AS ledger_id, l.name AS contractor_name, "
+            f"       COUNT(jwb.id) AS bill_count, "
+            f"       COALESCE(SUM(jwb.total_amount), 0) AS total_amount "
+            f"FROM {schema}.job_work_bills jwb "
+            f"LEFT JOIN master.ledgers l ON l.id = jwb.ledger_id "
+            f"WHERE jwb.bill_date >= :fd AND jwb.bill_date <= :td "
+            f"GROUP BY l.id, l.name "
+            f"ORDER BY total_amount DESC "
+            f"LIMIT 5"
+        ),
+        {"fd": fd, "td": td},
+    )
+    contractor_performance = [
+        {
+            "ledger_id": r["ledger_id"],
+            "contractor_name": r["contractor_name"] or "Unknown",
+            "bill_count": int(r["bill_count"] or 0),
+            "total_amount": float(r["total_amount"] or 0),
+        }
+        for r in contractor_result.mappings().all()
+    ]
+
+    # ── Weekly trend: last 4 weeks of inward/outward/purchases ──
+    trend_result = await db.execute(
+        text(
+            f"WITH weeks AS ("
+            f"  SELECT generate_series(0, 3) AS offset"
+            f"), inward_weekly AS ("
+            f"  SELECT EXTRACT(WEEK FROM inward_date) AS wk, "
+            f"         SUM(quantity) AS inward_qty, "
+            f"         SUM(COALESCE(NULLIF(total_weight, 0), weight, 0)) AS inward_weight "
+            f"  FROM {schema}.stock_inward "
+            f"  WHERE inward_date >= CURRENT_DATE - INTERVAL '28 days' "
+            f"  GROUP BY 1"
+            f"), outward_weekly AS ("
+            f"  SELECT EXTRACT(WEEK FROM outward_date) AS wk, "
+            f"         SUM(quantity) AS outward_qty, "
+            f"         SUM(COALESCE(NULLIF(total_weight, 0), weight, 0)) AS outward_weight "
+            f"  FROM {schema}.stock_outward "
+            f"  WHERE outward_date >= CURRENT_DATE - INTERVAL '28 days' "
+            f"  GROUP BY 1"
+            f"), purchase_weekly AS ("
+            f"  SELECT EXTRACT(WEEK FROM bill_date) AS wk, "
+            f"         SUM(total_amount) AS purchase_total "
+            f"  FROM {schema}.job_work_bills "
+            f"  WHERE bill_date >= CURRENT_DATE - INTERVAL '28 days' "
+            f"  GROUP BY 1"
+            f")"
+            f"SELECT w.offset, "
+            f"       COALESCE(iw.inward_qty, 0) AS inward_qty, "
+            f"       COALESCE(iw.inward_weight, 0) AS inward_weight, "
+            f"       COALESCE(ow.outward_qty, 0) AS outward_qty, "
+            f"       COALESCE(ow.outward_weight, 0) AS outward_weight, "
+            f"       COALESCE(pw.purchase_total, 0) AS purchase_total "
+            f"FROM weeks w "
+            f"LEFT JOIN inward_weekly iw ON iw.wk = EXTRACT(WEEK FROM CURRENT_DATE - (w.offset * INTERVAL '7 days')) "
+            f"LEFT JOIN outward_weekly ow ON ow.wk = EXTRACT(WEEK FROM CURRENT_DATE - (w.offset * INTERVAL '7 days')) "
+            f"LEFT JOIN purchase_weekly pw ON pw.wk = EXTRACT(WEEK FROM CURRENT_DATE - (w.offset * INTERVAL '7 days')) "
+            f"ORDER BY w.offset DESC"
+        )
+    )
+    weekly_trend = [
+        {
+            "week_offset": int(r["week_offset"]),
+            "label": f"Week {-int(r['week_offset'])}",
+            "inward_qty": float(r["inward_qty"] or 0),
+            "inward_weight": float(r["inward_weight"] or 0),
+            "outward_qty": float(r["outward_qty"] or 0),
+            "outward_weight": float(r["outward_weight"] or 0),
+            "purchase_total": float(r["purchase_total"] or 0),
+        }
+        for r in trend_result.mappings().all()
+    ]
+
+    return {
+        "week_start": fd,
+        "week_end": td,
+        "inward_qty": float(inward_row[0] or 0),
+        "inward_weight": float(inward_row[1] or 0),
+        "outward_qty": float(outward_row[0] or 0),
+        "outward_weight": float(outward_row[1] or 0),
+        "purchase_total": float(purchase_row["purchase_total"] or 0),
+        "contractor_performance": contractor_performance,
+        "weekly_trend": weekly_trend,
+    }
+
+
 # ─────── Day Book ───────
 
 def _norm_date(d_str: str | None) -> str | None:
