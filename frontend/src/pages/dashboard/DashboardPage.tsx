@@ -114,7 +114,6 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardWeeklyData>({
     queryKey: ["dashboard-weekly", activeFY],
     queryFn: async () => (await api.get(`/reports/dashboard-weekly?fy=${activeFY}`)).data,
-    refetchInterval: 60_000,
   });
 
   const weekLabel = data ? `${data.week_start} to ${data.week_end}` : "";
@@ -138,28 +137,13 @@ export default function DashboardPage() {
       <AnimatePresence>
         {!isLoading && (
           <>
-            <MotionBox
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              sx={{ mb: 3, textAlign: "center" }}
-            >
-              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 0.5 }}>
-                Current Week: {weekLabel}
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary" }}>
-                Weekly Performance Overview
-              </Typography>
-            </MotionBox>
-
             {/* ── Weekly KPI Metrics Grid ── */}
             <Grid container spacing={2.5} sx={{ mb: 3 }}>
               <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                 <WeeklyKPICard
-                  title="Week's Inward Qty"
-                  value={(data?.inward_qty ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  subtitle="Total inward quantity this week"
+                  title="Week's Inward Weight"
+                  value={(data?.inward_weight ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  subtitle="Total inward weight this week"
                   icon={<ReceiptLong />}
                   trend="up"
                   color={isDark ? "#4ade80" : "#0f5132"}
@@ -168,9 +152,9 @@ export default function DashboardPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                 <WeeklyKPICard
-                  title="Week's Outward Qty"
-                  value={(data?.outward_qty ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  subtitle="Total outward quantity this week"
+                  title="Week's Outward Weight"
+                  value={(data?.outward_weight ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  subtitle="Total outward weight this week"
                   icon={<Inventory2 />}
                   trend="down"
                   color="#ed6c02"
