@@ -516,20 +516,35 @@ async def delete_advance(
 
 @router.get("/balance-summary")
 async def staff_balance_summary(
-    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
+    current_user: CurrentUser, db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    from_date: Optional[str] = Query(default=None),
+    to_date: Optional[str] = Query(default=None),
 ):
     """
-    Returns one consolidated row per active Staff ledger with:
-      - opening_balance / balance_type
-      - advance_paid      (Advance Payment entries)
-      - advance_received  (Advance Receipt entries)
-      - salary_payable    (Total gross payable from Salary Vouchers)
-      - salary_deductions (Total deductions / advances recovered from Salary Vouchers)
-      - net_salary        (Total net salary from Salary Vouchers)
-      - advance_balance   = advance_paid - advance_received - salary_deductions
-      - current_balance   = Net balance between company and staff
+    Returns one consolidated row per active Staff ledger with advance/salary/net balances
+    for a weekly pay period (from_date / to_date). Only Weekly salary vouchers and advance
+    payments within the date range are aggregated.
     """
     schema = s(fy)
+
+    # Date range filter for salary vouchers (weekly pay period)
+    sv_date_cond = ""
+    sv_params: dict = {}
+    if from_date and to_date:
+        sv_date_cond = "AND sv.voucher_date BETWEEN CAST(:sv_from AS DATE) AND CAST(:sv_to AS DATE)"
+        sv_date_cond += " AND sv.pay_period_type = :ppt"
+        sv_params["sv_from"] = from_date[:10]
+        sv_params["sv_to"] = to_date[:10]
+        sv_params["ppt"] = "Weekly"
+
+    # Date range filter for advance payments (weekly pay period)
+    ap_date_cond = ""
+    if from_date and to_date:
+        ap_date_cond = "AND ap_voucher_date BETWEEN CAST(:ap_from AS DATE) AND CAST(:ap_to AS DATE)"
+        sv_params["ap_from"] = from_date[:10]
+        sv_params["ap_to"] = to_date[:10]
+
     query = f"""
     SELECT
         l.id AS ledger_id,
@@ -557,7 +572,10 @@ async def staff_balance_summary(
             (CASE WHEN l.balance_type = 'Cr' THEN COALESCE(l.opening_balance, 0) ELSE -COALESCE(l.opening_balance, 0) END)
             + COALESCE(sv.net_salary, 0)
             - (COALESCE(ap.advance_paid, 0) - COALESCE(ap.advance_received, 0) - COALESCE(sv.salary_deductions, 0))
-        ) AS current_balance
+        ) AS current_balance,
+        'Weekly' AS pay_period_type,
+        :from_date AS from_date,
+        :to_date AS to_date
     FROM master.ledgers l
     LEFT JOIN master.ledger_groups lg ON lg.id = l.group_id
     LEFT JOIN LATERAL (
@@ -568,6 +586,7 @@ async def staff_balance_summary(
         WHERE (ledger_id = l.id OR ledger_id IN (
             SELECT id FROM master.ledgers WHERE TRIM(name) = TRIM(l.name) OR TRIM(name) ILIKE TRIM(l.name) || ' - (Staff%'
         )) AND ledger_type = 'Staff'
+        {ap_date_cond}
     ) ap ON TRUE
     LEFT JOIN LATERAL (
         SELECT
@@ -578,6 +597,7 @@ async def staff_balance_summary(
         WHERE (ledger_id = l.id OR ledger_id IN (
             SELECT id FROM master.ledgers WHERE TRIM(name) = TRIM(l.name) OR TRIM(name) ILIKE TRIM(l.name) || ' - (Staff%'
         ))
+        {sv_date_cond}
     ) sv ON TRUE
     WHERE (l.ledger_type = 'Staff' OR lg.name LIKE '%Staff%' OR lg.name LIKE '%Salary%' OR l.name LIKE '%(Staff%')
       AND (l.is_active = TRUE OR l.is_active IS NULL)
@@ -585,7 +605,8 @@ async def staff_balance_summary(
       AND l.name NOT ILIKE '%(Contractor Advance)%'
     ORDER BY l.name
     """
-    result = await db.execute(text(query))
+    params = {"from_date": from_date, "to_date": to_date, **sv_params}
+    result = await db.execute(text(query), params)
     rows = []
     for r in result.mappings().all():
         row = dict(r)

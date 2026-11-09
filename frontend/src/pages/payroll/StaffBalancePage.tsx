@@ -39,7 +39,14 @@ import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
 
-async function handlePrintStaffStatement(staffData: any, transactionsParam: any[] | null, companyData: any, activeFY: string) {
+async function handlePrintStaffStatement(
+  staffData: any,
+  transactionsParam: any[] | null,
+  companyData: any,
+  activeFY: string,
+  fromDate: string = "",
+  toDate: string = ""
+) {
   let transactions = transactionsParam || [];
 
   if ((!transactions || transactions.length === 0) && staffData?.ledger_id) {
@@ -177,6 +184,7 @@ async function handlePrintStaffStatement(staffData: any, transactionsParam: any[
           <h2>STAFF ADVANCE & BALANCE STATEMENT</h2>
           <div class="doc-no">Staff Member: <strong>${staffName}${staffCode}</strong> [${designation}]</div>
           <div class="doc-date">Statement Date: ${new Date().toLocaleDateString("en-IN")}</div>
+          ${fromDate && toDate ? `<div class="doc-date">Weekly Pay Period: ${fromDate} to ${toDate}</div>` : ""}
         </div>
 
         <!-- FIRST HALF: Transaction Summary Table -->
@@ -283,6 +291,8 @@ export default function StaffBalancePage() {
   const [advAmount, setAdvAmount] = useState("");
   const [advNarration, setAdvNarration] = useState("");
   const [showZeroBalance, setShowZeroBalance] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({
     open: false,
     msg: "",
@@ -295,8 +305,13 @@ export default function StaffBalancePage() {
   });
 
   const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["staff-balance-summary", activeFY],
-    queryFn: async () => (await api.get(`/payroll/balance-summary?fy=${activeFY}`)).data,
+    queryKey: ["staff-balance-summary", activeFY, fromDate, toDate],
+    queryFn: async () => {
+      const params = new URLSearchParams({ fy: activeFY });
+      if (fromDate) params.set("from_date", fromDate);
+      if (toDate) params.set("to_date", toDate);
+      return (await api.get(`/payroll/balance-summary?${params}`)).data;
+    },
   });
 
   const filteredData = useMemo(() => {
@@ -484,7 +499,7 @@ export default function StaffBalancePage() {
       cellRenderer: (p: any) => (
         <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 0.5, height: "100%" }}>
           <Tooltip title="Print Staff Statement (A4)">
-            <IconButton size="small" color="primary" onClick={() => handlePrintStaffStatement(p.data, [], companyData, activeFY)}>
+            <IconButton size="small" color="primary" onClick={() => handlePrintStaffStatement(p.data, [], companyData, activeFY, fromDate, toDate)}>
               <PrintIcon fontSize="small" />
             </IconButton>
           </Tooltip>
@@ -505,22 +520,47 @@ export default function StaffBalancePage() {
         subtitle="Consolidated staff advances, recoveries, salary deductions, and net balances"
         breadcrumbs={[{ label: "Salary and Wages" }, { label: "Staff Balance" }]}
         actions={
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={showZeroBalance}
-                onChange={(e) => setShowZeroBalance(e.target.checked)}
-                color="primary"
-              />
-            }
-            label={
-              <Typography variant="body2" sx={{ fontSize: "0.82rem", fontWeight: 600, color: "text.secondary" }}>
-                Show Zero Balance
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={showZeroBalance}
+                  onChange={(e) => setShowZeroBalance(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontSize: "0.82rem", fontWeight: 600, color: "text.secondary" }}>
+                  Show Zero Balance
+                </Typography>
+              }
+              sx={{ m: 0 }}
+            />
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, px: 1, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", mr: 0.5, fontWeight: 600 }}>
+                Weekly Pay Period
               </Typography>
-            }
-            sx={{ m: 0 }}
-          />
+              <TextField
+                size="small"
+                type="date"
+                label="From"
+                fullWidth
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                sx={{ width: 110 }}
+              />
+              <TextField
+                size="small"
+                type="date"
+                label="To"
+                fullWidth
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                sx={{ width: 110 }}
+              />
+            </Box>
+          </Box>
         }
       />
 
@@ -556,7 +596,7 @@ export default function StaffBalancePage() {
               variant="outlined"
               color="primary"
               startIcon={<PrintIcon />}
-              onClick={() => handlePrintStaffStatement(selectedStaff, transactions, companyData, activeFY)}
+              onClick={() => handlePrintStaffStatement(selectedStaff, transactions, companyData, activeFY, fromDate, toDate)}
             >
               Print Statement
             </Button>
