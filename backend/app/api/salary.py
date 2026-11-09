@@ -541,7 +541,7 @@ async def staff_balance_summary(
     # Date range filter for advance payments (weekly pay period)
     ap_date_cond = ""
     if from_date and to_date:
-        ap_date_cond = "AND ap_voucher_date BETWEEN CAST(:ap_from AS DATE) AND CAST(:ap_to AS DATE)"
+        ap_date_cond = "AND ap.voucher_date BETWEEN CAST(:ap_from AS DATE) AND CAST(:ap_to AS DATE)"
         sv_params["ap_from"] = from_date[:10]
         sv_params["ap_to"] = to_date[:10]
 
