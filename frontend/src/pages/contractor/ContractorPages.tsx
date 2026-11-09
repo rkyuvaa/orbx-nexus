@@ -173,12 +173,11 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   };
 
   const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["contractor", type, activeFY, defaultSupplier?.id, fromDate, toDate],
+    queryKey: ["contractor", type, activeFY, fromDate, toDate],
     queryFn: async () => {
       if (type === "rates") return (await api.get("/products/rates/all")).data;
       const entryType = type === "payment" ? "Payment" : "Register";
       const params = new URLSearchParams({ fy: activeFY, entry_type: entryType });
-      if (defaultSupplier?.id) params.set("ledger_id", String(defaultSupplier.id));
       if (fromDate) params.set("from_date", fromDate);
       if (toDate) params.set("to_date", toDate);
       return (await api.get(`/contractor/?${params.toString()}`)).data;
@@ -897,23 +896,6 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
               >
                 <ArrowRight fontSize="small" />
               </IconButton>
-              <Box sx={{ px: 1 }} />
-              <Box sx={{ minWidth: 220 }}>
-                <TextField
-                  select
-                  size="small"
-                  label="Supplier"
-                  value={defaultSupplier?.id ?? ""}
-                  onChange={(e) => setDefaultSupplier(e.target.value ? { id: Number(e.target.value), name: "" } : null)}
-                >
-                  <MenuItem value="">All Suppliers</MenuItem>
-                  {suppliers.map((l: any) => (
-                    <MenuItem key={l.id} value={l.id}>
-                      {l.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Box>
             </Box>
           )
         }
@@ -922,7 +904,37 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         rowData={data}
         columnDefs={colDefs}
         loading={isLoading}
+        fromDate={fromDate}
+        toDate={toDate}
         onRefresh={refetch}
+        onDateChange={(from, to) => {
+          setFromDate(from);
+          setToDate(to);
+        }}
+        extraFilters={
+          <Box sx={{ minWidth: 220, display: "flex", alignItems: "center", gap: 0.5 }}>
+            <TextField
+              select
+              size="small"
+              label="Supplier"
+              value={defaultSupplier?.id ?? ""}
+              onChange={(e) => setDefaultSupplier(e.target.value ? { id: Number(e.target.value), name: "" } : null)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                },
+              }}
+            >
+              <MenuItem value="">All Suppliers</MenuItem>
+              {suppliers.map((l: any) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+        }
         onBulkDelete={async (rows) => {
           await Promise.all(rows.map((r) => deleteMutation.mutateAsync(r.id)));
         }}

@@ -59,6 +59,9 @@ export interface OrbxGridProps<T = any> {
   onDeleteRow?: (row: T) => void | Promise<void>;
   onBulkStatusChange?: (selectedRows: T[], is_active: boolean) => void | Promise<void>;
   extraFilters?: React.ReactNode;
+  fromDate?: string;
+  toDate?: string;
+  onDateChange?: (fromDate: string, toDate: string) => void;
   printOverride?: (rows: T[], printWindow: Window) => void;
 }
 
@@ -83,6 +86,9 @@ export default function OrbxGrid<T = any>({
   onDeleteRow,
   onBulkStatusChange,
   extraFilters,
+  fromDate: fromDateProp = "",
+  toDate: toDateProp = "",
+  onDateChange,
   printOverride,
 }: OrbxGridProps<T>) {
   const [searchText, setSearchText] = useState("");
@@ -93,8 +99,8 @@ export default function OrbxGrid<T = any>({
     return sortableCol?.field || "";
   });
   const [order, setOrder] = useState<"asc" | "desc">("desc");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState(fromDateProp);
+  const [toDate, setToDate] = useState(toDateProp);
   const [selectedKeys, setSelectedKeys] = useState<Set<string | number>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmStatusTarget, setConfirmStatusTarget] = useState<boolean | null>(null);
@@ -122,6 +128,13 @@ export default function OrbxGrid<T = any>({
   useEffect(() => {
     setPage(0);
   }, [rowData]);
+
+  useEffect(() => {
+    setFromDate(fromDateProp);
+  }, [fromDateProp]);
+  useEffect(() => {
+    setToDate(toDateProp);
+  }, [toDateProp]);
 
   const dateFieldKey = useMemo(() => {
     if (rowData.length === 0) return null;
@@ -503,6 +516,7 @@ export default function OrbxGrid<T = any>({
                   onChange={(e) => {
                     setFromDate(e.target.value);
                     setPage(0);
+                    onDateChange?.(e.target.value, toDate);
                   }}
                   slotProps={{ inputLabel: { shrink: true } }}
                   sx={{
@@ -512,6 +526,7 @@ export default function OrbxGrid<T = any>({
                     },
                   }}
                 />
+                {extraFilters}
                 <TextField
                   type="date"
                   label="To"
@@ -520,6 +535,7 @@ export default function OrbxGrid<T = any>({
                   onChange={(e) => {
                     setToDate(e.target.value);
                     setPage(0);
+                    onDateChange?.(fromDate, e.target.value);
                   }}
                   slotProps={{ inputLabel: { shrink: true } }}
                   sx={{
@@ -538,6 +554,7 @@ export default function OrbxGrid<T = any>({
                       setFromDate("");
                       setToDate("");
                       setPage(0);
+                      onDateChange?.("", "");
                     }}
                     sx={{ textTransform: "none", fontWeight: 600 }}
                   >
@@ -546,7 +563,6 @@ export default function OrbxGrid<T = any>({
                 )}
               </Box>
             )}
-            {extraFilters}
           </Box>
 
           <Box
