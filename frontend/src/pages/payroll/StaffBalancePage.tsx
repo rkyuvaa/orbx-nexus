@@ -636,8 +636,8 @@ export default function StaffBalancePage() {
           const totals = rows.reduce((sum: any, row: any) => ({
             salary: sum.salary + Number(row.net_salary || 0),
             advance: sum.advance + Number(row.advance_paid || 0),
-            paid: sum.paid + Number(row.advance_received || 0),
-            balance: sum.balance + Number(row.current_balance || 0),
+            paid: sum.paid + Number(row.current_balance || 0),
+            balance: sum.balance + Number(row.advance_received || 0),
           }), { salary: 0, advance: 0, paid: 0, balance: 0 });
 
           const compData = useCompanyStore.getState().company;
@@ -646,7 +646,7 @@ export default function StaffBalancePage() {
           const rowsHtml = rows.map((row: any, index: number) => {
             const staffName = row.staff_name || `Staff #${row.ledger_id}`;
             const staffCode = row.staff_code ? ` (${row.staff_code})` : "";
-            return `<tr><td>${index + 1}</td><td>${staffName}${staffCode}</td><td class="amount">₹${formatAmount(Number(row.net_salary || 0))}</td><td class="amount">₹${formatAmount(Number(row.advance_paid || 0))}</td><td class="amount">₹${formatAmount(Number(row.advance_received || 0))}</td><td class="amount">₹${formatAmount(Number(row.current_balance || 0))}</td></tr>`;
+            return `<tr><td>${index + 1}</td><td>${staffName}${staffCode}</td><td class="amount">₹${formatAmount(Number(row.net_salary || 0))}</td><td class="amount">₹${formatAmount(Number(row.advance_paid || 0))}</td><td class="amount">₹${formatAmount(Number(row.current_balance || 0))}</td><td class="amount">₹${formatAmount(Number(row.advance_received || 0))}</td></tr>`;
           }).join("");
 
           printWindow.document.write(`<!DOCTYPE html><html><head><title>Staff Balance Report</title><style>
