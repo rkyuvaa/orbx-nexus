@@ -477,13 +477,6 @@ export default function StaffBalancePage() {
       valueFormatter: (p) => `₹${formatAmount(p.value)}`,
     },
     {
-      field: "salary_deductions",
-      headerName: "Salary Deductions",
-      width: 155,
-      type: "numericColumn",
-      valueFormatter: (p) => `₹${formatAmount(p.value)}`,
-    },
-    {
       field: "advance_balance",
       headerName: "Advance Due",
       width: 155,
