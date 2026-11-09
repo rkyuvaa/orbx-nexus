@@ -724,6 +724,7 @@ export default function StaffBalancePage() {
                   size="small"
                   sx={{
                     height: 24,
+                    minWidth: 150,
                     fontSize: 12,
                     fontWeight: 700,
                     bgcolor: costPerTon > 0 ? "#fff3e0" : "#f0f4f8",
