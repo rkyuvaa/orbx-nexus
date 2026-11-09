@@ -16,7 +16,16 @@ import { formatAmount, formatQty } from "../../utils/format";
 
 const today = new Date().toISOString().split("T")[0];
 
-// Resolve a group process into its child process ids (empty array for non-group processes)
+// Persist the last-selected contractor for Job Work Register so it loads by default next time
+const loadDefaultContractor = () => {
+  try {
+    const saved = localStorage.getItem("orbx_jobwork_default_contractor");
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+};
+
 const getChildProcessIds = (proc: any, processes: any[]): number[] => {
   if (!proc) return [];
   const ids: number[] = [];
@@ -81,13 +90,24 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [defaultContractor, setDefaultContractor] = useState<{ id: number | null; name: string } | null>(loadDefaultContractor);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("orbx_jobwork_default_contractor", JSON.stringify(defaultContractor));
+    } catch {
+      // ignore storage errors
+    }
+  }, [defaultContractor]);
 
   const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["contractor", type, activeFY],
+    queryKey: ["contractor", type, activeFY, defaultContractor?.id],
     queryFn: async () => {
       if (type === "rates") return (await api.get("/products/rates/all")).data;
       const entryType = type === "payment" ? "Payment" : "Register";
-      return (await api.get(`/contractor/?fy=${activeFY}&entry_type=${entryType}`)).data;
+      const params = new URLSearchParams({ fy: activeFY, entry_type: entryType });
+      if (defaultContractor?.id) params.set("ledger_id", String(defaultContractor.id));
+      return (await api.get(`/contractor/?${params.toString()}`)).data;
     },
   });
 
@@ -778,7 +798,33 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
 
   return (
     <Box>
-      <PageHeader title={TITLES[type]} breadcrumbs={[{ label: "Contractor Work" }]} />
+      <PageHeader
+        title={TITLES[type]}
+        breadcrumbs={[{ label: "Contractor Work" }]}
+        actions={
+          type === "job-work" && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ minWidth: 220 }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Contractor"
+                  value={defaultContractor?.id ?? ""}
+                  onChange={(e) => setDefaultContractor(e.target.value ? { id: Number(e.target.value), name: "" } : null)}
+                >
+                  <MenuItem value="">All Contractors</MenuItem>
+                  {ledgers.map((l: any) => (
+                    <MenuItem key={l.id} value={l.id}>
+                      {l.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+              <Box sx={{ px: 1 }} />
+            </Box>
+          )
+        }
+      />
       <OrbxGrid
         rowData={data}
         columnDefs={colDefs}
