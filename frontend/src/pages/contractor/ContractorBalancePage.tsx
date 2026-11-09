@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -27,6 +27,8 @@ import {
 } from "@mui/material";
 import Visibility from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
+import ArrowLeft from "@mui/icons-material/ArrowLeft";
+import ArrowRight from "@mui/icons-material/ArrowRight";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import PageHeader from "../../components/PageHeader";
@@ -37,6 +39,38 @@ import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCR
 import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+function shiftDate(date: Date, days: number) {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+}
+
+function isoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}-${m}-${y}`;
+}
+
+function getWeeklyPayPeriod(anchorDate: string, payoutWeekday: number) {
+  const [year, month, day] = anchorDate.split("-").map(Number);
+  const anchor = new Date(year, month - 1, day);
+  const daysSincePayout = (anchor.getDay() - payoutWeekday + 7) % 7;
+  const payoutDate = shiftDate(anchor, -daysSincePayout);
+  const to = shiftDate(payoutDate, -1);
+  const from = shiftDate(payoutDate, -7);
+  return { from: isoDate(from), to: isoDate(to), payoutDate: isoDate(payoutDate) };
+}
 
 async function handlePrintContractorStatement(contractorData: any, transactionsParam: any[] | null, companyData: any, activeFY: string) {
   let transactions = transactionsParam || [];
@@ -265,6 +299,8 @@ export default function ContractorBalancePage() {
   const [payAmount, setPayAmount] = useState("");
   const [payNarration, setPayNarration] = useState("");
   const [showZeroBalance, setShowZeroBalance] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [snack, setSnack] = useState<{ open: boolean; msg: string; severity: "success" | "error" }>({ open: false, msg: "", severity: "success" });
 
   const { data: companyData } = useQuery({
@@ -272,10 +308,46 @@ export default function ContractorBalancePage() {
     queryFn: async () => (await api.get("/company/")).data,
   });
 
+  const { data: payrollConfig } = useQuery({
+    queryKey: ["payroll-config"],
+    queryFn: async () => (await api.get("/payroll/config-settings/")).data || {},
+  });
+
+  // Auto-calculate weekly pay period (Saturday->Friday based on configured payout day)
+  const payoutWeekday = WEEKDAY_INDEX[payrollConfig?.payout_day ?? "Saturday"] ?? 6;
+  const autoWeek = useMemo(() => getWeeklyPayPeriod(todayStr(), payoutWeekday), [payoutWeekday]);
+
+  useEffect(() => {
+    if (autoWeek && !fromDate && !toDate) {
+      setFromDate(autoWeek.from);
+      setToDate(autoWeek.to);
+    }
+  }, [autoWeek, fromDate, toDate]);
+
+  const handlePrevWeek = () => {
+    if (!fromDate || !toDate) return;
+    const [y, m, d] = fromDate.split("-").map(Number);
+    const prevFrom = shiftDate(new Date(y, m - 1, d), -7);
+    setFromDate(isoDate(prevFrom));
+    setToDate(isoDate(shiftDate(prevFrom, 6)));
+  };
+
+  const handleNextWeek = () => {
+    if (!fromDate || !toDate) return;
+    const [y, m, d] = fromDate.split("-").map(Number);
+    const nextFrom = shiftDate(new Date(y, m - 1, d), 7);
+    setFromDate(isoDate(nextFrom));
+    setToDate(isoDate(shiftDate(nextFrom, 6)));
+  };
+
   const { data = [], isLoading, refetch } = useQuery({
-    queryKey: ["contractor-balance-summary", activeFY],
-    queryFn: async () =>
-      (await api.get(`/contractor/balance-summary?fy=${activeFY}`)).data,
+    queryKey: ["contractor-balance-summary", activeFY, fromDate, toDate],
+    queryFn: async () => {
+      const params = new URLSearchParams({ fy: activeFY });
+      if (fromDate) params.set("from_date", fromDate);
+      if (toDate) params.set("to_date", toDate);
+      return (await api.get(`/contractor/balance-summary?${params}`)).data;
+    },
   });
 
   const { data: transactions = [], isLoading: isTxLoading } = useQuery({
@@ -457,22 +529,51 @@ export default function ContractorBalancePage() {
         title="Contractor Balance"
         breadcrumbs={[{ label: "Contractor Work" }]}
         actions={
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={showZeroBalance}
-                onChange={(e) => setShowZeroBalance(e.target.checked)}
-                color="primary"
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", mr: 0.5, fontWeight: 600 }}>
+              Weekly Pay Period
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={handlePrevWeek}
+              disabled={!fromDate || !toDate}
+              sx={{ p: 0.5, minWidth: 32 }}
+            >
+              <ArrowLeft fontSize="small" />
+            </IconButton>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, minWidth: 90, textAlign: "center", fontSize: "0.9rem" }}
+            >
+              {fromDate && toDate ? `${formatDisplayDate(fromDate)} – ${formatDisplayDate(toDate)}` : "–"}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={handleNextWeek}
+              disabled={!fromDate || !toDate}
+              sx={{ p: 0.5, minWidth: 32 }}
+            >
+              <ArrowRight fontSize="small" />
+            </IconButton>
+            <Box sx={{ borderLeft: "1px solid", borderColor: "divider", pl: 0.75, pr: 0.75 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={showZeroBalance}
+                    onChange={(e) => setShowZeroBalance(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontSize: "0.82rem", fontWeight: 600, color: "text.secondary", ml: 0.5 }}>
+                    Show Zero Balance
+                  </Typography>
+                }
+                sx={{ m: 0 }}
               />
-            }
-            label={
-              <Typography variant="body2" sx={{ fontSize: "0.82rem", fontWeight: 600, color: "text.secondary" }}>
-                Show Zero Balance
-              </Typography>
-            }
-            sx={{ m: 0 }}
-          />
+            </Box>
+          </Box>
         }
       />
       <OrbxGrid

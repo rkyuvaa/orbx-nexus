@@ -132,7 +132,10 @@ async def list_pending_registers(
 
 @router.get("/balance-summary")
 async def contractor_balance_summary(
-    current_user: CurrentUser, db: DBSession, fy: str = Query(default="2026_2027")
+    current_user: CurrentUser, db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    from_date: Optional[str] = Query(default=None),
+    to_date: Optional[str] = Query(default=None),
 ):
     """
     Returns one consolidated row per active Contractor ledger with:
@@ -144,11 +147,23 @@ async def contractor_balance_summary(
       - current_balance  = signed_ob + job_work_amount - job_work_paid
                            - advance_paid + advance_received
 
-    Signed opening balance:
-      Cr -> positive (company owes the contractor - payable)
-      Dr -> negative (contractor owes the company - receivable)
+    For weekly pay period, filter job_work_entries and advance_payments
+    within from_date / to_date range.
     """
     schema = s(fy)
+
+    # Date range filter for job work entries (weekly pay period)
+    jw_date_cond = ""
+    ap_date_cond = ""
+    params: dict = {}
+    if from_date and to_date:
+        jw_date_cond = "AND j.entry_date BETWEEN CAST(:jw_fd AS DATE) AND CAST(:jw_td AS DATE)"
+        ap_date_cond = "AND a.voucher_date BETWEEN CAST(:ap_fd AS DATE) AND CAST(:ap_td AS DATE)"
+        params["jw_fd"] = from_date[:10]
+        params["jw_td"] = to_date[:10]
+        params["ap_fd"] = from_date[:10]
+        params["ap_td"] = to_date[:10]
+
     query = f"""
     SELECT
         l.id                            AS ledger_id,
@@ -175,20 +190,22 @@ async def contractor_balance_summary(
         SELECT
             SUM(CASE WHEN entry_type = 'Register' THEN amount ELSE 0 END) AS job_work_amount,
             SUM(CASE WHEN entry_type = 'Payment'  THEN amount ELSE 0 END) AS job_work_paid
-        FROM {schema}.job_work_entries
-        WHERE ledger_id = l.id
+        FROM {schema}.job_work_entries j
+        WHERE j.ledger_id = l.id
+        {jw_date_cond}
     ) jw ON TRUE
     LEFT JOIN LATERAL (
         SELECT
             SUM(CASE WHEN payment_type = 'Payment' THEN amount ELSE 0 END) AS advance_paid,
             SUM(CASE WHEN payment_type = 'Receipt' THEN amount ELSE 0 END) AS advance_received
-        FROM {schema}.advance_payments
-        WHERE ledger_id = l.id AND ledger_type = 'Contractor'
+        FROM {schema}.advance_payments a
+        WHERE a.ledger_id = l.id AND a.ledger_type = 'Contractor'
+        {ap_date_cond}
     ) ap ON TRUE
     WHERE (l.ledger_type = 'Contractor' OR lg.name LIKE '%Contractor%') AND l.is_active = TRUE
     ORDER BY l.name
     """
-    result = await db.execute(text(query))
+    result = await db.execute(text(query), params)
     rows = []
     for r in result.mappings().all():
         row = dict(r)
