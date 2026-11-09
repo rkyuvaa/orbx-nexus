@@ -28,6 +28,8 @@ import {
 import Visibility from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
 import Payment from "@mui/icons-material/Payment";
+import ArrowLeft from "@mui/icons-material/ArrowLeft";
+import ArrowRight from "@mui/icons-material/ArrowRight";
 import { ColDef } from "../../components/tables/OrbxGrid";
 import OrbxGrid from "../../components/tables/OrbxGrid";
 import PageHeader from "../../components/PageHeader";
@@ -54,6 +56,11 @@ function isoDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}-${m}-${y}`;
 }
 
 function getWeeklyPayPeriod(anchorDate: string, payoutWeekday: number) {
@@ -347,6 +354,22 @@ export default function StaffBalancePage() {
     }
   }, [autoWeek, fromDate, toDate]);
 
+  const handlePrevWeek = () => {
+    if (!fromDate || !toDate) return;
+    const [y, m, d] = fromDate.split("-").map(Number);
+    const prevFrom = shiftDate(new Date(y, m - 1, d), -7);
+    setFromDate(isoDate(prevFrom));
+    setToDate(isoDate(shiftDate(prevFrom, 6)));
+  };
+
+  const handleNextWeek = () => {
+    if (!fromDate || !toDate) return;
+    const [y, m, d] = fromDate.split("-").map(Number);
+    const nextFrom = shiftDate(new Date(y, m - 1, d), 7);
+    setFromDate(isoDate(nextFrom));
+    setToDate(isoDate(shiftDate(nextFrom, 6)));
+  };
+
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ["staff-balance-summary", activeFY, fromDate, toDate],
     queryFn: async () => {
@@ -584,24 +607,28 @@ export default function StaffBalancePage() {
               <Typography variant="caption" sx={{ color: "text.secondary", mr: 0.5, fontWeight: 600 }}>
                 Weekly Pay Period
               </Typography>
-              <TextField
+              <IconButton
                 size="small"
-                type="date"
-                label="From"
-                fullWidth
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                sx={{ width: 110 }}
-              />
-              <TextField
+                onClick={handlePrevWeek}
+                disabled={!fromDate || !toDate}
+                sx={{ p: 0.5, minWidth: 32 }}
+              >
+                <ArrowLeft fontSize="small" />
+              </IconButton>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 700, minWidth: 90, textAlign: "center", fontSize: "0.9rem" }}
+              >
+                {fromDate && toDate ? `${formatDisplayDate(fromDate)} – ${formatDisplayDate(toDate)}` : "–"}
+              </Typography>
+              <IconButton
                 size="small"
-                type="date"
-                label="To"
-                fullWidth
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                sx={{ width: 110 }}
-              />
+                onClick={handleNextWeek}
+                disabled={!fromDate || !toDate}
+                sx={{ p: 0.5, minWidth: 32 }}
+              >
+                <ArrowRight fontSize="small" />
+              </IconButton>
             </Box>
           </Box>
         }
