@@ -37,7 +37,7 @@ import OrbxGrid from "../../components/tables/OrbxGrid";
 import PageHeader from "../../components/PageHeader";
 import api from "../../api/client";
 import { useAuthStore, useCompanyStore } from "../../store";
-import { formatAmount } from "../../utils/format";
+import { formatAmount, formatWeight } from "../../utils/format";
 import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCRIPT, getGlobalPrintFooterHtml, resolveCompanyDetails } from "../../utils/printStyles";
 import { toWords } from "../../utils/numberToWords";
 
@@ -403,6 +403,16 @@ export default function StaffBalancePage() {
     },
   });
 
+  const { data: inwardWeightData = 0, isLoading: isInwardWeightLoading } = useQuery({
+    queryKey: ["staff-balance-inward-weight", activeFY, defaultSupplier?.id],
+    queryFn: async () => {
+      if (!defaultSupplier?.id) return 0;
+      const res = await api.get(`/payroll/staff-inward-weight?fy=${activeFY}&ledger_id=${defaultSupplier.id}`);
+      return res.data.total_inward_weight ?? 0;
+    },
+    enabled: !!defaultSupplier?.id,
+  });
+
   const filteredData = useMemo(() => {
     if (showZeroBalance) return data;
     return data.filter((row: any) => {
@@ -657,7 +667,7 @@ export default function StaffBalancePage() {
         onRefresh={refetch}
         hideDateFields
         extraFilters={
-          <Box sx={{ minWidth: 260, display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Box sx={{ minWidth: 340, display: "flex", alignItems: "center", gap: 0.75 }}>
             <TextField
               select
               size="small"
@@ -682,6 +692,19 @@ export default function StaffBalancePage() {
                 <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
               ))}
             </TextField>
+            {defaultSupplier && (
+              <Chip
+                label={`Total Inward Weight: ${formatWeight(inwardWeightData)} kg`}
+                size="small"
+                sx={{
+                  height: 24,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  bgcolor: isInwardWeightLoading ? "#f0f4f8" : "#e8f5e9",
+                  color: isInwardWeightLoading ? "text.secondary" : "success.dark",
+                }}
+              />
+            )}
           </Box>
         }
         printOverride={(rows, printWindow) => {

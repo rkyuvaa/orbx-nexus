@@ -514,6 +514,29 @@ async def delete_advance(
     await db.commit()
 
 
+@router.get("/staff-inward-weight")
+async def staff_inward_weight(
+    current_user: CurrentUser, db: DBSession,
+    fy: str = Query(default="2026_2027"),
+    ledger_id: int = Query(...),
+):
+    """
+    Returns the total inward weight for the given supplier (ledger_id)
+    from stock_inward within the current financial year.
+    """
+    schema = s(fy)
+    result = await db.execute(
+        text(
+            f"SELECT COALESCE(SUM(COALESCE(NULLIF(si.total_weight, 0), si.weight, 0)), 0) AS total_inward_weight "
+            f"FROM {schema}.stock_inward si "
+            f"WHERE si.ledger_id = :lid"
+        ),
+        {"lid": ledger_id}
+    )
+    row = result.mappings().first()
+    return {"total_inward_weight": float(row["total_inward_weight"] or 0)}
+
+
 @router.get("/balance-summary")
 async def staff_balance_summary(
     current_user: CurrentUser, db: DBSession,
