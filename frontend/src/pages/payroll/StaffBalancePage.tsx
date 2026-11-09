@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -38,6 +38,33 @@ import { COMMON_PRINT_CSS, getPageSizeCSS, getCompanyLogoHtml, PRINT_TRIGGER_SCR
 import { toWords } from "../../utils/numberToWords";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
+};
+
+function shiftDate(date: Date, days: number) {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+}
+
+function isoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getWeeklyPayPeriod(anchorDate: string, payoutWeekday: number) {
+  const [year, month, day] = anchorDate.split("-").map(Number);
+  const anchor = new Date(year, month - 1, day);
+  const daysSincePayout = (anchor.getDay() - payoutWeekday + 7) % 7;
+  const payoutDate = shiftDate(anchor, -daysSincePayout);
+  const to = shiftDate(payoutDate, -1);
+  const from = shiftDate(payoutDate, -7);
+  return { from: isoDate(from), to: isoDate(to), payoutDate: isoDate(payoutDate) };
+}
 
 async function handlePrintStaffStatement(
   staffData: any,
@@ -303,6 +330,22 @@ export default function StaffBalancePage() {
     queryKey: ["company"],
     queryFn: async () => (await api.get("/company/")).data,
   });
+
+  const { data: payrollConfig } = useQuery({
+    queryKey: ["payroll-config"],
+    queryFn: async () => (await api.get("/payroll/config-settings/")).data || {},
+  });
+
+  // Auto-calculate weekly pay period (Saturday->Friday based on configured payout day)
+  const payoutWeekday = WEEKDAY_INDEX[payrollConfig?.payout_day ?? "Saturday"] ?? 6;
+  const autoWeek = useMemo(() => getWeeklyPayPeriod(todayStr(), payoutWeekday), [payoutWeekday]);
+
+  useEffect(() => {
+    if (autoWeek && !fromDate && !toDate) {
+      setFromDate(autoWeek.from);
+      setToDate(autoWeek.to);
+    }
+  }, [autoWeek, fromDate, toDate]);
 
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: ["staff-balance-summary", activeFY, fromDate, toDate],
