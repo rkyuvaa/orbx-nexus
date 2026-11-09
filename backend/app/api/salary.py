@@ -519,19 +519,29 @@ async def staff_inward_weight(
     current_user: CurrentUser, db: DBSession,
     fy: str = Query(default="2026_2027"),
     ledger_id: int = Query(...),
+    from_date: Optional[str] = Query(default=None),
+    to_date: Optional[str] = Query(default=None),
 ):
     """
     Returns the total inward weight for the given supplier (ledger_id)
-    from stock_inward within the current financial year.
+    from stock_inward within the weekly pay period (from_date / to_date).
     """
     schema = s(fy)
+
+    date_cond = ""
+    params: dict = {"lid": ledger_id}
+    if from_date and to_date:
+        date_cond = "AND si.inward_date BETWEEN CAST(:fd AS DATE) AND CAST(:td AS DATE)"
+        params["fd"] = from_date[:10]
+        params["td"] = to_date[:10]
+
     result = await db.execute(
         text(
             f"SELECT COALESCE(SUM(COALESCE(NULLIF(si.total_weight, 0), si.weight, 0)), 0) AS total_inward_weight "
             f"FROM {schema}.stock_inward si "
-            f"WHERE si.ledger_id = :lid"
+            f"WHERE si.ledger_id = :lid {date_cond}"
         ),
-        {"lid": ledger_id}
+        params
     )
     row = result.mappings().first()
     return {"total_inward_weight": float(row["total_inward_weight"] or 0)}

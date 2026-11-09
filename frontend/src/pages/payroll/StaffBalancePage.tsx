@@ -404,10 +404,13 @@ export default function StaffBalancePage() {
   });
 
   const { data: inwardWeightData = 0, isLoading: isInwardWeightLoading } = useQuery({
-    queryKey: ["staff-balance-inward-weight", activeFY, defaultSupplier?.id],
+    queryKey: ["staff-balance-inward-weight", activeFY, defaultSupplier?.id, fromDate, toDate],
     queryFn: async () => {
       if (!defaultSupplier?.id) return 0;
-      const res = await api.get(`/payroll/staff-inward-weight?fy=${activeFY}&ledger_id=${defaultSupplier.id}`);
+      const params = new URLSearchParams({ fy: activeFY, ledger_id: String(defaultSupplier.id) });
+      if (fromDate) params.set("from_date", fromDate);
+      if (toDate) params.set("to_date", toDate);
+      const res = await api.get(`/payroll/staff-inward-weight?${params}`);
       return res.data.total_inward_weight ?? 0;
     },
     enabled: !!defaultSupplier?.id,
