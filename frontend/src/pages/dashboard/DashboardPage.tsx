@@ -114,6 +114,9 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardWeeklyData>({
     queryKey: ["dashboard-weekly", activeFY],
     queryFn: async () => (await api.get(`/reports/dashboard-weekly?fy=${activeFY}`)).data,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
   });
 
   const weekLabel = data ? `${data.week_start} to ${data.week_end}` : "";
