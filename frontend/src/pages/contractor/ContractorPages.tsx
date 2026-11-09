@@ -199,8 +199,12 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
   }, [rawLedgers, editing]);
 
   const { data: outwardVouchers = [] } = useQuery<any>({
-    queryKey: ["inward-vouchers", activeFY],
-    queryFn: async () => (await api.get(`/stock/inward?fy=${activeFY}`)).data,
+    queryKey: ["inward-vouchers", activeFY, defaultSupplier?.id],
+    queryFn: async () => {
+      const params = new URLSearchParams({ fy: activeFY });
+      if (defaultSupplier?.id) params.set("ledger_id", String(defaultSupplier.id));
+      return (await api.get(`/stock/inward?${params.toString()}`)).data;
+    },
     enabled: type === "job-work",
   });
 
