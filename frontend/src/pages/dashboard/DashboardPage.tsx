@@ -72,7 +72,7 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ["dashboard", activeFY],
     queryFn: async () => (await api.get(`/reports/dashboard-summary?fy=${activeFY}`)).data,
-    refetchInterval: 60_000,
+    // No auto-refresh: only load on first login, FY change, or browser refresh
   });
 
   const fyLabel = activeFY.replace("_", "-");
