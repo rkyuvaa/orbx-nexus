@@ -59,7 +59,13 @@ services:
     depends_on:
       - backend
     ports:
-      - "8090:80"
+      - "127.0.0.1:8081:80"
+      - "8090:8090"
+    volumes:
+      # Dedicated cert copy owned by this app; do not mount the shared
+      # /etc/letsencrypt tree (root-only perms, symlink fragility, and it
+      # is shared with other services on this host).
+      - /etc/orbx-nexus-certs:/etc/letsencrypt/live/nexus.orbx.in:ro
 
 volumes:
   orbx_nexus_postgres_data:
