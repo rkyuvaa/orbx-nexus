@@ -146,16 +146,19 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
     queryFn: async () => (await api.get("/payroll/config-settings/")).data || {},
   });
 
-  // Auto-calculate weekly pay period (Saturday->Friday based on configured payout day)
+  // Auto-calculate weekly pay period (Saturday->Friday based on configured payout day).
+  // Only applied to the Payment view; the Register view must show all entries so newly
+  // created registers are always visible.
   const payoutWeekday = WEEKDAY_INDEX[payrollConfig?.payout_day ?? "Saturday"] ?? 6;
   const autoWeek = useMemo(() => getWeeklyPayPeriod(today, payoutWeekday), [payoutWeekday]);
 
   useEffect(() => {
+    if (type !== "payment") return;
     if (autoWeek && !fromDate && !toDate) {
       setFromDate(autoWeek.from);
       setToDate(autoWeek.to);
     }
-  }, [autoWeek, fromDate, toDate]);
+  }, [autoWeek, fromDate, toDate, type]);
 
   const handlePrevWeek = () => {
     if (!fromDate || !toDate) return;
@@ -911,7 +914,7 @@ export default function ContractorPages({ type }: { type: "rates" | "job-work" |
         title={TITLES[type]}
         breadcrumbs={[{ label: "Contractor Work" }]}
         actions={
-          type === "job-work" && (
+          type === "payment" && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <IconButton
                 size="small"
